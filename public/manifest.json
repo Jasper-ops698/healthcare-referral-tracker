@@ -1,0 +1,28 @@
+{
+  "name": "Healthcare Referral Tracker",
+  "short_name": "HealthTrack",
+  "description": "Healthcare Referral Management System - Track patients from lower-level to higher-tier facilities",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0284c7",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/brand-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "medical", "productivity"],
+  "lang": "en",
+  "dir": "ltr"
+}

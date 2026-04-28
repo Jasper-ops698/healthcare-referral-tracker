@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ─── Light Theme ─── */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 200 98% 39%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 200 98% 39%;
+    --radius: 0.5rem;
+
+    --sidebar-background: 200 18% 16%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 200 98% 39%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 200 15% 30%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 200 15% 25%;
+    --sidebar-ring: 200 98% 39%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Times New Roman', Times, Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Times New Roman', Times, Georgia, serif;
+    letter-spacing: 0.01em;
+    line-height: 1.3;
+  }
+}
+
+@layer base {
+  input, select, textarea {
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  /* ─── Chart Containers ─── */
+  .chart-container {
+    background-color: white;
+    border: 1px solid rgba(226, 232, 240, 0.5);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+  }
+
+  /* ─── Staggered Card Animations ─── */
+  .stagger-card {
+    animation: fadeIn 0.3s ease-out forwards;
+    opacity: 0;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Health Gradient ─── */
+  .health-gradient {
+    background: linear-gradient(135deg, #1e3a8a 0%, #0284c7 100%);
+  }
+
+  /* PWA safe area for notched devices */
+  .safe-area-top    { padding-top: env(safe-area-inset-top); }
+  .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}

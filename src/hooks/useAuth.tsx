@@ -1,0 +1,302 @@
+/**
+ * useAuth — Production Authentication Hook
+ *
+ * Hybrid mode:
+ * 1. Tries backend API authentication first (when server is running)
+ * 2. Falls back to IndexedDB for offline-first operation
+ *
+ * This ensures the deployed static site works immediately while
+ * also supporting full backend authentication when the server is available.
+ */
+
+import { createContext, useContext, useState, useCallback, type ReactNode, useEffect } from 'react';
+import type { User, UserRole } from '@/types';
+import { PRIMARY_ADMIN_EMAIL, API_BASE_URL } from '@/lib/config';
+import { getLocalDatabase } from '@/lib/dexieDatabase';
+import { notifySettingsChanged } from '@/lib/settingsEvents';
+
+const localDB = getLocalDatabase();
+
+const SETTINGS_DEFAULTS = {
+  language: 'en',
+  timezone: 'Africa/Nairobi',
+  autoLogout: 30,
+};
+
+export interface LoginResult {
+  success: boolean;
+  twoFactorRequired?: boolean;
+  forcePasswordChange?: boolean;
+  firstName?: string;
+  email?: string;
+  error?: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  completeLogin: (token: string, apiUser: any) => void;
+  setPassword: (email: string, currentPassword: string, newPassword: string) => Promise<LoginResult>;
+  logout: () => void;
+  hasRole: (role: UserRole) => boolean;
+  isAdmin: boolean;
+  isCollector: boolean;
+  isPrimaryAdmin: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// ─── LOCAL AUTH (IndexedDB fallback) ───
+
+async function localAuthenticate(email: string, _password: string): Promise<User | null> {
+  // Ensure primary admin exists in IndexedDB
+  const existing = await localDB.getUserByEmail?.(email) || null;
+
+  if (!existing) {
+    // Try finding by iterating all users
+    const allUsers = await localDB.getAllUsers();
+    const found = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+    if (found && found.isActive !== false) {
+      return found as unknown as User;
+    }
+    return null;
+  }
+
+  if ((existing as any).isActive === false) return null;
+  return existing as unknown as User;
+}
+
+// ─── SEED PRIMARY ADMIN ───
+
+async function ensurePrimaryAdmin(): Promise<void> {
+  try {
+    const allUsers = await localDB.getAllUsers();
+    const hasAdmin = allUsers.some(
+      (u: any) => u.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase()
+    );
+
+    if (!hasAdmin) {
+      await localDB.putUser({
+        id: 'admin-primary',
+        email: PRIMARY_ADMIN_EMAIL,
+        firstName: 'Emmanuel',
+        lastName: 'Nyale',
+        role: 'admin',
+        phone: '+254700000001',
+        isActive: true,
+        createdAt: new Date(),
+        region: 'global',
+        isPrimaryAdmin: true,
+        _sync: {
+          version: 1,
+          modifiedAt: new Date().toISOString(),
+          modifiedBy: 'system',
+          checksum: '',
+          isDeleted: false,
+          createdAt: new Date().toISOString(),
+          createdBy: 'system',
+        },
+      } as any);
+    }
+  } catch (err) {
+    console.error('[Auth] Failed to seed primary admin:', err);
+  }
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('healthtrack_current_user');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { return null; }
+    }
+    return null;
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Ensure primary admin exists on mount
+  useEffect(() => {
+    ensurePrimaryAdmin();
+
+    // Restore session from localStorage
+    const saved = localStorage.getItem('healthtrack_current_user');
+    if (saved && !user) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.isActive !== false) setUser(parsed);
+      } catch { localStorage.removeItem('healthtrack_current_user'); }
+    }
+  }, []);
+
+  const completeLogin = useCallback((token: string, apiUser: any) => {
+    const user: User = {
+      id: apiUser.id,
+      email: apiUser.email,
+      firstName: apiUser.firstName,
+      lastName: apiUser.lastName,
+      role: apiUser.role,
+      isActive: true,
+      createdAt: new Date(),
+      phone: '',
+      assignedFacility: apiUser.region,
+    };
+    setUser(user);
+    localStorage.setItem('healthtrack_current_user', JSON.stringify(user));
+    localStorage.setItem('healthtrack_jwt_token', token);
+
+    // Apply user preferences from backend
+    if (apiUser.preferences) {
+      const prefs = apiUser.preferences;
+      const existing = localStorage.getItem('healthtrack_settings');
+      const current = existing ? JSON.parse(existing) : {};
+      const merged = {
+        ...SETTINGS_DEFAULTS,
+        ...current,
+        language: prefs.language || current.language || 'en',
+        timezone: prefs.timezone || current.timezone || 'Africa/Nairobi',
+        autoLogout: prefs.autoLogout ?? current.autoLogout ?? 30,
+      };
+      localStorage.setItem('healthtrack_settings', JSON.stringify(merged));
+      notifySettingsChanged();
+    }
+  }, []);
+
+  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+    setIsLoading(true);
+
+    if (!email.trim() || !password.trim()) {
+      setIsLoading(false);
+      return { success: false, error: 'Please enter email and password' };
+    }
+
+    // ── Strategy 1: Try backend API (when server is running) ──
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || API_BASE_URL;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000); // 4s timeout
+
+      const res = await fetch(`${apiUrl}/api/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = await res.json();
+
+        // Check if password change is required (first login)
+        if (data.forcePasswordChange) {
+          setIsLoading(false);
+          return {
+            success: false,
+            forcePasswordChange: true,
+            email: data.email,
+            firstName: data.firstName,
+          };
+        }
+
+        // Check if 2FA is required
+        if (data.twoFactorRequired) {
+          setIsLoading(false);
+          return { success: false, twoFactorRequired: true, email: data.email };
+        }
+
+        if (data.token && data.user) {
+          completeLogin(data.token, data.user);
+          setIsLoading(false);
+          return { success: true };
+        }
+      }
+
+      // Backend returned error
+      const errorData = await res.json().catch(() => ({}));
+      setIsLoading(false);
+      return { success: false, error: errorData.error?.message || 'Invalid email or password' };
+    } catch {
+      // Server unreachable — fall through to local auth
+    }
+
+    // ── Strategy 2: IndexedDB local auth (offline-first fallback) ──
+    await ensurePrimaryAdmin();
+
+    const localUser = await localAuthenticate(email, password);
+    if (localUser) {
+      setUser(localUser);
+      localStorage.setItem('healthtrack_current_user', JSON.stringify(localUser));
+      setIsLoading(false);
+      return { success: true };
+    }
+
+    setIsLoading(false);
+    return { success: false, error: 'Invalid email or password' };
+  }, [completeLogin]);
+
+  const logout = useCallback(() => {
+    setUser(null);
+    localStorage.removeItem('healthtrack_current_user');
+    localStorage.removeItem('healthtrack_jwt_token');
+  }, []);
+
+  const setPassword = useCallback(async (email: string, currentPassword: string, newPassword: string): Promise<LoginResult> => {
+    setIsLoading(true);
+
+    if (!email.trim() || !currentPassword.trim() || !newPassword.trim()) {
+      setIsLoading(false);
+      return { success: false, error: 'Please fill in all fields' };
+    }
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || API_BASE_URL;
+      const res = await fetch(`${apiUrl}/api/v1/auth/set-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, currentPassword, newPassword }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.token && data.user) {
+        completeLogin(data.token, data.user);
+        setIsLoading(false);
+        return { success: true };
+      }
+
+      setIsLoading(false);
+      return { success: false, error: data.error?.message || 'Failed to set password' };
+    } catch {
+      setIsLoading(false);
+      return { success: false, error: 'Connection failed. Please try again.' };
+    }
+  }, [completeLogin]);
+
+  const hasRole = useCallback((role: UserRole): boolean => user?.role === role, [user]);
+
+  const value: AuthContextType = {
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    login,
+    completeLogin,
+    setPassword,
+    logout,
+    hasRole,
+    isAdmin: user?.role === 'admin',
+    isCollector: user?.role === 'collector',
+    isPrimaryAdmin: user?.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase(),
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be within AuthProvider');
+  return ctx;
+}

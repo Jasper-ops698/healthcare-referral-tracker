@@ -1,0 +1,56 @@
+# Render Blueprint — Infrastructure as Code
+# 
+# This file tells Render how to build and deploy your app.
+# When connected to GitHub, Render auto-deploys on every push.
+#
+# Setup:
+#   1. Push this repo to GitHub
+#   2. In Render dashboard → New → Blueprint
+#   3. Connect your GitHub repo
+#   4. Render reads this file and creates the service automatically
+
+services:
+  # ─── Main Web Service (Express Backend + Frontend) ───
+  - type: web
+    name: healthtrack-api
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install && npx vite build
+    startCommand: npm start
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: MONGODB_URI
+        sync: false  # Set in Render dashboard → Environment
+      - key: JWT_SECRET
+        sync: false  # Set in Render dashboard → Environment
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: FRONTEND_URL
+        value: "https://healthcare-referral-tracker.onrender.com"
+      - key: SMTP_HOST
+        value: "smtp.gmail.com"
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        value: "bkitib@gmail.com"
+      - key: SMTP_PASS
+        sync: false  # Set in Render dashboard → Environment (Gmail app password)
+      - key: AFRICASTALKING_API_KEY
+        sync: false  # Set in Render dashboard → Environment
+      - key: AFRICASTALKING_USERNAME
+        value: "sandbox"
+      - key: VAPID_PUBLIC_KEY
+        sync: false  # Set in Render dashboard → Environment
+      - key: VAPID_PRIVATE_KEY
+        sync: false  # Set in Render dashboard → Environment
+      - key: SESSION_SECRET
+        sync: false  # Set in Render dashboard → Environment
+    healthCheckPath: /health
