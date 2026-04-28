@@ -1,4 +1,5 @@
 import { FolderOpen, Plus, UserPlus, FileText } from 'lucide-react';
+import { useI18n } from '@/i18n/useI18n';
 
 interface EmptyStateProps {
   title: string;
@@ -8,12 +9,12 @@ interface EmptyStateProps {
   onAction?: () => void;
 }
 
-export function EmptyState({ 
-  title, 
-  description, 
+export function EmptyState({
+  title,
+  description,
   icon = 'folder',
   actionLabel,
-  onAction 
+  onAction
 }: EmptyStateProps) {
   const Icon = {
     folder: FolderOpen,
@@ -42,33 +43,36 @@ export function EmptyState({
 }
 
 export function EmptyPatientsState({ onAdd }: { onAdd?: () => void }) {
+  const { t } = useI18n();
   return (
     <EmptyState
-      title="No patients yet"
-      description="Start by registering your first patient. All registered patients will appear here."
+      title={t('empty.noPatients')}
+      description={t('patients.collectorsWillRegister')}
       icon="users"
-      actionLabel="Register Patient"
+      actionLabel={t('patients.addPatient')}
       onAction={onAdd}
     />
   );
 }
 
 export function EmptyRecordsState({ onAdd }: { onAdd?: () => void }) {
+  const { t } = useI18n();
   return (
     <EmptyState
-      title="No medical records"
+      title={t('empty.noMedicalRecords')}
       description="Medical records you create will appear here. Select a patient to add their first record."
       icon="records"
-      actionLabel="Add Record"
+      actionLabel={t('medical.addRecord')}
       onAction={onAdd}
     />
   );
 }
 
 export function EmptyReferralsState() {
+  const { t } = useI18n();
   return (
     <EmptyState
-      title="No referrals yet"
+      title={t('empty.noReferrals')}
       description="Patient referrals will appear here once they are created in the system."
       icon="folder"
     />

@@ -6,11 +6,13 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useI18n } from '@/i18n/useI18n';
 import { Bell, BellRing, CheckCheck, Trash2, Settings } from 'lucide-react';
 import { useNotifications, isPushSupported } from '@/hooks/useNotifications';
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
   const {
     history,
     unreadCount,
@@ -59,7 +61,7 @@ export default function NotificationBell() {
             ? 'bg-white/20 text-white'
             : 'text-white/70 hover:text-white hover:bg-white/10'
         }`}
-        title="Notifications"
+        title={t('notifications.title')}
       >
         {unreadCount > 0 ? (
           <BellRing className="w-5 h-5" />
@@ -102,7 +104,7 @@ export default function NotificationBell() {
                   <button
                     onClick={markAllRead}
                     className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
-                    title="Mark all read"
+                    title={t('notifications.markAllRead')}
                   >
                     <CheckCheck className="w-4 h-4" />
                   </button>
@@ -131,7 +133,7 @@ export default function NotificationBell() {
               {history.length === 0 ? (
                 <div className="px-5 py-12 text-center text-gray-400 dark:text-gray-500">
                   <Bell className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">No notifications yet</p>
+                  <p className="text-sm">{t('notifications.noNotifications')} yet</p>
                   <p className="text-xs mt-1 opacity-70">
                     Notifications will appear here when events occur
                   </p>
@@ -189,7 +191,7 @@ export default function NotificationBell() {
                   className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  Clear all
+                  {t('notifications.clearAll')}
                 </button>
               )}
             </div>

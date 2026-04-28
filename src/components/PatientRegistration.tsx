@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePatients } from '@/hooks/useData';
+import { useI18n } from '@/i18n/useI18n';
 import type { Patient } from '@/types';
 import { 
   User, 
@@ -20,6 +21,7 @@ interface PatientRegistrationProps {
 export default function PatientRegistration({ onSuccess }: PatientRegistrationProps) {
   const { user } = useAuth();
   const { addPatient } = usePatients();
+  const { t } = useI18n();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -36,7 +38,7 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
       city: '',
       state: '',
       postalCode: '',
-      country: 'USA',
+      country: 'Kenya',
     },
     emergencyContact: {
       name: '',
@@ -113,37 +115,37 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
         <User className="w-5 h-5 text-primary" />
-        Personal Information
+        {t('reg.personalInfo')}
       </h3>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">First Name *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('reg.firstName')} *</label>
           <input
             type="text"
             required
             value={formData.firstName}
             onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="Enter first name"
+            placeholder={t('reg.firstNamePlaceholder')}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Last Name *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('reg.lastName')} *</label>
           <input
             type="text"
             required
             value={formData.lastName}
             onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="Enter last name"
+            placeholder={t('reg.lastNamePlaceholder')}
           />
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Date of Birth *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('reg.dateOfBirth')} *</label>
           <input
             type="date"
             required
@@ -153,29 +155,29 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Gender *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('reg.gender')} *</label>
           <select
             value={formData.gender}
             onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-white"
           >
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
+            <option value="male">{t('reg.male')}</option>
+            <option value="female">{t('reg.female')}</option>
+            <option value="other">{t('reg.other')}</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Phone Number *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('reg.phone')} *</label>
           <input
             type="tel"
             required
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="+1 (555) 000-0000"
+            placeholder={t('reg.phonePlaceholder')}
           />
         </div>
         <div>
@@ -185,19 +187,19 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="patient@email.com"
+            placeholder={t('reg.emailPlaceholder')}
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-foreground mb-1">Blood Type (Optional)</label>
+        <label className="block text-sm font-medium text-foreground mb-1">{t('patients.bloodType')} (Optional)</label>
         <select
           value={formData.bloodType}
           onChange={(e) => setFormData({ ...formData, bloodType: e.target.value })}
           className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-white"
         >
-          <option value="">Select blood type</option>
+          <option value="">{'Select'} {t('patients.bloodType').toLowerCase()}</option>
           <option value="A+">A+</option>
           <option value="A-">A-</option>
           <option value="B+">B+</option>
@@ -215,11 +217,11 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
         <MapPin className="w-5 h-5 text-primary" />
-        Address Information
+        {t('reg.address')}
       </h3>
       
       <div>
-        <label className="block text-sm font-medium text-foreground mb-1">Street Address *</label>
+        <label className="block text-sm font-medium text-foreground mb-1">{t('reg.address')} *</label>
         <input
           type="text"
           required
@@ -229,13 +231,13 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
             address: { ...formData.address!, street: e.target.value }
           })}
           className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-          placeholder="Enter street address"
+          placeholder={t('reg.streetPlaceholder')}
         />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="col-span-2">
-          <label className="block text-sm font-medium text-foreground mb-1">City *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('reg.cityPlaceholder')} *</label>
           <input
             type="text"
             required
@@ -245,11 +247,11 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
               address: { ...formData.address!, city: e.target.value }
             })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="City"
+            placeholder={t('reg.cityPlaceholder')}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">State *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('reg.statePlaceholder')} *</label>
           <input
             type="text"
             required
@@ -259,11 +261,11 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
               address: { ...formData.address!, state: e.target.value }
             })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="State"
+            placeholder={t('reg.statePlaceholder')}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">ZIP *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('reg.zipPlaceholder')} *</label>
           <input
             type="text"
             required
@@ -273,19 +275,19 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
               address: { ...formData.address!, postalCode: e.target.value }
             })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="ZIP"
+            placeholder={t('reg.zipPlaceholder')}
           />
         </div>
       </div>
 
       <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 pt-4 border-t border-border">
         <Heart className="w-5 h-5 text-primary" />
-        Emergency Contact
+        {t('reg.emergencyContact')}
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Contact Name</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('patients.fullName')}</label>
           <input
             type="text"
             value={formData.emergencyContact?.name}
@@ -294,11 +296,11 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
               emergencyContact: { ...formData.emergencyContact!, name: e.target.value }
             })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="Full name"
+            placeholder={t('reg.emergencyNamePlaceholder')}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Relationship</label>
+          <label className="block text-sm font-medium text-foreground mb-1">{t('patients.relationship')}</label>
           <input
             type="text"
             value={formData.emergencyContact?.relationship}
@@ -307,13 +309,13 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
               emergencyContact: { ...formData.emergencyContact!, relationship: e.target.value }
             })}
             className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="e.g., Spouse, Parent"
+            placeholder={t('reg.emergencyRelationshipPlaceholder')}
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-foreground mb-1">Emergency Phone</label>
+        <label className="block text-sm font-medium text-foreground mb-1">{t('patients.emergencyContact')} {t('patients.phone')}</label>
         <input
           type="tel"
           value={formData.emergencyContact?.phone}
@@ -322,7 +324,7 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
             emergencyContact: { ...formData.emergencyContact!, phone: e.target.value }
           })}
           className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-          placeholder="+1 (555) 000-0000"
+          placeholder={t('reg.emergencyPhonePlaceholder')}
         />
       </div>
     </div>
@@ -332,12 +334,12 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
         <AlertCircle className="w-5 h-5 text-primary" />
-        Medical Information
+        {t('reg.medicalInfo')}
       </h3>
 
       {/* Allergies */}
       <div>
-        <label className="block text-sm font-medium text-foreground mb-2">Allergies</label>
+        <label className="block text-sm font-medium text-foreground mb-2">{t('reg.allergies')}</label>
         <div className="flex gap-2 mb-2">
           <input
             type="text"
@@ -345,14 +347,14 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
             onChange={(e) => setAllergyInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAllergy())}
             className="flex-1 px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="Add allergy (e.g., Penicillin)"
+            placeholder={t('reg.allergyPlaceholder')}
           />
           <button
             type="button"
             onClick={addAllergy}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
           >
-            Add
+            {t('common.add')}
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -376,7 +378,7 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
 
       {/* Chronic Conditions */}
       <div className="pt-4 border-t border-border">
-        <label className="block text-sm font-medium text-foreground mb-2">Chronic Conditions</label>
+        <label className="block text-sm font-medium text-foreground mb-2">{t('reg.chronicConditions')}</label>
         <div className="flex gap-2 mb-2">
           <input
             type="text"
@@ -384,14 +386,14 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
             onChange={(e) => setConditionInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCondition())}
             className="flex-1 px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            placeholder="Add condition (e.g., Diabetes)"
+            placeholder={t('reg.conditionPlaceholder')}
           />
           <button
             type="button"
             onClick={addCondition}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
           >
-            Add
+            {t('common.add')}
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -415,10 +417,10 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
 
       {/* Insurance Info */}
       <div className="pt-4 border-t border-border">
-        <h4 className="font-medium text-foreground mb-3">Insurance Information (Optional)</h4>
+        <h4 className="font-medium text-foreground mb-3">{t('reg.insurance')} (Optional)</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">Provider</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">{t('reg.provider')}</label>
             <input
               type="text"
               value={formData.insuranceInfo?.provider || ''}
@@ -431,11 +433,11 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
                 }
               })}
               className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-              placeholder="Insurance provider"
+              placeholder={t('reg.providerPlaceholder')}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">Policy Number</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">{t('reg.policyNumber')}</label>
             <input
               type="text"
               value={formData.insuranceInfo?.policyNumber || ''}
@@ -448,7 +450,7 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
                 }
               })}
               className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-              placeholder="Policy number"
+              placeholder={t('reg.policyPlaceholder')}
             />
           </div>
         </div>
@@ -457,18 +459,18 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
   );
 
   const steps = [
-    { number: 1, title: 'Personal Info', render: renderStep1 },
-    { number: 2, title: 'Address', render: renderStep2 },
-    { number: 3, title: 'Medical Info', render: renderStep3 },
+    { number: 1, title: t('reg.personalInfo'), render: renderStep1 },
+    { number: 2, title: t('reg.address'), render: renderStep2 },
+    { number: 3, title: t('reg.medicalInfo'), render: renderStep3 },
   ];
 
   return (
     <div className="max-w-3xl mx-auto animate-in">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Register New Patient</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('reg.title')}</h1>
         <p className="text-muted-foreground mt-1">
-          Enter patient information to create a new record in the system.
+          {t('patients.subtitle')}
         </p>
       </div>
 
@@ -507,7 +509,7 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
             className="px-6 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
             <ChevronLeft className="w-4 h-4" />
-            Previous
+            {t('common.cancel')}
           </button>
           
           {step < steps.length ? (
@@ -515,7 +517,7 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
               onClick={() => setStep(step + 1)}
               className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
             >
-              Next
+              {t('common.save')}
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
@@ -527,12 +529,12 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
               {isSubmitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Saving...
+                  {t('reg.registering')}
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Register Patient
+                  {t('reg.registerButton')}
                 </>
               )}
             </button>
@@ -547,9 +549,9 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-8 h-8 text-emerald-600" />
             </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">Success!</h3>
+            <h3 className="text-xl font-semibold text-foreground mb-2">{t('common.success')}</h3>
             <p className="text-muted-foreground">
-              Patient has been registered successfully.
+              {t('reg.success')}
             </p>
           </div>
         </div>

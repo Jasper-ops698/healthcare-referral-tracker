@@ -261,25 +261,25 @@ export default function Settings() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatusPill
           icon={<Globe className="w-4 h-4" />}
-          label="Language"
+          label={t('settings.language')}
           value={settings.language === 'en' ? 'English' : 'Kiswahili'}
           color="sky"
         />
         <StatusPill
           icon={<Clock className="w-4 h-4" />}
-          label="Auto Logout"
+          label={t('settings.autoLogout')}
           value={settings.autoLogout === 0 ? 'Never' : `${settings.autoLogout} min`}
           color="amber"
         />
         <StatusPill
           icon={<Shield className="w-4 h-4" />}
-          label="2FA"
+          label={t('settings.twoFactor')}
           value={twoFactorEnabled ? 'Enabled' : 'Disabled'}
           color={twoFactorEnabled ? 'emerald' : 'rose'}
         />
         <StatusPill
           icon={<Database className="w-4 h-4" />}
-          label="Retention"
+          label={t('settings.dataRetention')}
           value={settings.dataRetention === 0 ? 'Forever' : `${settings.dataRetention}d`}
           color="purple"
         />
@@ -523,7 +523,7 @@ export default function Settings() {
                       <option value={0}>{t('settings.autoLogout.never')}</option>
                     </select>
                   </FormField>
-                  <FormField label="System Status" hint="Current data protection status">
+                  <FormField label={t('profile.systemStatus')} hint={t('profile.dataProtection')}>
                     <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm">
                       <HardDrive className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-600">

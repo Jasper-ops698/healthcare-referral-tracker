@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useI18n } from '@/i18n/useI18n';
 import type { Patient } from '@/types';
 import { 
   Search, 
@@ -30,6 +31,7 @@ const referralStatusColors: Record<string, string> = {
 };
 
 export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -87,7 +89,7 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           type="text"
-          placeholder="Search your patients..."
+          placeholder={t('myPatients.searchPlaceholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
@@ -147,14 +149,14 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
                       <button
                         onClick={() => setSelectedPatient(patient)}
                         className="p-2 rounded-lg hover:bg-muted transition-colors text-primary"
-                        title="View Details"
+                        title={t('myPatients.viewDetails')}
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => onAddRecord?.(patient.id)}
                         className="p-2 rounded-lg hover:bg-muted transition-colors text-emerald-600"
-                        title="Add Record"
+                        title={t('myPatients.addRecord')}
                       >
                         <Plus className="w-4 h-4" />
                       </button>

@@ -1,4 +1,5 @@
 import { useState, useRef, type ChangeEvent } from 'react';
+import { useI18n } from '@/i18n/useI18n';
 import type { User } from '@/types';
 import { isPrimaryAdmin } from '@/lib/config';
 import {
@@ -52,6 +53,7 @@ export interface ProfileModalProps {
 /* ═══════════════════════════ Profile Modal ═══════════════════════════ */
 
 export default function ProfileModal({ user, onClose, onSave, canEdit = true }: ProfileModalProps) {
+  const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Partial<User>>({
@@ -169,7 +171,7 @@ export default function ProfileModal({ user, onClose, onSave, canEdit = true }: 
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="absolute -bottom-2 -right-2 p-2 rounded-xl bg-sky-500 text-white shadow-lg hover:bg-sky-600 transition-all hover:scale-110 active:scale-95"
-                    title="Upload photo"
+                    title={t('profile.uploadPhoto')}
                   >
                     <Camera className="w-3.5 h-3.5" />
                   </button>
@@ -211,7 +213,7 @@ export default function ProfileModal({ user, onClose, onSave, canEdit = true }: 
           </div>
 
           {/* ── Personal Information ── */}
-          <Section title="Personal Information" icon={<UserCircle className="w-4 h-4" />}>
+          <Section title={t('profile.personalInfo')} icon={<UserCircle className="w-4 h-4" />}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Phone Number">
                 {canEdit ? (
@@ -327,7 +329,7 @@ export default function ProfileModal({ user, onClose, onSave, canEdit = true }: 
           </Section>
 
           {/* ── Languages Spoken ── */}
-          <Section title="Languages Spoken" icon={<Globe className="w-4 h-4" />}>
+          <Section title={t('profile.languages')} icon={<Globe className="w-4 h-4" />}>
             <div className="flex flex-wrap gap-2">
               {LANGUAGES.map((lang) => {
                 const selected = (form.languages || []).includes(lang);
@@ -352,7 +354,7 @@ export default function ProfileModal({ user, onClose, onSave, canEdit = true }: 
           </Section>
 
           {/* ── Physical Address ── */}
-          <Section title="Physical Address" icon={<MapPin className="w-4 h-4" />}>
+          <Section title={t('profile.physicalAddress')} icon={<MapPin className="w-4 h-4" />}>
             {canEdit ? (
               <textarea
                 value={form.physicalAddress || ''}
@@ -367,7 +369,7 @@ export default function ProfileModal({ user, onClose, onSave, canEdit = true }: 
           </Section>
 
           {/* ── Emergency Contact ── */}
-          <Section title="Emergency Contact" icon={<HeartPulse className="w-4 h-4 text-rose-500" />}>
+          <Section title={t('profile.emergencyContact')} icon={<HeartPulse className="w-4 h-4 text-rose-500" />}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Full Name">
                 {canEdit ? (
@@ -418,7 +420,7 @@ export default function ProfileModal({ user, onClose, onSave, canEdit = true }: 
           </Section>
 
           {/* ── Next of Kin ── */}
-          <Section title="Next of Kin" icon={<Contact className="w-4 h-4 text-teal-500" />}>
+          <Section title={t('profile.nextOfKin')} icon={<Contact className="w-4 h-4 text-teal-500" />}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Full Name">
                 {canEdit ? (
@@ -469,7 +471,7 @@ export default function ProfileModal({ user, onClose, onSave, canEdit = true }: 
           </Section>
 
           {/* ── Bio / Notes ── */}
-          <Section title="Bio / Professional Notes" icon={<FileText className="w-4 h-4" />}>
+          <Section title={t('profile.bio')} icon={<FileText className="w-4 h-4" />}>
             {canEdit ? (
               <textarea
                 value={form.bio || ''}

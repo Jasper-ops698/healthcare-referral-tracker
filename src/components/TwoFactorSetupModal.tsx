@@ -296,7 +296,7 @@ export default function TwoFactorSetupModal({ mode, onClose, onComplete }: Props
                     setToken(e.target.value.replace(/\D/g, '').slice(0, 6));
                   }}
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all text-center tracking-[0.5em] text-lg"
-                  placeholder="000000"
+                  placeholder={t('2fa.codePlaceholder')}
                   maxLength={6}
                   autoFocus
                 />
@@ -377,7 +377,7 @@ export default function TwoFactorSetupModal({ mode, onClose, onComplete }: Props
                 value={disablePassword}
                 onChange={(e) => { setError(''); setDisablePassword(e.target.value); }}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
-                placeholder="Enter your current password"
+                placeholder={t('2fa.passwordPlaceholder')}
                 autoFocus
               />
               <div className="flex gap-3">

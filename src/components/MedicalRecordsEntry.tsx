@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useI18n } from '@/i18n/useI18n';
 import { useAuth } from '@/hooks/useAuth';
 import { useMedicalRecords } from '@/hooks/useData';
 import type { Patient, MedicalRecord } from '@/types';
@@ -25,6 +26,7 @@ interface MedicalRecordsEntryProps {
 }
 
 export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryProps) {
+  const { t } = useI18n();
   const { user } = useAuth();
   const { addRecord } = useMedicalRecords();
   const [searchQuery, setSearchQuery] = useState('');
@@ -174,9 +176,9 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
     return (
       <div className="max-w-2xl mx-auto animate-in">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-foreground">Medical Records Entry</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('medical.title')}</h1>
           <p className="text-muted-foreground mt-1">
-            Search and select a patient to add a medical record.
+            {t('medical.noPatientSelected')}
           </p>
         </div>
 
@@ -184,7 +186,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search patients by name or ID..."
+            placeholder={t('medical.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-12 pr-4 py-4 rounded-xl border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-lg"
@@ -229,7 +231,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Medical Record Entry</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('medical.title')}</h1>
           <p className="text-muted-foreground mt-1">
             Recording for: <span className="font-medium text-foreground">{selectedPatient.firstName} {selectedPatient.lastName}</span> ({selectedPatient.patientId})
           </p>
@@ -238,16 +240,16 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
           onClick={() => setSelectedPatient(null)}
           className="px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
         >
-          Change Patient
+          {t('common.cancel')}
         </button>
       </div>
 
       <div className="space-y-6">
-        {/* Visit Type & Chief Complaint */}
+        {/* Visit Type & {t('medical.chiefComplaint')} */}
         <div className="bg-white rounded-xl shadow-sm border border-border/50 p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
-            Visit Information
+            {t('medical.visitDate')}
           </h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -283,18 +285,18 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Chief Complaint</label>
+            <label className="block text-sm font-medium text-foreground mb-1">{t('medical.chiefComplaint')}</label>
             <textarea
               value={formData.chiefComplaint}
               onChange={(e) => setFormData({ ...formData, chiefComplaint: e.target.value })}
               className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               rows={2}
-              placeholder="Main reason for visit"
+              placeholder={t('medical.chiefComplaintPlaceholder')}
             />
           </div>
 
           <div className="mt-4">
-            <label className="block text-sm font-medium text-foreground mb-2">Symptoms</label>
+            <label className="block text-sm font-medium text-foreground mb-2">{t('medical.symptoms')}</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
@@ -302,7 +304,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                 onChange={(e) => setSymptomInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSymptom())}
                 className="flex-1 px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                placeholder="Add symptom"
+                placeholder={t('medical.symptomPlaceholder')}
               />
               <button
                 type="button"
@@ -332,16 +334,16 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
           </div>
         </div>
 
-        {/* Vital Signs */}
+        {/* {t('medical.vitals')} */}
         <div className="bg-white rounded-xl shadow-sm border border-border/50 p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <Activity className="w-5 h-5 text-primary" />
-            Vital Signs
+            {t('medical.vitals')}
           </h3>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">Temperature (°C)</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">{t('medical.temperature')}</label>
               <div className="relative">
                 <Thermometer className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
@@ -353,13 +355,13 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                     vitalSigns: { ...formData.vitalSigns!, temperature: parseFloat(e.target.value) }
                   })}
                   className="w-full pl-10 pr-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="36.5"
+                  placeholder={t('medical.tempPlaceholder')}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">Blood Pressure</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">{t('medical.bloodPressure')}</label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -369,7 +371,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                     vitalSigns: { ...formData.vitalSigns!, bloodPressureSystolic: parseInt(e.target.value) }
                   })}
                   className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="120"
+                  placeholder={t('medical.systolicPlaceholder')}
                 />
                 <span className="text-muted-foreground">/</span>
                 <input
@@ -380,13 +382,13 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                     vitalSigns: { ...formData.vitalSigns!, bloodPressureDiastolic: parseInt(e.target.value) }
                   })}
                   className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="80"
+                  placeholder={t('medical.diastolicPlaceholder')}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">Heart Rate (bpm)</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">{t('medical.heartRate')}</label>
               <div className="relative">
                 <Heart className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
@@ -397,13 +399,13 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                     vitalSigns: { ...formData.vitalSigns!, heartRate: parseInt(e.target.value) }
                   })}
                   className="w-full pl-10 pr-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="72"
+                  placeholder={t('medical.heartRatePlaceholder')}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">Respiratory Rate</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">{t('medical.respiratoryRate')}</label>
               <div className="relative">
                 <Wind className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
@@ -414,13 +416,13 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                     vitalSigns: { ...formData.vitalSigns!, respiratoryRate: parseInt(e.target.value) }
                   })}
                   className="w-full pl-10 pr-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="16"
+                  placeholder={t('medical.respPlaceholder')}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">Oxygen Saturation (%)</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">{t('medical.oxygenSaturation')}</label>
               <input
                 type="number"
                 value={formData.vitalSigns?.oxygenSaturation || ''}
@@ -429,12 +431,12 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                   vitalSigns: { ...formData.vitalSigns!, oxygenSaturation: parseInt(e.target.value) }
                 })}
                 className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                placeholder="98"
+                placeholder={t('medical.o2Placeholder')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">Weight (kg)</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">{t('medical.weight')}</label>
               <div className="relative">
                 <Scale className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
@@ -446,13 +448,13 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                     vitalSigns: { ...formData.vitalSigns!, weight: parseFloat(e.target.value) }
                   })}
                   className="w-full pl-10 pr-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="70"
+                  placeholder={t('medical.weightPlaceholder')}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">Height (cm)</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">{t('medical.height')}</label>
               <div className="relative">
                 <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
@@ -463,7 +465,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                     vitalSigns: { ...formData.vitalSigns!, height: parseInt(e.target.value) }
                   })}
                   className="w-full pl-10 pr-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="170"
+                  placeholder={t('medical.heightPlaceholder')}
                 />
               </div>
             </div>
@@ -484,11 +486,11 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
           </div>
         </div>
 
-        {/* Physical Examination */}
+        {/* {t('medical.physicalExam')} */}
         <div className="bg-white rounded-xl shadow-sm border border-border/50 p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <Stethoscope className="w-5 h-5 text-primary" />
-            Physical Examination
+            {t('medical.physicalExam')}
           </h3>
           
           <div className="space-y-4">
@@ -502,7 +504,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
                   physicalExamination: { ...formData.physicalExamination!, generalAppearance: e.target.value }
                 })}
                 className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                placeholder="e.g., Well-nourished, alert"
+                placeholder={t('medical.physicalExamPlaceholder')}
               />
             </div>
 
@@ -555,12 +557,12 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
         <div className="bg-white rounded-xl shadow-sm border border-border/50 p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <FlaskConical className="w-5 h-5 text-primary" />
-            Diagnosis & Treatment
+            {t('medical.diagnosis')}
           </h3>
           
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Preliminary Diagnosis</label>
+              <label className="block text-sm font-medium text-foreground mb-1">{t('medical.primaryDiagnosis')}</label>
               <input
                 type="text"
                 value={formData.preliminaryDiagnosis}
@@ -571,7 +573,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Clinical Notes</label>
+              <label className="block text-sm font-medium text-foreground mb-1">{t('medical.notes')}</label>
               <textarea
                 value={formData.clinicalNotes}
                 onChange={(e) => setFormData({ ...formData, clinicalNotes: e.target.value })}
@@ -582,7 +584,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Follow-up Instructions</label>
+              <label className="block text-sm font-medium text-foreground mb-1">{t('medical.notes')}</label>
               <textarea
                 value={formData.followUpInstructions}
                 onChange={(e) => setFormData({ ...formData, followUpInstructions: e.target.value })}
@@ -598,7 +600,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
         <div className="bg-white rounded-xl shadow-sm border border-border/50 p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <Pill className="w-5 h-5 text-primary" />
-            Prescribed Medications
+            {t('medical.prescription')}
           </h3>
           
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
@@ -628,7 +630,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
               onClick={addMedication}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
             >
-              Add Medication
+              {t('common.add')}
             </button>
           </div>
 
@@ -669,12 +671,12 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
             {isSubmitting ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Saving Record...
+                {t('medical.adding')}
               </>
             ) : (
               <>
                 <Save className="w-5 h-5" />
-                Save Medical Record
+                {t('medical.addRecord')}
               </>
             )}
           </button>
@@ -688,9 +690,9 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-8 h-8 text-emerald-600" />
             </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">Record Saved!</h3>
+            <h3 className="text-xl font-semibold text-foreground mb-2">{t('common.success')}</h3>
             <p className="text-muted-foreground">
-              Medical record has been successfully added.
+              {t('medical.success')}
             </p>
           </div>
         </div>

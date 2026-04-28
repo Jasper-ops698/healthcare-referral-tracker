@@ -605,6 +605,7 @@ export default function UserManagement() {
 
 /* ─── Copy Temp Password Button ─── */
 function CopyTempPasswordButton({ password }: { password: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -614,7 +615,7 @@ function CopyTempPasswordButton({ password }: { password: string }) {
         setTimeout(() => setCopied(false), 2000);
       }}
       className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white transition-colors"
-      title="Copy to clipboard"
+      title={t('users.copyToClipboard')}
     >
       {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
     </button>
