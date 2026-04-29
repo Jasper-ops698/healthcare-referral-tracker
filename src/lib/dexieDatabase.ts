@@ -230,8 +230,8 @@ export class LocalDatabase {
     const [pendingCount, retryableCount] = await Promise.all([
       db.outbox.where('status').equals('pending').count(),
       db.outbox
-        .where('[status+nextRetryAt]')
-        .between(['error', Dexie.minKey], ['error', now])
+        .where('status').equals('error')
+        .filter(e => e.nextRetryAt !== null && e.nextRetryAt <= now)
         .count(),
     ]);
     return pendingCount + retryableCount;
@@ -287,8 +287,8 @@ export class LocalDatabase {
   async getRetryableErrors(limit = 50): Promise<OutboxEntry[]> {
     const now = new Date().toISOString();
     return db.outbox
-      .where('[status+nextRetryAt]')
-      .between(['error', Dexie.minKey], ['error', now])
+      .where('status').equals('error')
+      .filter(e => e.nextRetryAt !== null && e.nextRetryAt <= now)
       .limit(limit).toArray();
   }
 
