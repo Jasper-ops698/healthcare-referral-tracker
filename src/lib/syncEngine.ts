@@ -84,6 +84,12 @@ export class MedSyncManager {
 
   /** Full sync cycle: pull then push */
   async sync(): Promise<boolean> {
+    // Skip sync entirely if using local auth token (no backend access)
+    if (!this.authToken || this.authToken.startsWith('local_')) {
+      this.setStatus('offline');
+      return false;
+    }
+
     try {
       const pullOk = await this.pullRemoteChanges();
       if (!pullOk) return false;
@@ -101,7 +107,15 @@ export class MedSyncManager {
 
   /** Get count of pending (unsynced) changes — for UI badges */
   async getPendingCount(): Promise<number> {
-    return this.localDB.getPendingCount();
+    return this.localDB.getUnsyncedCount();
+  }
+
+  /**
+   * Recover items stuck in 'syncing' state from crashed sessions.
+   * Call this once on startup before starting auto-sync.
+   */
+  async recoverStuckItems(): Promise<number> {
+    return this.localDB.recoverStaleSyncingItems(5);
   }
 
   /** Get unresolved conflicts — for UI resolution dialog */
@@ -123,11 +137,22 @@ export class MedSyncManager {
   // PULL REMOTE CHANGES
   // ═══════════════════════════════════════════════════════════════════════════
 
+  private getUserRegion(): string {
+    try {
+      const saved = localStorage.getItem('healthtrack_current_user');
+      if (saved) {
+        const user = JSON.parse(saved);
+        return user?.region || 'default';
+      }
+    } catch { /* ignore */ }
+    return 'default';
+  }
+
   /**
    * pullRemoteChanges()
    *
    * 1. Read checkpoint from IndexedDB syncMeta table
-   * 2. GET /sync/pull?since={lastSyncVersion}
+   * 2. POST /sync/pull with { clientVersion, deviceId, region, limit }
    * 3. Apply each change to the appropriate IndexedDB entity table
    * 4. Save updated checkpoint back to syncMeta
    */
@@ -137,20 +162,24 @@ export class MedSyncManager {
 
     try {
       const checkpoint = await this.localDB.getCheckpoint();
-      let cursor: string | undefined;
+      const region = this.getUserRegion();
       let hasMore = true;
       let total = 0;
 
       while (hasMore) {
-        const params = new URLSearchParams({
-          since: checkpoint.lastSyncVersion.toString(),
-          limit: SYNC_CONFIG.BATCH_SIZE.toString(),
-        });
-        if (cursor) params.set('cursor', cursor);
 
         const res = await this.fetchWithRetry(
-          `${SYNC_CONFIG.API_BASE_URL}/pull?${params}`,
-          { method: 'GET' }
+          `${SYNC_CONFIG.API_BASE_URL}/pull`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clientVersion: checkpoint.lastSyncVersion,
+              deviceId: this.localDB.getDeviceId(),
+              region,
+              limit: SYNC_CONFIG.BATCH_SIZE,
+            }),
+          }
         );
         if (!res.ok) throw new Error(`Pull ${res.status}`);
 
@@ -163,7 +192,6 @@ export class MedSyncManager {
         }
 
         hasMore = body.hasMore;
-        cursor = body.nextCursor;
 
         // Update checkpoint
         checkpoint.lastSyncVersion = body.serverVersion;
@@ -209,6 +237,123 @@ export class MedSyncManager {
    * MedSyncManager never maintains its own queue — it reads from
    * and writes to the IndexedDB outbox table.
    */
+  /**
+   * Try to apply a pending outbox entry via the direct API endpoint.
+   * This ensures actual entity documents are created in MongoDB,
+   * not just audit logs in the ChangeRecord collection.
+   *
+   * Returns true if the direct API call succeeded.
+   *
+   * NOTE: When using a local auth token (offline mode), this skips
+   * the API call and returns false. The item stays in the outbox
+   * and will be processed when the user re-authenticates with a
+   * real JWT token.
+   */
+  private async applyViaDirectApi(entry: OutboxEntry): Promise<boolean> {
+    // Skip if no token or using local token — can't call backend API
+    if (!this.authToken || this.authToken.startsWith('local_')) {
+      return false;
+    }
+
+    const apiUrl = `${API_BASE_URL}/api/v1`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.authToken}`,
+    };
+
+    try {
+      if (entry.entityType === 'user' && entry.changeType === 'create') {
+        const payload = entry.payload as Record<string, unknown>;
+        const res = await fetch(`${apiUrl}/users`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            firstName: payload.firstName,
+            lastName: payload.lastName,
+            email: payload.email,
+            phone: payload.phone,
+            role: payload.role,
+            assignedFacility: payload.assignedFacility,
+            region: payload.region || 'default',
+          }),
+        });
+        if (res.ok || res.status === 409) {
+          // 201 Created or 409 Conflict (already exists)
+          await this.localDB.markAsSent(entry.changeId);
+          return true;
+        }
+        // 401 = token expired — don't mark as error, let it retry later
+        if (res.status === 401) return false;
+      }
+
+      if (entry.entityType === 'chp' && entry.changeType === 'create') {
+        const payload = entry.payload as Record<string, unknown>;
+        const res = await fetch(`${apiUrl}/chps`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            fullName: payload.fullName,
+            nationalId: payload.nationalId,
+            phone: payload.phone,
+            alternatePhone: payload.alternatePhone,
+            gender: payload.gender,
+            dateOfBirth: payload.dateOfBirth,
+            village: payload.village,
+            subLocation: payload.subLocation,
+            ward: payload.ward,
+            county: payload.county,
+            languages: payload.languages,
+            yearsOfExperience: payload.yearsOfExperience,
+            chpRegNumber: payload.chpRegNumber,
+            supervisorName: payload.supervisorName,
+            supervisorPhone: payload.supervisorPhone,
+            facilityId: payload.facilityId,
+            facilityName: payload.facilityName,
+            status: payload.status || 'active',
+          }),
+        });
+        if (res.ok || res.status === 409) {
+          await this.localDB.markAsSent(entry.changeId);
+          return true;
+        }
+        if (res.status === 401) return false;
+      }
+
+      if (entry.entityType === 'patient' && entry.changeType === 'create') {
+        const payload = entry.payload as Record<string, unknown>;
+        const res = await fetch(`${apiUrl}/sync/push`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            clientVersion: 1,
+            deviceId: 'direct-api',
+            region: payload.region || 'default',
+            changes: [{
+              changeId: entry.changeId,
+              entityType: 'patient',
+              entityId: entry.entityId,
+              operation: 'create',
+              previousVersion: 0,
+              checksum: entry.checksum,
+              payload,
+              clientTimestamp: entry.timestamp,
+            }],
+          }),
+        });
+        if (res.ok) {
+          await this.localDB.markAsSent(entry.changeId);
+          return true;
+        }
+        if (res.status === 401) return false;
+      }
+
+      // Fallback: push via sync endpoint for audit logging
+      return false;
+    } catch {
+      return false; // Network error — will retry via sync endpoint
+    }
+  }
+
   async pushLocalChanges(): Promise<boolean> {
     // ── 1. Collect pending + retryable items from Outbox ──
     const [pending, retryable] = await Promise.all([
@@ -222,21 +367,40 @@ export class MedSyncManager {
     this.setStatus('pushing');
     const t0 = performance.now();
 
+    // ── 1b. Try direct API for create operations first ──
+    // This ensures actual MongoDB documents are created, not just audit logs
+    const remainingBatch: typeof batch = [];
+    for (const entry of batch) {
+      const directApplied = await this.applyViaDirectApi(entry);
+      if (!directApplied) {
+        remainingBatch.push(entry);
+      }
+    }
+
+    // If all items were applied via direct API, we're done
+    if (remainingBatch.length === 0) {
+      this.stats.totalPushes++;
+      this.saveStats();
+      this.setStatus('idle');
+      this.localDB.cleanupSentItems(24);
+      return true;
+    }
+
     try {
       const checkpoint = await this.localDB.getCheckpoint();
 
-      // ── 2. Mark batch as 'syncing' (atomic, in transaction) ──
-      const changeIds = batch.map(e => e.changeId);
+      // ── 2. Mark remaining batch as 'syncing' ──
+      const changeIds = remainingBatch.map(e => e.changeId);
       await this.localDB.markBatchAsSyncing(changeIds);
 
-      // ── 3. Build ChangeRecords from Outbox entries ──
+      // ── 3. Build ChangeRecords from remaining entries ──
       const changes: ChangeRecord[] = await Promise.all(
-        batch.map(async entry => ({
+        remainingBatch.map(async entry => ({
           id: entry.changeId,
           entityType: entry.entityType,
           entityId: entry.entityId,
           changeType: entry.changeType,
-          version: checkpoint.lastSyncVersion, // client-side version
+          version: checkpoint.lastSyncVersion,
           timestamp: entry.timestamp,
           checksum: entry.checksum,
           payload: entry.payload,
@@ -244,7 +408,7 @@ export class MedSyncManager {
         }))
       );
 
-      // ── 4. POST to server ──
+      // ── 4. POST to sync endpoint (audit log) ──
       const res = await this.fetchWithRetry(
         `${SYNC_CONFIG.API_BASE_URL}/push`,
         {
@@ -253,6 +417,7 @@ export class MedSyncManager {
           body: JSON.stringify({
             clientVersion: checkpoint.lastSyncVersion,
             deviceId: checkpoint.deviceId,
+            region: this.getUserRegion(),
             changes,
           }),
         }
@@ -278,7 +443,7 @@ export class MedSyncManager {
       // ── 6. Handle 207 Multi-Status (partial accept) ──
       if (res.status === 207) {
         const body: PushResponse = await res.json();
-        await this.processPushResponse(body, batch);
+        await this.processPushResponse(body, remainingBatch);
         checkpoint.lastSyncVersion = body.serverVersion;
         await this.localDB.saveCheckpoint(checkpoint);
         return body.accepted;
@@ -287,7 +452,7 @@ export class MedSyncManager {
       // ── 7. Handle full success (200 OK) ──
       if (res.ok) {
         const body: PushResponse = await res.json();
-        await this.processPushResponse(body, batch);
+        await this.processPushResponse(body, remainingBatch);
 
         checkpoint.lastSyncVersion = body.serverVersion;
         checkpoint.lastSyncTime = new Date().toISOString();
@@ -309,9 +474,9 @@ export class MedSyncManager {
       throw new Error(`Push ${res.status}`);
 
     } catch (err) {
-      // Network error → mark all syncing items as error with retry
+      // Network error → mark all remaining syncing items as error with retry
       if (this.isNetworkError(err)) {
-        for (const entry of batch) {
+        for (const entry of remainingBatch) {
           await this.localDB.markAsError(
             entry.changeId,
             'Network error',
@@ -381,6 +546,9 @@ export class MedSyncManager {
         break;
       case 'user':
         await db.bulkPutUsers([{ ...change.payload, _sync: this.makeSyncMeta() }]);
+        break;
+      case 'chp':
+        await db.bulkPutChps([change.payload as any]);
         break;
       case 'medicalRecord':
         await db.bulkPutMedicalRecords([{ ...change.payload, _sync: this.makeSyncMeta() }]);

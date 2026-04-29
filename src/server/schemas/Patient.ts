@@ -37,6 +37,24 @@ export interface IInsuranceInfo {
   groupNumber?: string;
 }
 
+/** A single stage in a patient's referral journey */
+export interface IReferralStage {
+  /** Stage order (1, 2, 3...) */
+  stage: number;
+  /** From facility name */
+  fromFacility: string;
+  /** To facility name */
+  toFacility: string;
+  /** Stage status */
+  status: 'pending' | 'in-progress' | 'completed' | 'rejected';
+  /** Date the stage was entered */
+  date: Date;
+  /** Notes about this stage */
+  notes?: string;
+  /** CHP who facilitated this stage */
+  chpName?: string;
+}
+
 export interface IPatient extends Document {
   /** Human-readable patient ID (e.g., PT-000001) — NOT the Mongo _id */
   patientId: string;
@@ -57,9 +75,21 @@ export interface IPatient extends Document {
   /** CHP (user) who registered this patient */
   registeredBy: mongoose.Types.ObjectId;
 
+  /** CHP (non-system user) assigned to accompany patient through referrals */
+  assignedChpId?: mongoose.Types.ObjectId;
+
+  /** CHP name (denormalized for quick display without populate) */
+  assignedChpName?: string;
+
   /** Patient's current referral status in the workflow */
   referralStatus: 'registered' | 'screened' | 'referred' | 'accepted' |
                   'in-treatment' | 'completed' | 'rejected';
+
+  /**
+   * Referral stages — tracks the patient's journey through facilities.
+   * Each stage represents a step in the referral pipeline.
+   */
+  referralStages: IReferralStage[];
 
   status: 'active' | 'inactive' | 'deceased';
 
@@ -107,13 +137,28 @@ const AddressSchema = new Schema<IAddress>({
   city: { type: String, required: true },
   state: { type: String, required: true },
   postalCode: { type: String, required: true },
-  country: { type: String, required: true, default: 'USA' },
+  country: { type: String, required: true, default: 'Kenya' },
 }, { _id: false });
 
 const InsuranceInfoSchema = new Schema<IInsuranceInfo>({
   provider: { type: String, required: true },
   policyNumber: { type: String, required: true },
   groupNumber: { type: String },
+}, { _id: false });
+
+const ReferralStageSchema = new Schema<IReferralStage>({
+  stage: { type: Number, required: true, min: 1 },
+  fromFacility: { type: String, required: true, trim: true },
+  toFacility: { type: String, required: true, trim: true },
+  status: {
+    type: String,
+    required: true,
+    enum: ['pending', 'in-progress', 'completed', 'rejected'],
+    default: 'pending',
+  },
+  date: { type: Date, required: true, default: Date.now },
+  notes: { type: String, trim: true },
+  chpName: { type: String, trim: true },
 }, { _id: false });
 
 const PatientSchema = new Schema<IPatient, IPatientModel>(
@@ -213,6 +258,23 @@ const PatientSchema = new Schema<IPatient, IPatientModel>(
       index: true,
     },
 
+    assignedChpId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Chp',
+      required: false,
+      index: true,
+    },
+
+    assignedChpName: {
+      type: String,
+      required: false,
+    },
+
+    referralStages: {
+      type: [ReferralStageSchema],
+      default: [],
+    },
+
     referralStatus: {
       type: String,
       required: true,
@@ -261,6 +323,9 @@ PatientSchema.index({ '_sync.version': 1, status: 1 });
 
 /** Compound index: CHP workload queries */
 PatientSchema.index({ registeredBy: 1, '_sync.version': 1 });
+
+/** Compound index: patients by assigned CHP for accompaniment tracking */
+PatientSchema.index({ assignedCollector: 1, status: 1 });
 
 /** Compound index: referral tracking dashboard */
 PatientSchema.index({ referralStatus: 1, '_sync.modifiedAt': -1 });

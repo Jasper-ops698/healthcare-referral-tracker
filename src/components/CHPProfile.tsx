@@ -47,7 +47,7 @@ export default function CollectorProfile() {
         { label: 'Assigned Facility', value: user?.assignedFacility || 'Not assigned', icon: <Building2 className="w-4 h-4 text-gray-400" /> },
         { label: 'Role', value: user?.role === 'admin' ? 'Administrator' : 'Collector', icon: <Shield className="w-4 h-4 text-gray-400" /> },
         { label: 'Last Login', value: user?.lastLogin ? format(new Date(user.lastLogin), 'MMM d, yyyy h:mm a') : 'Never', icon: <Calendar className="w-4 h-4 text-gray-400" /> },
-        { label: 'Account Status', value: user?.isActive ? 'Active' : 'Inactive', icon: <Shield className="w-4 h-4 text-gray-400" /> },
+        { label: 'Account Status', value: user?.status === 'active' ? 'Active' : 'Inactive', icon: <Shield className="w-4 h-4 text-gray-400" /> },
       ],
     },
     {

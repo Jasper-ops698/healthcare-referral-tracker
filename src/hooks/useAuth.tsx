@@ -58,13 +58,13 @@ async function localAuthenticate(email: string, _password: string): Promise<User
     // Try finding by iterating all users
     const allUsers = await localDB.getAllUsers();
     const found = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
-    if (found && found.isActive !== false) {
+    if (found && found.status !== 'inactive') {
       return found as unknown as User;
     }
     return null;
   }
 
-  if ((existing as any).isActive === false) return null;
+  if ((existing as any).status === 'inactive') return null;
   return existing as unknown as User;
 }
 
@@ -85,7 +85,7 @@ async function ensurePrimaryAdmin(): Promise<void> {
         lastName: 'Nyale',
         role: 'admin',
         phone: '+254700000001',
-        isActive: true,
+        status: 'active',
         createdAt: new Date(),
         region: 'global',
         isPrimaryAdmin: true,
@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (saved && !user) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.isActive !== false) setUser(parsed);
+        if (parsed.status !== 'inactive') setUser(parsed);
       } catch { localStorage.removeItem('healthtrack_current_user'); }
     }
   }, []);
@@ -136,10 +136,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       firstName: apiUser.firstName,
       lastName: apiUser.lastName,
       role: apiUser.role,
-      isActive: true,
+      status: apiUser.status || 'active',
+      region: apiUser.region || 'default',
       createdAt: new Date(),
-      phone: '',
-      assignedFacility: apiUser.region,
+      phone: apiUser.phone || '',
+      assignedFacility: apiUser.assignedFacility,
+      preferences: apiUser.preferences,
     };
     setUser(user);
     localStorage.setItem('healthtrack_current_user', JSON.stringify(user));
@@ -174,7 +176,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || API_BASE_URL;
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000); // 4s timeout
+      // Render free tier cold start takes 30-60s; give it 45s
+      const timeout = setTimeout(() => controller.abort(), 45000);
 
       const res = await fetch(`${apiUrl}/api/v1/auth/login`, {
         method: 'POST',
@@ -226,6 +229,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (localUser) {
       setUser(localUser);
       localStorage.setItem('healthtrack_current_user', JSON.stringify(localUser));
+      // Generate a local session token so API calls don't fail immediately.
+      // This token is only valid locally; the backend will reject it,
+      // but it lets the app distinguish between "logged out" and "offline mode".
+      localStorage.setItem('healthtrack_jwt_token', `local_${Date.now()}_${localUser.id}`);
       setIsLoading(false);
       return { success: true };
     }

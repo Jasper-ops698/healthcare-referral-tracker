@@ -18,7 +18,7 @@ export type SyncStatus =
 export type ChangeType = 'create' | 'update' | 'delete';
 
 /** Entity types that can be synced */
-export type EntityType = 'user' | 'patient' | 'medicalRecord';
+export type EntityType = 'user' | 'patient' | 'medicalRecord' | 'chp';
 
 /** A single change record sent to / received from the server */
 export interface ChangeRecord<T = any> {

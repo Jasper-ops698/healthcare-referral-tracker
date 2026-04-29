@@ -1,4 +1,4 @@
-404: Not Foundo Render
+name: Deploy to Render
 
 on:
   push:

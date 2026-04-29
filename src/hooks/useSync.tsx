@@ -51,14 +51,19 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const token = localStorage.getItem('healthtrack_jwt_token');
-    if (!token) return; // Local-only auth — no server sync possible
+    const token = localStorage.getItem('healthtrack_jwt_token') || '';
 
     const manager = getSyncManager();
     syncManagerRef.current = manager;
 
-    // Set auth token and subscribe
+    // Set auth token (may be local_ token — sync engine handles this)
     manager.setAuthToken(token);
+
+    // Recover items stuck in 'syncing' from previous crashed sessions
+    manager.recoverStuckItems().then((count) => {
+      if (count > 0) console.log(`[Sync] Recovered ${count} stuck items`);
+    }).catch(() => {});
+
     const unsubscribe = manager.onStatusChange((s) => {
       setStatus(s);
       if (s === 'idle' || s === 'error' || s === 'offline') {

@@ -118,6 +118,29 @@ export interface PasswordResetEmailData {
   expiresIn: string;
 }
 
+export interface ChpRegistrationEmailData {
+  to: string;
+  chpName: string;
+  chpId: string;
+  facilityName: string;
+  registeredBy: string;
+  phone: string;
+  village: string;
+  county: string;
+}
+
+export interface ChpPatientAssignedEmailData {
+  to: string;
+  chpName: string;
+  patientName: string;
+  patientId: string;
+  patientPhone: string;
+  patientCondition: string;
+  collectorName: string;
+  facilityName: string;
+  assignedDate: string;
+}
+
 export interface SMTPHealthResult {
   configured: boolean;
   host: string;
@@ -475,6 +498,95 @@ export function sendPasswordResetEmail(data: PasswordResetEmailData): Promise<Em
 export function resendWelcomeEmail(data: WelcomeEmailData): Promise<EmailResult> {
   return sendWelcomeEmail(data);
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// CHP EMAILS
+// ═══════════════════════════════════════════════════════════════════════
+
+export function buildChpRegistrationEmail(data: ChpRegistrationEmailData): SendMailOptions {
+  const subject = 'Welcome to HealthTrack — CHP Registration Confirmed';
+  const content = `
+    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:20px;margin:20px 0;">
+      <h3 style="color:#065f46;margin-top:0;">Dear ${data.chpName},</h3>
+      <p style="font-size:15px;">
+        You have been successfully registered as a <strong>Community Health Promoter (CHP)</strong>
+        in the HealthTrack system by <strong>${data.registeredBy}</strong>.
+      </p>
+      <div style="background:#fff;border-radius:6px;padding:15px;margin-top:15px;">
+        <h4 style="color:#374151;margin-top:0;">Your Registration Details</h4>
+        <table style="width:100%;font-size:14px;">
+          <tr><td style="padding:6px 0;color:#6b7280;width:40%;"><strong>CHP ID:</strong></td><td style="padding:6px 0;">${data.chpId}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Full Name:</strong></td><td style="padding:6px 0;">${data.chpName}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Phone:</strong></td><td style="padding:6px 0;">${data.phone}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Location:</strong></td><td style="padding:6px 0;">${data.village}, ${data.county}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Facility:</strong></td><td style="padding:6px 0;">${data.facilityName || 'Not assigned yet'}</td></tr>
+        </table>
+      </div>
+      <p style="margin-top:20px;font-size:14px;color:#4b5563;">
+        As a registered CHP, you will be assigned patients who need accompaniment
+        through their referral journey. You will receive an email notification each
+        time a new patient is assigned to you.
+      </p>
+      <p style="font-size:13px;color:#6b7280;">
+        If you have any questions, please contact your supervisor or the facility administrator.
+      </p>
+    </div>
+  `;
+  return {
+    to: data.to,
+    subject,
+    html: baseTemplate(subject, content),
+    text: `Dear ${data.chpName}, you have been registered as a CHP in HealthTrack. CHP ID: ${data.chpId}. Facility: ${data.facilityName || 'Not assigned'}. Phone: ${data.phone}.`,
+  };
+}
+
+export function buildChpPatientAssignedEmail(data: ChpPatientAssignedEmailData): SendMailOptions {
+  const subject = `New Patient Assigned — ${data.patientName}`;
+  const content = `
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px;margin:20px 0;">
+      <h3 style="color:#1e40af;margin-top:0;">Dear ${data.chpName},</h3>
+      <p style="font-size:15px;">
+        A new patient has been <strong>assigned to you</strong> by <strong>${data.collectorName}</strong>
+        at <strong>${data.facilityName}</strong>.
+      </p>
+      <div style="background:#fff;border-radius:6px;padding:15px;margin-top:15px;">
+        <h4 style="color:#374151;margin-top:0;">Patient Details</h4>
+        <table style="width:100%;font-size:14px;">
+          <tr><td style="padding:6px 0;color:#6b7280;width:40%;"><strong>Patient ID:</strong></td><td style="padding:6px 0;">${data.patientId}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Full Name:</strong></td><td style="padding:6px 0;">${data.patientName}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Phone:</strong></td><td style="padding:6px 0;">${data.patientPhone || 'N/A'}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Condition:</strong></td><td style="padding:6px 0;">${data.patientCondition || 'Not specified'}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Assigned Date:</strong></td><td style="padding:6px 0;">${data.assignedDate}</td></tr>
+        </table>
+      </div>
+      <p style="margin-top:20px;font-size:14px;color:#4b5563;">
+        Please follow up with this patient and ensure they receive the care they need
+        throughout their referral journey. Update their referral stages in the HealthTrack
+        system as they progress.
+      </p>
+    </div>
+  `;
+  return {
+    to: data.to,
+    subject,
+    html: baseTemplate(subject, content),
+    text: `Dear ${data.chpName}, a new patient ${data.patientName} (${data.patientId}) has been assigned to you by ${data.collectorName} at ${data.facilityName}.`,
+  };
+}
+
+// ─── CHP SEND WRAPPERS ───
+
+export function sendChpRegistrationEmail(data: ChpRegistrationEmailData): Promise<EmailResult> {
+  const options = buildChpRegistrationEmail(data);
+  return sendEmail(options, 'chp_registration', data.to);
+}
+
+export function sendChpPatientAssignedEmail(data: ChpPatientAssignedEmailData): Promise<EmailResult> {
+  const options = buildChpPatientAssignedEmail(data);
+  return sendEmail(options, 'chp_patient_assigned', data.to, data.patientId, data.facilityName);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 
 export function buildNotificationEmail(
   to: string,

@@ -1,12 +1,15 @@
 import { useState } from 'react';
+import AddCHPModal from './AddCHPModal';
 import { useAuth } from '@/hooks/useAuth';
-import { useUsers } from '@/hooks/useData';
+import { useUsers, useChps } from '@/hooks/useData';
+import { useSync } from '@/hooks/useSync';
 import { useI18n } from '@/i18n/useI18n';
 import type { User, UserRole } from '@/types';
 import { isPrimaryAdmin, API_BASE_URL } from '@/lib/config';
 import ProfileModal from '@/components/ProfileModal';
 import {
   Plus,
+  UserPlus,
   Search,
   MoreHorizontal,
   Edit2,
@@ -24,6 +27,9 @@ import {
   Check,
   AlertCircle,
   Trash2,
+  Wifi,
+  WifiOff,
+  CloudOff,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -46,9 +52,12 @@ export default function UserManagement() {
   const { t } = useI18n();
   const { user: currentUser, isPrimaryAdmin: isViewerPrimaryAdmin } = useAuth();
   const { users, addUser, updateUser, toggleUserStatus, clearUsers } = useUsers();
+  const { addChp } = useChps();
+  const { isOnline, pendingCount } = useSync();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddCHPModal, setShowAddCHPModal] = useState(false);
   const [createdUserResult, setCreatedUserResult] = useState<{
     tempPassword?: string;
     emailSent: boolean;
@@ -83,7 +92,7 @@ export default function UserManagement() {
       return;
     }
     toggleUserStatus(user.id);
-    toast.success(user.isActive
+    toast.success(user.status === 'active'
       ? (t('users.deactivatedSuccess') || 'User deactivated successfully')
       : (t('users.activatedSuccess') || 'User activated successfully')
     );
@@ -102,14 +111,40 @@ export default function UserManagement() {
 
   const handleResendEmail = async (user: User) => {
     if (resendingUserId) return;
-    setResendingUserId(user.id);
+
+    // ── Detect "ghost" users created offline but never synced ──
+    // lastSyncedAt is only set when data is confirmed from the backend
+    const isGhostUser = !user.lastSyncedAt;
+
+    if (isGhostUser) {
+      toast.error(
+        t('users.userNotSynced') ||
+        `${user.firstName} ${user.lastName} was created offline and has not been synced to the server. Please sync first.`
+      );
+      return;
+    }
+
+    // ── Check if we're in offline/local mode ──
     const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = jwtToken?.startsWith('local_');
+
+    if (isLocalToken) {
+      toast.info(t('users.cannotResendOffline') || 'Cannot resend welcome email while in offline mode. User will receive email when system syncs.');
+      return;
+    }
+
+    if (!jwtToken) {
+      toast.error(t('users.notAuthenticated') || 'Not authenticated. Please log in again.');
+      return;
+    }
+
+    setResendingUserId(user.id);
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/users/resend`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': jwtToken ? `Bearer ${jwtToken}` : '',
+          'Authorization': `Bearer ${jwtToken}`,
         },
         body: JSON.stringify({ email: user.email }),
       });
@@ -119,6 +154,7 @@ export default function UserManagement() {
         const text = await res.text();
         console.error('[Resend] Non-JSON response:', text.substring(0, 200));
         toast.error('Server returned invalid response. Backend may be restarting, try again in 30 seconds.');
+        setResendingUserId(null);
         return;
       }
       const result = await res.json();
@@ -173,7 +209,35 @@ export default function UserManagement() {
             <Plus className="w-4 h-4" />
             {t('users.addUser')}
           </button>
+          <button
+            onClick={() => setShowAddCHPModal(true)}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-teal-500 text-white font-semibold text-sm shadow-lg shadow-teal-500/30 hover:bg-teal-600 hover:shadow-teal-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+            title={t('users.addCHPDesc')}
+          >
+            <UserPlus className="w-4 h-4" />
+            {t('users.addCHP')}
+          </button>
         </div>
+
+        {/* ── Connection & Sync Status ── */}
+        {!isOnline && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium">
+            <WifiOff className="w-3.5 h-3.5" />
+            {t('common.offline') || 'Offline'} — {t('users.changesSavedLocally') || 'changes saved locally'}
+          </div>
+        )}
+        {isOnline && pendingCount > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 text-xs font-medium cursor-pointer hover:bg-sky-100 transition-colors">
+            <CloudOff className="w-3.5 h-3.5" />
+            {pendingCount} {t('users.pendingSync') || 'pending sync'}
+          </div>
+        )}
+        {isOnline && pendingCount === 0 && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+            <Wifi className="w-3.5 h-3.5" />
+            {t('common.online') || 'Online'}
+          </div>
+        )}
       </div>
 
       {/* ── Stats Cards ── */}
@@ -207,7 +271,7 @@ export default function UserManagement() {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">
-                {users.filter((u) => u.role === 'collector' || u.role === 'chp').length}
+                {users.filter((u) => u.role === 'collector').length}
               </p>
               <p className="text-sm text-gray-500">{t('users.collectors')}</p>
             </div>
@@ -281,7 +345,7 @@ export default function UserManagement() {
                           className="w-10 h-10 rounded-full bg-gray-100 object-cover ring-2 ring-white group-hover/user:ring-sky-100 transition-all"
                         />
                         <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-white p-0.5">
-                          <div className={`w-full h-full rounded-full ${user.isActive ? 'bg-emerald-400' : 'bg-gray-300'}`} />
+                          <div className={`w-full h-full rounded-full ${user.status === 'active' ? 'bg-emerald-400' : 'bg-gray-300'}`} />
                         </div>
                       </div>
                       <div className="min-w-0">
@@ -289,6 +353,16 @@ export default function UserManagement() {
                           <span className="font-semibold text-gray-900 group-hover/user:text-sky-600 transition-colors truncate">
                             {user.firstName} {user.lastName}
                           </span>
+                          {/* Sync status indicator — based on lastSyncedAt, not ID format */}
+                          {user.lastSyncedAt ? (
+                            <span title={`${t('users.synced') || 'Synced'}: ${new Date(user.lastSyncedAt).toLocaleString()}`} className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-medium">
+                              ✓ {t('users.synced') || 'Synced'}
+                            </span>
+                          ) : (
+                            <span title={t('users.notSynced') || 'Not synced to server'} className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-medium">
+                              ⚠ {t('users.pending') || 'Pending'}
+                            </span>
+                          )}
                           {isPrimaryAdmin(user.email) && (
                             <span title={t('users.primaryAdmin')}>
                               <Crown className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
@@ -339,13 +413,13 @@ export default function UserManagement() {
                       onClick={() => handleToggleStatus(user)}
                       disabled={isPrimaryAdmin(user.email)}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
-                        user.isActive
+                        user.status === 'active'
                           ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       } ${isPrimaryAdmin(user.email) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                     >
-                      {user.isActive ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
-                      {user.isActive ? t('common.active') : t('common.inactive')}
+                      {user.status === 'active' ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
+                      {user.status === 'active' ? t('common.active') : t('common.inactive')}
                     </button>
                   </td>
 
@@ -378,10 +452,10 @@ export default function UserManagement() {
                         {!isPrimaryAdmin(user.email) && (
                           <DropdownMenuItem
                             onClick={() => handleToggleStatus(user)}
-                            className={user.isActive ? 'text-rose-600' : 'text-emerald-600'}
+                            className={user.status === 'active' ? 'text-rose-600' : 'text-emerald-600'}
                           >
-                            {user.isActive ? <UserX className="w-4 h-4 mr-2" /> : <UserCheck className="w-4 h-4 mr-2" />}
-                            {user.isActive ? t('users.deactivate') : t('users.activate')}
+                            {user.status === 'active' ? <UserX className="w-4 h-4 mr-2" /> : <UserCheck className="w-4 h-4 mr-2" />}
+                            {user.status === 'active' ? t('users.deactivate') : t('users.activate')}
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
@@ -416,7 +490,21 @@ export default function UserManagement() {
         />
       )}
 
-      {/* ── Add User Modal ── */}
+      {/* ── Add CHP Modal ── */}
+      {showAddCHPModal && (
+        <AddCHPModal
+          onSubmit={async (chpData) => {
+            try {
+              const chp = await addChp(chpData);
+              setShowAddCHPModal(false);
+              toast.success(`${chp.fullName} ${t('chp.addedSuccess') || 'registered as CHP'}`);
+            } catch (err: any) {
+              toast.error(err.message || t('chp.addError') || 'Failed to register CHP');
+            }
+          }}
+          onCancel={() => setShowAddCHPModal(false)}
+        />
+      )}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -425,66 +513,48 @@ export default function UserManagement() {
           </DialogHeader>
           <AddUserForm
             onSubmit={async (data) => {
-              // Call backend API to create user with email delivery
-              const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+              // OFFLINE-FIRST: save locally, try API, enqueue for sync if offline
               try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/users`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': jwtToken ? `Bearer ${jwtToken}` : '',
+                const { user, serverSynced, error } = await addUser(
+                  {
+                    firstName: data.firstName,
+                    lastName: data.lastName,
+                    email: data.email,
+                    phone: data.phone,
+                    role: data.role,
+                    status: 'active',
+                    region: 'default',
+                    assignedFacility: data.assignedFacility,
                   },
-                  body: JSON.stringify({
+                  {
                     firstName: data.firstName,
                     lastName: data.lastName,
                     email: data.email,
                     phone: data.phone,
                     role: data.role,
                     assignedFacility: data.assignedFacility,
-                  }),
-                });
-                // Guard against HTML responses (wrong domain, 404 pages, etc.)
-                const contentType = res.headers.get('content-type') || '';
-                if (!contentType.includes('application/json')) {
-                  const text = await res.text();
-                  console.error('[AddUser] Non-JSON response:', text.substring(0, 200));
-                  toast.error('Server returned invalid response. Check API connection.');
-                  return;
-                }
-                const result = await res.json();
-                if (result.success) {
-                  // Store MongoDB _id as local id so resend works correctly
-                  addUser({
-                    id: result.data.user._id || result.data.user.id,
-                    firstName: data.firstName,
-                    lastName: data.lastName,
-                    email: data.email,
-                    phone: data.phone,
-                    role: data.role,
-                    isActive: true,
-                    assignedFacility: data.assignedFacility,
-                  } as any);
-                  setShowAddModal(false);
-                  if (!result.data.emailSent && result.data.tempPassword) {
-                    setCreatedUserResult({
-                      tempPassword: result.data.tempPassword,
-                      emailSent: false,
-                      emailError: result.data.emailError,
-                      userName: `${data.firstName} ${data.lastName}`,
-                      userEmail: data.email,
-                    });
-                  } else if (result.data.emailSent) {
-                    toast.success(t('users.userCreatedEmailSent') || 'User created and welcome email sent');
-                  } else {
-                    toast.success(t('users.userCreated') || 'User created successfully');
+                    region: 'default',
                   }
+                );
+
+                setShowAddModal(false);
+
+                if (serverSynced) {
+                  toast.success(t('users.userCreated') || 'User created successfully');
                 } else {
-                  toast.error(result.error?.message || 'Failed to create user');
+                  toast.success(
+                    t('users.savedLocallyWillSync') ||
+                    `${user.firstName} ${user.lastName} saved locally. Will sync when backend is available.`
+                  );
+                  if (error) console.log('[AddUser] Offline:', error);
                 }
+
+                // If backend gave us a tempPassword, show it (for admin to share)
+                // Note: tempPassword only comes from server, not available offline
               } catch (err: any) {
                 const errorMsg = err?.message || String(err);
-                console.error('[AddUser] API error:', errorMsg);
-                toast.error(`Server connection failed: ${errorMsg}. Backend may be restarting, try again in 30 seconds.`);
+                console.error('[AddUser] Error:', errorMsg);
+                toast.error(errorMsg || 'Failed to create user');
               }
             }}
             onCancel={() => setShowAddModal(false)}
@@ -542,7 +612,7 @@ export default function UserManagement() {
             <button
               onClick={() => changingRoleUser && handleRoleChange(changingRoleUser, 'collector')}
               className={`w-full p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${
-                changingRoleUser?.role === 'collector' || changingRoleUser?.role === 'chp'
+                changingRoleUser?.role === 'collector'
                   ? 'border-sky-500 bg-sky-50'
                   : 'border-gray-200 hover:border-sky-300'
               }`}
@@ -707,7 +777,7 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
         </select>
       </div>
 
-      {(formData.role === 'collector' || formData.role === 'chp') && (
+      {formData.role === 'collector' && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.assignedFacility')}</label>
           <input
@@ -808,7 +878,7 @@ function EditUserForm({ user, onSubmit, onCancel }: EditUserFormProps) {
         />
       </div>
 
-      {(user.role === 'collector' || user.role === 'chp') && (
+      {user.role === 'collector' && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.assignedFacility')}</label>
           <input

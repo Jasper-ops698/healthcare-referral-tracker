@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { usePatients } from '@/hooks/useData';
+import { usePatients, useChps } from '@/hooks/useData';
 import { useI18n } from '@/i18n/useI18n';
 import type { Patient } from '@/types';
 import { 
@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   ChevronRight,
   ChevronLeft,
-  Save
+  Save,
+  Users
 } from 'lucide-react';
 
 interface PatientRegistrationProps {
@@ -21,11 +22,18 @@ interface PatientRegistrationProps {
 export default function PatientRegistration({ onSuccess }: PatientRegistrationProps) {
   const { user } = useAuth();
   const { addPatient } = usePatients();
+  const { chps } = useChps();
   const { t } = useI18n();
   const [step, setStep] = useState(1);
+
+  // Get available CHPs for the collector's facility
+  const facilityChps = user?.assignedFacility
+    ? chps.filter(c => c.facilityId === user.assignedFacility && c.status === 'active')
+    : chps.filter(c => c.status === 'active');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  
+
   const [formData, setFormData] = useState<Partial<Patient>>({
     firstName: '',
     lastName: '',
@@ -48,6 +56,9 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
     bloodType: '',
     allergies: [],
     chronicConditions: [],
+    assignedChpId: '',
+    assignedChpName: '',
+    referralStages: [],
     status: 'active',
     referralStatus: 'registered',
   });
@@ -209,6 +220,31 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
           <option value="O+">O+</option>
           <option value="O-">O-</option>
         </select>
+      </div>
+
+      {/* Assigned CHP */}
+      <div>
+        <label className="block text-sm font-medium text-foreground mb-1">{t('patients.chpAssigned')}</label>
+        <p className="text-xs text-muted-foreground mb-1">{t('patients.assignChpDesc')}</p>
+        <select
+          value={formData.assignedChpId || ''}
+          onChange={(e) => {
+            const chpId = e.target.value;
+            const selected = facilityChps.find(c => c.id === chpId);
+            setFormData({ ...formData, assignedChpId: chpId, assignedChpName: selected?.fullName || '' });
+          }}
+          className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-white"
+        >
+          <option value="">{t('patients.selectCollector')}</option>
+          {facilityChps.map((chp) => (
+            <option key={chp.id} value={chp.id}>
+              {chp.fullName} — {chp.village}, {chp.ward}
+            </option>
+          ))}
+        </select>
+        {facilityChps.length === 0 && (
+          <p className="text-xs text-amber-600 mt-1">{t('patients.noChpsForFacility')}</p>
+        )}
       </div>
     </div>
   );
@@ -458,10 +494,68 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
     </div>
   );
 
+  // ── Step 4: CHP Assignment ──
+  const renderStep4 = () => (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+        <Users className="w-5 h-5 text-primary" />
+        {t('patients.assignChp')}
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        {t('patients.assignChpDesc')}
+      </p>
+
+      <div>
+        <label className="block text-sm font-medium text-foreground mb-1">
+          {t('patients.chpAssigned')}
+        </label>
+        <select
+          value={formData.assignedChpId || ''}
+          onChange={(e) => {
+            const chpId = e.target.value;
+            const selectedChp = facilityChps.find(c => c.id === chpId);
+            setFormData({
+              ...formData,
+              assignedChpId: chpId,
+              assignedChpName: selectedChp?.fullName || '',
+            });
+          }}
+          className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-white"
+        >
+          <option value="">{t('patients.selectCollector')}</option>
+          {facilityChps.map((chp) => (
+            <option key={chp.id} value={chp.id}>
+              {chp.fullName} — {chp.village}, {chp.ward} ({chp.phone})
+            </option>
+          ))}
+        </select>
+        {facilityChps.length === 0 && (
+          <p className="text-xs text-amber-600 mt-2">
+            {t('patients.noChpsForFacility')}
+          </p>
+        )}
+      </div>
+
+      {/* Referral Stages Preview */}
+      {formData.assignedChpId && (
+        <div className="mt-4 p-4 bg-muted/30 rounded-lg border border-border">
+          <h4 className="text-sm font-medium text-foreground mb-2">
+            {t('referral.stages')}
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            Referral stages will be tracked as the patient moves between facilities.
+            The assigned CHP ({formData.assignedChpName}) will accompany the patient through each stage.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   const steps = [
     { number: 1, title: t('reg.personalInfo'), render: renderStep1 },
     { number: 2, title: t('reg.address'), render: renderStep2 },
     { number: 3, title: t('reg.medicalInfo'), render: renderStep3 },
+    { number: 4, title: t('patients.assignChp'), render: renderStep4 },
   ];
 
   return (

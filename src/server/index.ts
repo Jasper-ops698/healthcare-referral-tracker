@@ -22,6 +22,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import syncRoutes from './routes/sync.js';
 import authRoutes from './routes/auth.js';
+import chpRoutes from './routes/chps.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { processPendingEmails } from './services/emailService.js';
@@ -83,6 +84,9 @@ app.use(`${API_PREFIX}/auth`, authRoutes);
 
 // User routes (admin only — auth enforced per-route)
 app.use(`${API_PREFIX}/users`, userRoutes);
+
+// CHP routes (admin only — auth enforced per-route)
+app.use(`${API_PREFIX}/chps`, chpRoutes);
 
 // Email routes
 app.use(`${API_PREFIX}/email`, emailRoutes);

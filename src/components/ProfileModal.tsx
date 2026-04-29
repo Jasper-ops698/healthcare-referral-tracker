@@ -196,11 +196,11 @@ export default function ProfileModal({ user, onClose, onSave, canEdit = true }: 
                 </span>
                 <span
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                    user.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                    user.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
                   }`}
                 >
-                  {user.isActive ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
-                  {user.isActive ? 'Active' : 'Inactive'}
+                  {user.status === 'active' ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
+                  {user.status === 'active' ? 'Active' : 'Inactive'}
                 </span>
                 {!canEdit && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-100">

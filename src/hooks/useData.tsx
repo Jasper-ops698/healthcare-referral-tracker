@@ -1,19 +1,13 @@
-/**
- * useData — React hooks backed by IndexedDB (Dexie.js)
- *
- * Every mutation is written to IndexedDB and automatically enqueued
- * in the sync Outbox for MedSyncManager.pushLocalChanges() to upload.
- */
-
 import { useState, useCallback, useEffect } from 'react';
 import type {
   Patient,
   MedicalRecord,
   User,
-  FilterOptions
+  Chp
 } from '@/types';
 import { getLocalDatabase } from '@/lib/dexieDatabase';
 import type { DBPatient, DBUser, DBMedicalRecord } from '@/lib/dexieDatabase';
+import { API_BASE_URL } from '@/lib/config';
 import { v4 as uuidv4 } from 'uuid';
 import { useDashboard } from './useDashboard';
 
@@ -24,17 +18,16 @@ async function seedIfEmpty() {
   const existingUsers = await localDB.getAllUsers();
   if (existingUsers.length === 0) {
     // Seed only the primary admin — no mock data
+    // Phone is empty; will be filled by backend sync (loadUsers fetches real data)
     await localDB.putUser({
       id: 'admin-primary',
       email: 'bkitib@gmail.com',
       firstName: 'Emmanuel',
       lastName: 'Nyale',
       role: 'admin',
-      phone: '+254700000001',
-      isActive: true,
-      createdAt: new Date(),
+      phone: '',
+      status: 'active',
       region: 'global',
-      isPrimaryAdmin: true,
       _sync: {
         version: 1,
         modifiedAt: new Date().toISOString(),
@@ -58,7 +51,102 @@ export function useUsers() {
     seedIfEmpty().then(() => loadUsers());
   }, []);
 
+  /**
+   * Load users — BACKEND-FIRST sync with REPLACE strategy.
+   *
+   * When backend responds successfully:
+   *   1. CLEAR the local users table
+   *   2. INSERT fresh backend data with lastSyncedAt timestamp
+   *   3. RE-INSERT any offline-created users still pending sync
+   *
+   * This guarantees the frontend matches MongoDB exactly.
+   */
   const loadUsers = useCallback(async () => {
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    if (!isLocalToken) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 15000);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/users`, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+
+        if (res.ok) {
+          const result = await res.json();
+          if (result.success && Array.isArray(result.data)) {
+            // 1. Get offline users pending sync (to re-insert after clear)
+            const outboxEntries = await localDB.getPendingChanges(100);
+            const offlineUserIds = new Set(
+              outboxEntries.filter(e => e.entityType === 'user').map(e => e.entityId)
+            );
+            const allLocal = await localDB.getAllUsers();
+            const offlineUsers = allLocal.filter(u => offlineUserIds.has(u.id));
+
+            // 2. CLEAR local users table
+            await localDB.clearAllUsers();
+
+            // 3. INSERT fresh backend data with lastSyncedAt
+            const backendUsers = result.data.map((u: any) => ({
+              id: u._id || u.id,
+              firstName: u.firstName,
+              lastName: u.lastName,
+              email: u.email,
+              phone: u.phone || '',
+              role: u.role,
+              status: u.status || 'active',
+              region: u.region || 'default',
+              assignedFacility: u.assignedFacility || u.facilityId,
+              forcePasswordChange: u.forcePasswordChange,
+              preferences: u.preferences,
+              avatar: u.avatar,
+              dateOfBirth: u.dateOfBirth,
+              gender: u.gender,
+              nationalId: u.nationalId,
+              emergencyContact: u.emergencyContact,
+              languages: u.languages,
+              homeCounty: u.homeCounty,
+              bloodGroup: u.bloodGroup,
+              physicalAddress: u.physicalAddress,
+              nextOfKin: u.nextOfKin,
+              bio: u.bio,
+              createdAt: u.createdAt ? new Date(u.createdAt) : new Date(),
+              lastLogin: u.lastLogin ? new Date(u.lastLogin) : undefined,
+              lastSyncedAt: new Date(), // ← fresh from server
+              _sync: {
+                version: (u._sync?.version || 0) + 1,
+                modifiedAt: new Date().toISOString(),
+                modifiedBy: 'backend-pull',
+                checksum: '',
+                isDeleted: false,
+                createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : new Date().toISOString(),
+                createdBy: u._sync?.createdBy || 'backend',
+              },
+            } as DBUser));
+
+            for (const u of backendUsers) {
+              await localDB.putUser(u);
+            }
+
+            // 4. Re-insert offline-created users (pending sync)
+            for (const u of offlineUsers) {
+              await localDB.putUser({ ...u, lastSyncedAt: undefined } as DBUser);
+            }
+          }
+        }
+      } catch {
+        /* backend unreachable — keep existing IndexedDB data */
+      }
+    }
+
+    // Read from IndexedDB (backend-fresh or cached)
     const all = await localDB.getAllUsers();
     setUsers(all as User[]);
     setIsLoading(false);
@@ -72,47 +160,156 @@ export function useUsers() {
     return users.find(u => u.id === id);
   }, [users]);
 
-  const addUser = useCallback(async (userData: Omit<User, 'id' | 'createdAt'> & { id?: string }): Promise<User> => {
-    setIsLoading(true);
-    const newUser: DBUser = {
-      ...userData,
-      id: userData.id || uuidv4(),
-      createdAt: new Date(),
-      _sync: {
-        version: 1,
-        modifiedAt: new Date().toISOString(),
-        modifiedBy: localDB.getDeviceId(),
-        checksum: '',
-        isDeleted: false,
-        createdAt: new Date().toISOString(),
-        createdBy: localDB.getDeviceId(),
-      },
-    } as DBUser;
+  /**
+   * Add user — BACKEND-FIRST.
+   * Only saves locally after backend confirms success.
+   */
+  const addUser = useCallback(async (
+    userData: Omit<User, 'id' | 'createdAt'> & { id?: string; password?: string },
+    apiPayload?: { firstName: string; lastName: string; email: string; phone: string; role: string; assignedFacility?: string; region?: string }
+  ): Promise<{ user: User; serverSynced: boolean; error?: string }> => {
+    const email = userData.email?.toLowerCase().trim();
+    if (email) {
+      const existing = users.find(u => u.email?.toLowerCase().trim() === email);
+      if (existing) {
+        return { user: existing, serverSynced: false, error: `User with email ${email} already exists` };
+      }
+    }
 
-    await localDB.putUser(newUser);
-    await loadUsers();
-    return newUser as User;
-  }, [loadUsers]);
+    setIsLoading(true);
+
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    if (isLocalToken) {
+      setIsLoading(false);
+      return {
+        user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
+        serverSynced: false,
+        error: 'You must be logged in with a server connection to create users. Please log out and log back in.',
+      };
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwtToken}`,
+        },
+        body: JSON.stringify(apiPayload || {
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          email: userData.email,
+          phone: userData.phone,
+          role: userData.role,
+          assignedFacility: userData.assignedFacility,
+          region: userData.region || 'default',
+        }),
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('[AddUser] Non-JSON response:', text.substring(0, 200));
+        setIsLoading(false);
+        return {
+          user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
+          serverSynced: false,
+          error: 'Backend returned an invalid response. The server may be restarting — try again in 30 seconds.',
+        };
+      }
+
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        const errorMsg = result.error?.message || result.error || `Server error: ${res.status}`;
+        setIsLoading(false);
+        return {
+          user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
+          serverSynced: false,
+          error: errorMsg,
+        };
+      }
+
+      const backendUser = result.data?.user || result.data;
+      const serverId = backendUser?._id || backendUser?.id || uuidv4();
+
+      const newUser: DBUser = {
+        ...userData,
+        id: serverId,
+        createdAt: backendUser?.createdAt ? new Date(backendUser.createdAt) : new Date(),
+        lastSyncedAt: new Date(),
+        _sync: {
+          version: 1,
+          modifiedAt: new Date().toISOString(),
+          modifiedBy: localDB.getDeviceId(),
+          checksum: '',
+          isDeleted: false,
+          createdAt: new Date().toISOString(),
+          createdBy: localDB.getDeviceId(),
+        },
+      } as DBUser;
+
+      await localDB.putUser(newUser);
+      await loadUsers();
+      setIsLoading(false);
+
+      return {
+        user: newUser as User,
+        serverSynced: true,
+        error: result.data?.tempPassword ? `Temp password: ${result.data.tempPassword}` : undefined,
+      };
+
+    } catch (err: any) {
+      const isNetworkError =
+        err.message?.includes('fetch') ||
+        err.message?.includes('network') ||
+        err.message?.includes('Failed to fetch') ||
+        !navigator.onLine;
+
+      if (isNetworkError) {
+        setIsLoading(false);
+        return {
+          user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
+          serverSynced: false,
+          error: 'Network error — cannot reach the backend server. Please check your connection and try again.',
+        };
+      }
+
+      setIsLoading(false);
+      return {
+        user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
+        serverSynced: false,
+        error: err.message || 'Failed to create user',
+      };
+    }
+  }, [loadUsers, users]);
 
   const updateUser = useCallback(async (id: string, updates: Partial<User>): Promise<User | null> => {
     setIsLoading(true);
     const existing = await localDB.getUserById(id);
-    if (!existing) { setIsLoading(false); return null; }
+    if (!existing) {
+      setIsLoading(false);
+      return null;
+    }
 
-    const updated: DBUser = { ...existing, ...updates } as DBUser;
+    const updated = { ...existing, ...updates } as DBUser;
     await localDB.putUser(updated);
     await loadUsers();
+    setIsLoading(false);
     return updated as User;
   }, [loadUsers]);
 
   const toggleUserStatus = useCallback(async (id: string): Promise<boolean> => {
     const user = users.find(u => u.id === id);
     if (!user) return false;
-    await updateUser(id, { isActive: !user.isActive });
+    const newStatus = user.status === 'active' ? 'inactive' : 'active';
+    await updateUser(id, { status: newStatus });
     return true;
   }, [users, updateUser]);
 
-  const clearUsers = useCallback(async (): Promise<void> => {
+  const clearUsers = useCallback(async () => {
     await localDB.clearAllUsers();
     setUsers([]);
   }, []);
@@ -120,12 +317,75 @@ export function useUsers() {
   return {
     users,
     isLoading,
+    loadUsers,
     getUsersByRole,
     getUserById,
     addUser,
     updateUser,
     toggleUserStatus,
     clearUsers,
+  };
+}
+
+// ─── CHPs Hook ───
+
+export function useChps() {
+  const [chps, setChps] = useState<Chp[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadChps();
+  }, []);
+
+  const loadChps = useCallback(async () => {
+    const all = await localDB.getAllChps();
+    setChps(all);
+    setIsLoading(false);
+  }, []);
+
+  const addChp = useCallback(async (chpData: Omit<Chp, 'id' | 'chpId' | 'createdAt'>): Promise<Chp> => {
+    const existing = chps.find(c => c.nationalId === chpData.nationalId);
+    if (existing) return existing;
+
+    const id = uuidv4();
+    const count = chps.length;
+    const chpId = `CHP-${String(count + 1).padStart(4, '0')}`;
+
+    const newChp: Chp = {
+      ...chpData,
+      id,
+      chpId,
+      createdAt: new Date(),
+    };
+
+    await localDB.putChp(newChp);
+    await loadChps();
+    return newChp;
+  }, [chps, loadChps]);
+
+  const getChpsByFacility = useCallback(async (facilityId: string): Promise<Chp[]> => {
+    if (!facilityId) return chps.filter(c => c.status === 'active');
+    return localDB.getChpsByFacility(facilityId);
+  }, [chps]);
+
+  const deleteChp = useCallback(async (id: string) => {
+    await localDB.deleteChp(id);
+    await loadChps();
+  }, [loadChps]);
+
+  const clearChps = useCallback(async () => {
+    await localDB.clearAllChps();
+    setChps([]);
+  }, []);
+
+  return {
+    chps,
+    isLoading,
+    loadChps,
+    addChp,
+    getChpsByFacility,
+    deleteChp,
+    clearChps,
   };
 }
 
@@ -145,27 +405,14 @@ export function usePatients() {
     setIsLoading(false);
   }, []);
 
-  const getPatientById = useCallback((id: string): Patient | undefined => {
-    return patients.find(p => p.id === id);
-  }, [patients]);
-
-  const getPatientByPatientId = useCallback((patientId: string): Patient | undefined => {
-    return patients.find(p => p.patientId === patientId);
-  }, [patients]);
-
-  const getPatientsByCollector = useCallback((collectorId: string): Patient[] => {
-    return patients.filter(p => p.registeredBy === collectorId);
-  }, [patients]);
-
   const addPatient = useCallback(async (
     patientData: Omit<Patient, 'id' | 'patientId' | 'registrationDate' | 'lastUpdated'>
   ): Promise<Patient> => {
-    setIsLoading(true);
     const count = patients.length;
     const newPatient: DBPatient = {
       ...patientData,
       id: uuidv4(),
-      patientId: `PT-${String(count + 1).padStart(6, '0')}`,
+      patientId: `P1-${String(count + 1).padStart(6, '0')}`,
       registrationDate: new Date(),
       lastUpdated: new Date(),
       _sync: {
@@ -185,50 +432,25 @@ export function usePatients() {
   }, [patients.length, loadPatients]);
 
   const updatePatient = useCallback(async (id: string, updates: Partial<Patient>): Promise<Patient | null> => {
-    setIsLoading(true);
     const existing = await localDB.getPatientById(id);
-    if (!existing) { setIsLoading(false); return null; }
-
-    const updated: DBPatient = { ...existing, ...updates, lastUpdated: new Date() } as DBPatient;
+    if (!existing) return null;
+    const updated = { ...existing, ...updates } as DBPatient;
     await localDB.putPatient(updated);
     await loadPatients();
     return updated as Patient;
   }, [loadPatients]);
 
-  const filterPatients = useCallback((filters: FilterOptions): Patient[] => {
-    return patients.filter(p => {
-      if (filters.status?.length && !filters.status.includes(p.status)) return false;
-      if (filters.gender?.length && !filters.gender.includes(p.gender)) return false;
-      if (filters.searchQuery) {
-        const q = filters.searchQuery.toLowerCase();
-        if (!`${p.firstName} ${p.lastName}`.toLowerCase().includes(q) &&
-            !p.patientId.toLowerCase().includes(q) &&
-            !p.phone.includes(filters.searchQuery)) return false;
-      }
-      return true;
-    });
-  }, [patients]);
-
-  const searchPatients = useCallback((query: string): Patient[] => {
-    if (!query.trim()) return patients;
-    const q = query.toLowerCase();
-    return patients.filter(p =>
-      `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
-      p.patientId.toLowerCase().includes(q) ||
-      p.phone.includes(query)
-    );
+  const getPatientsByCollector = useCallback((collectorId: string): Patient[] => {
+    return patients.filter(p => p.registeredBy === collectorId);
   }, [patients]);
 
   return {
     patients,
     isLoading,
-    getPatientById,
-    getPatientByPatientId,
-    getPatientsByCollector,
+    loadPatients,
     addPatient,
     updatePatient,
-    filterPatients,
-    searchPatients,
+    getPatientsByCollector,
   };
 }
 
@@ -284,37 +506,16 @@ export function useMedicalRecords() {
     return newRecord as MedicalRecord;
   }, [loadRecords]);
 
-  const updateRecord = useCallback(async (id: string, updates: Partial<MedicalRecord>): Promise<MedicalRecord | null> => {
-    setIsLoading(true);
-    const existing = await localDB.getMedicalRecordById(id);
-    if (!existing) { setIsLoading(false); return null; }
-
-    const updated: DBMedicalRecord = { ...existing, ...updates } as DBMedicalRecord;
-    await localDB.putMedicalRecord(updated);
-    await loadRecords();
-    return updated as MedicalRecord;
-  }, [loadRecords]);
-
-  return {
-    records,
-    isLoading,
-    getRecordsByPatient,
-    getRecordsByCollector,
-    getRecordById,
-    addRecord,
-    updateRecord,
-  };
+  return { records, isLoading, addRecord, getRecordsByPatient, getRecordsByCollector, getRecordById, loadRecords };
 }
 
-// ─── Dashboard Hook (re-export from useDashboard.ts) ───
-export { useDashboard } from './useDashboard';
-
-// ─── Combined Hook ───
+// ─── Aggregated Healthcare Hook ───
 
 export function useHealthcareData() {
   const patients = usePatients();
   const medicalRecords = useMedicalRecords();
   const users = useUsers();
+  const chps = useChps();
   const dashboard = useDashboard();
-  return { patients, medicalRecords, users, dashboard };
+  return { patients, medicalRecords, users, chps, dashboard };
 }

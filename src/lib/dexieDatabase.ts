@@ -7,7 +7,7 @@
  */
 
 import Dexie, { type EntityTable } from 'dexie';
-import type { Patient, MedicalRecord, User } from '@/types';
+import type { Patient, MedicalRecord, User, Chp } from '@/types';
 
 // ─── Outbox Status Lifecycle ───
 
@@ -41,7 +41,7 @@ export interface DBMedicalRecord extends MedicalRecord {
 
 export interface OutboxEntry {
   changeId: string;
-  entityType: 'user' | 'patient' | 'medicalRecord';
+  entityType: 'user' | 'patient' | 'medicalRecord' | 'chp';
   entityId: string;
   changeType: 'create' | 'update' | 'delete';
   status: OutboxStatus;
@@ -71,6 +71,7 @@ export interface DBSyncCheckpoint {
 
 class HealthTrackDB extends Dexie {
   patients!: EntityTable<DBPatient, 'id'>;
+  chps!: EntityTable<Chp, 'id'>;
   users!: EntityTable<DBUser, 'id'>;
   medicalRecords!: EntityTable<DBMedicalRecord, 'id'>;
   outbox!: EntityTable<OutboxEntry, 'changeId'>;
@@ -80,7 +81,8 @@ class HealthTrackDB extends Dexie {
     super('HealthTrackDB');
 
     this.version(1).stores({
-      patients: 'id, patientId, referralStatus, registeredBy, [registeredBy+_sync.version], _sync.version',
+      patients: 'id, patientId, referralStatus, registeredBy, assignedChpId, assignedCollector, [registeredBy+_sync.version], [assignedChpId+status], [assignedCollector+status], _sync.version',
+      chps: 'id, chpId, nationalId, facilityId, county, status, [facilityId+status], [county+status]',
       users: 'id, email, role, isActive',
       medicalRecords: 'id, patientId, recordedBy, [patientId+recordedAt]',
       outbox: 'changeId, status, [status+timestamp], [entityType+entityId], timestamp, nextRetryAt',
@@ -139,13 +141,48 @@ export class LocalDatabase {
 
   // ─── Outbox Operations ───
 
+  /**
+   * enqueueChange() — DEDUPLICATED.
+   *
+   * Before adding a new entry, checks if an identical pending entry
+   * already exists for the same entity + operation. If so, updates
+   * the payload (keeps the same changeId) instead of creating a duplicate.
+   *
+   * This prevents the "10 pending sync" problem where the same user
+   * was added 10 times.
+   */
   async enqueueChange(
-    entityType: 'user' | 'patient' | 'medicalRecord',
+    entityType: 'user' | 'patient' | 'medicalRecord' | 'chp',
     entityId: string,
     changeType: 'create' | 'update' | 'delete',
     payload: any
   ): Promise<OutboxEntry> {
     const checksum = await this.computeChecksum(payload);
+
+    // ── Deduplication: look for existing pending entry for same entity ──
+    const existing = await db.outbox
+      .where('[entityType+entityId]')
+      .between([entityType, entityId], [entityType, entityId])
+      .filter(e => e.status === 'pending' || e.status === 'error')
+      .first();
+
+    if (existing) {
+      // Update existing entry with new payload instead of creating duplicate
+      await db.outbox.update(existing.changeId, {
+        payload,
+        checksum,
+        timestamp: new Date().toISOString(),
+        status: 'pending',
+        retryCount: 0,
+        nextRetryAt: null,
+        lastError: undefined,
+        lastHttpStatus: undefined,
+      });
+      const updated = await db.outbox.get(existing.changeId);
+      return updated!;
+    }
+
+    // No existing entry — create new one
     const entry: OutboxEntry = {
       changeId: `change_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
       entityType, entityId, changeType,
@@ -157,6 +194,47 @@ export class LocalDatabase {
     };
     await db.outbox.add(entry);
     return entry;
+  }
+
+  /**
+   * recoverStaleSyncingItems()
+   *
+   * On startup, finds items stuck in 'syncing' state (from a previous
+   * crashed session) and resets them to 'pending' so they can be retried.
+   */
+  async recoverStaleSyncingItems(maxAgeMinutes = 5): Promise<number> {
+    const cutoff = new Date(Date.now() - maxAgeMinutes * 60000).toISOString();
+    const stale = await db.outbox
+      .where('status').equals('syncing')
+      .filter(e => e.timestamp < cutoff)
+      .toArray();
+
+    for (const item of stale) {
+      await db.outbox.update(item.changeId, {
+        status: 'pending',
+        retryCount: 0,
+        nextRetryAt: null,
+        lastError: `Recovered from stale syncing state (older than ${maxAgeMinutes}m)`,
+      });
+    }
+    return stale.length;
+  }
+
+  /**
+   * getUnsyncedCount() — counts ALL items not yet synced.
+   * Includes: pending + error (retryable) + syncing (stale)
+   * This is what the UI badge should show.
+   */
+  async getUnsyncedCount(): Promise<number> {
+    const now = new Date().toISOString();
+    const [pendingCount, retryableCount] = await Promise.all([
+      db.outbox.where('status').equals('pending').count(),
+      db.outbox
+        .where('[status+nextRetryAt]')
+        .between(['error', Dexie.minKey], ['error', now])
+        .count(),
+    ]);
+    return pendingCount + retryableCount;
   }
 
   async getPendingChanges(limit = 50): Promise<OutboxEntry[]> {
@@ -380,6 +458,64 @@ export class LocalDatabase {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // CHP (Community Health Promoter) CRUD — Wrapped in Dexie Transactions
+  // ═══════════════════════════════════════════════════════════════════════
+
+  async getAllChps(): Promise<Chp[]> {
+    return db.chps.toArray();
+  }
+
+  async getChpById(id: string): Promise<Chp | undefined> {
+    return db.chps.get(id);
+  }
+
+  async getChpByChpId(chpId: string): Promise<Chp | undefined> {
+    return db.chps.where('chpId').equals(chpId).first();
+  }
+
+  /**
+   * putChp()
+   *
+   * ATOMIC TRANSACTION: Writes to both `chps` and `outbox`.
+   */
+  async putChp(chp: Chp): Promise<Chp> {
+    const existing = await db.chps.get(chp.id);
+    const changeType = existing ? 'update' : 'create';
+
+    // Upsert
+    await db.transaction('rw', db.chps, db.outbox, async () => {
+      await db.chps.put(chp);
+      await this.enqueueChangeInTransaction('chp', chp.id, changeType, chp);
+    });
+
+    return chp;
+  }
+
+  async deleteChp(id: string): Promise<void> {
+    await db.chps.delete(id);
+  }
+
+  async clearAllChps(): Promise<void> {
+    await db.chps.clear();
+  }
+
+  /** Get CHPs filtered by facility (for collector dropdown) */
+  async getChpsByFacility(facilityId: string): Promise<Chp[]> {
+    return db.chps
+      .where('[facilityId+status]')
+      .between([facilityId, 'active'], [facilityId, 'active'])
+      .toArray();
+  }
+
+  /** Get CHPs by county */
+  async getChpsByCounty(county: string): Promise<Chp[]> {
+    return db.chps
+      .where('[county+status]')
+      .between([county, 'active'], [county, 'active'])
+      .toArray();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   // MEDICAL RECORD CRUD — Wrapped in Dexie Transactions
   // ═══════════════════════════════════════════════════════════════════════
 
@@ -436,6 +572,10 @@ export class LocalDatabase {
     await db.users.bulkPut(users);
   }
 
+  async bulkPutChps(chps: Chp[]): Promise<void> {
+    await db.chps.bulkPut(chps);
+  }
+
   async bulkPutMedicalRecords(records: DBMedicalRecord[]): Promise<void> {
     await db.medicalRecords.bulkPut(records);
   }
@@ -483,7 +623,7 @@ export class LocalDatabase {
    * db.transaction('rw', ...).
    */
   private async enqueueChangeInTransaction(
-    entityType: 'user' | 'patient' | 'medicalRecord',
+    entityType: 'user' | 'patient' | 'medicalRecord' | 'chp',
     entityId: string,
     changeType: 'create' | 'update' | 'delete',
     payload: any
