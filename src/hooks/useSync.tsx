@@ -66,7 +66,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
     const unsubscribe = manager.onStatusChange((s) => {
       setStatus(s);
-      if (s === 'idle' || s === 'error' || s === 'offline') {
+      if (s === 'idle') {
+        setLastSyncTime(new Date().toISOString());
+        // Notify data hooks to re-fetch from backend
+        window.dispatchEvent(new CustomEvent('healthtrack-sync-success'));
+      } else if (s === 'error' || s === 'offline') {
         setLastSyncTime(new Date().toISOString());
       }
     });

@@ -49,6 +49,11 @@ export function useUsers() {
 
   useEffect(() => {
     seedIfEmpty().then(() => loadUsers());
+
+    // Re-load users whenever a successful sync completes
+    const handleSyncSuccess = () => loadUsers();
+    window.addEventListener('healthtrack-sync-success', handleSyncSuccess);
+    return () => window.removeEventListener('healthtrack-sync-success', handleSyncSuccess);
   }, []);
 
   /**
@@ -68,7 +73,7 @@ export function useUsers() {
     if (!isLocalToken) {
       try {
         const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 15000);
+        const t = setTimeout(() => controller.abort(), 45000);
 
         const res = await fetch(`${API_BASE_URL}/api/v1/users`, {
           headers: {
@@ -141,8 +146,13 @@ export function useUsers() {
             }
           }
         }
-      } catch {
-        /* backend unreachable — keep existing IndexedDB data */
+      } catch (err: any) {
+        // Log so we can diagnose in DevTools, but don't break the UI
+        if (err.name === 'AbortError') {
+          console.warn('[loadUsers] Backend fetch timed out (45s). Server may be cold-starting. Retrying on next sync cycle.');
+        } else {
+          console.warn('[loadUsers] Backend fetch failed:', err.message || err);
+        }
       }
     }
 
@@ -191,6 +201,9 @@ export function useUsers() {
     }
 
     try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 45000);
+
       const res = await fetch(`${API_BASE_URL}/api/v1/users`, {
         method: 'POST',
         headers: {
@@ -206,7 +219,9 @@ export function useUsers() {
           assignedFacility: userData.assignedFacility,
           region: userData.region || 'default',
         }),
+        signal: controller.signal,
       });
+      clearTimeout(t);
 
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
@@ -262,6 +277,15 @@ export function useUsers() {
       };
 
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setIsLoading(false);
+        return {
+          user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
+          serverSynced: false,
+          error: 'Server is taking too long to respond. The backend may be waking up — try again in 30–60 seconds.',
+        };
+      }
+
       const isNetworkError =
         err.message?.includes('fetch') ||
         err.message?.includes('network') ||
