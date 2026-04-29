@@ -247,10 +247,17 @@ async function fetchDashboardFromAPI(): Promise<DashboardKPIs | null> {
     const token = localStorage.getItem('healthtrack_jwt_token');
     const apiUrl = import.meta.env.VITE_API_URL || API_BASE_URL;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), 45000);
 
-    const res = await fetch(`${apiUrl}/api/v1/analytics/dashboard`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    const res = await fetch(`${apiUrl}/api/v1/analytics/dashboard?_t=${Date.now()}`, {
+      headers: token ? { 
+        Authorization: `Bearer ${token}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      } : {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
       signal: controller.signal,
     });
     clearTimeout(timeout);

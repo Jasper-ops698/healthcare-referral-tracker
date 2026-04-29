@@ -75,10 +75,12 @@ export function useUsers() {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 45000);
 
-        const res = await fetch(`${API_BASE_URL}/api/v1/users`, {
+        const res = await fetch(`${API_BASE_URL}/api/v1/users?_t=${Date.now()}`, {
           headers: {
             'Authorization': `Bearer ${jwtToken}`,
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
           },
           signal: controller.signal,
         });
@@ -86,7 +88,11 @@ export function useUsers() {
 
         if (res.ok) {
           const result = await res.json();
-          if (result.success && Array.isArray(result.data)) {
+          // Backend returns { success: true, data: { users: [...], count: N } }
+          const usersArray = Array.isArray(result.data)
+            ? result.data
+            : result.data?.users || [];
+          if (result.success && usersArray.length > 0) {
             // 1. Get offline users pending sync (to re-insert after clear)
             const outboxEntries = await localDB.getPendingChanges(100);
             const offlineUserIds = new Set(
@@ -99,7 +105,7 @@ export function useUsers() {
             await localDB.clearAllUsers();
 
             // 3. INSERT fresh backend data with lastSyncedAt
-            const backendUsers = result.data.map((u: any) => ({
+            const backendUsers = usersArray.map((u: any) => ({
               id: u._id || u.id,
               firstName: u.firstName,
               lastName: u.lastName,
@@ -204,11 +210,13 @@ export function useUsers() {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 45000);
 
-      const res = await fetch(`${API_BASE_URL}/api/v1/users`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/users?_t=${Date.now()}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${jwtToken}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
         },
         body: JSON.stringify(apiPayload || {
           firstName: userData.firstName,
