@@ -39,7 +39,7 @@ export interface IUser extends Document {
   phone: string;
   role: UserRole;
   status: UserStatus;
-  facilityId?: mongoose.Types.ObjectId;
+  facilityId?: string;
   department?: string;
   licenseNumber?: string;
   specialization?: string;
@@ -166,8 +166,8 @@ const UserSchema = new Schema<IUser, IUserModel>(
     },
 
     facilityId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Facility',
+      type: String,
+      trim: true,
       index: true,
     },
 

@@ -89,7 +89,7 @@ export async function handleCreateUser(req: Request, res: Response): Promise<voi
       role,
       status: 'active',
       region: (region || 'default').trim(),
-      facilityId: assignedFacility ? new mongoose.Types.ObjectId() : undefined,
+      facilityId: assignedFacility ? assignedFacility.toString().trim() : undefined,
       forcePasswordChange: true,
       preferences: {
         language: 'en',

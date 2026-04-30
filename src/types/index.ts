@@ -46,6 +46,8 @@ export interface Chp {
   status: ChpStatus;
   avatar?: string;
   createdAt: Date;
+  /** Set when confirmed synced from backend */
+  lastSyncedAt?: Date;
 }
 
 /** Must stay in sync with backend UserStatus */

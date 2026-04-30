@@ -18,7 +18,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 // ─── TYPES ───
 
 export type DeltaOp = 'create' | 'update' | 'delete';
-export type SyncEntityType = 'patient' | 'appointment' | 'user' | 'medicalRecord' | 'referral' | 'facility';
+export type SyncEntityType = 'patient' | 'appointment' | 'user' | 'medicalRecord' | 'referral' | 'facility' | 'chp';
 
 export interface IChangeRecord extends Document {
   changeId: string;
@@ -93,7 +93,7 @@ const ChangeRecordSchema = new Schema<IChangeRecord, IChangeRecordModel>(
     entityType: {
       type: String,
       required: true,
-      enum: ['patient', 'appointment', 'user', 'medicalRecord', 'referral', 'facility'],
+      enum: ['patient', 'appointment', 'user', 'medicalRecord', 'referral', 'facility', 'chp'],
       index: true,
     },
     entityId: {

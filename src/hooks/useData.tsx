@@ -367,15 +367,132 @@ export function useChps() {
 
   useEffect(() => {
     loadChps();
+
+    const handleSyncSuccess = () => loadChps();
+    window.addEventListener('healthtrack-sync-success', handleSyncSuccess);
+    return () => window.removeEventListener('healthtrack-sync-success', handleSyncSuccess);
   }, []);
 
+  /**
+   * Load CHPs — BACKEND-FIRST sync with REPLACE strategy.
+   * Fetches from /api/v1/chps, replaces local IndexedDB data.
+   */
   const loadChps = useCallback(async () => {
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    if (!isLocalToken) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 45000);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/chps?_t=${Date.now()}`, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+
+        if (res.ok) {
+          const result = await res.json();
+          const chpsArray = Array.isArray(result.data) ? result.data : [];
+          if (result.success && chpsArray.length > 0) {
+            await localDB.clearAllChps();
+            for (const c of chpsArray) {
+              await localDB.putChp({
+                id: c._id || c.id,
+                chpId: c.chpId,
+                fullName: c.fullName,
+                nationalId: c.nationalId,
+                phone: c.phone,
+                alternatePhone: c.alternatePhone,
+                gender: c.gender,
+                dateOfBirth: c.dateOfBirth,
+                village: c.village,
+                subLocation: c.subLocation,
+                ward: c.ward,
+                county: c.county,
+                languages: c.languages || [],
+                yearsOfExperience: c.yearsOfExperience,
+                chpRegNumber: c.chpRegNumber,
+                supervisorName: c.supervisorName,
+                supervisorPhone: c.supervisorPhone,
+                facilityId: c.facilityId,
+                facilityName: c.facilityName,
+                status: c.status || 'active',
+                email: c.email,
+                avatar: c.avatar,
+                createdAt: c.createdAt ? new Date(c.createdAt) : new Date(),
+                lastSyncedAt: new Date(),
+              } as Chp);
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.warn('[loadChps] Backend fetch timed out (45s). Server may be cold-starting.');
+        } else {
+          console.warn('[loadChps] Backend fetch failed:', err.message || err);
+        }
+      }
+    }
+
     const all = await localDB.getAllChps();
     setChps(all);
     setIsLoading(false);
   }, []);
 
   const addChp = useCallback(async (chpData: Omit<Chp, 'id' | 'chpId' | 'createdAt'>): Promise<Chp> => {
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    // Backend-first: try API first
+    if (!isLocalToken) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 45000);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/chps?_t=${Date.now()}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToken}`,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+          body: JSON.stringify(chpData),
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+
+        if (res.ok || res.status === 201) {
+          const result = await res.json();
+          const backendChp = result.data?.chp || result.data;
+          if (backendChp) {
+            const newChp: Chp = {
+              ...chpData,
+              id: backendChp._id || backendChp.id || uuidv4(),
+              chpId: backendChp.chpId,
+              createdAt: backendChp.createdAt ? new Date(backendChp.createdAt) : new Date(),
+              lastSyncedAt: new Date(),
+            };
+            await localDB.putChp(newChp);
+            await loadChps();
+            return newChp;
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.warn('[addChp] Backend create failed, falling back to local:', err.message);
+        }
+      }
+    }
+
+    // Fallback: save locally (offline mode)
     const existing = chps.find(c => c.nationalId === chpData.nationalId);
     if (existing) return existing;
 
