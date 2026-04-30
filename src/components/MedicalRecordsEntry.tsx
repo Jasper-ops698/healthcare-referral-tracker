@@ -18,8 +18,11 @@ import {
   Stethoscope,
   Save,
   CheckCircle2,
-  X
+  X,
+  ArrowRightLeft,
 } from 'lucide-react';
+import { usePatients } from '@/hooks/useData';
+import { toast } from 'sonner';
 
 interface MedicalRecordsEntryProps {
   patients: Patient[];
@@ -29,6 +32,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
   const { t } = useI18n();
   const { user } = useAuth();
   const { addRecord } = useMedicalRecords();
+  const { updatePatient } = usePatients();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,6 +70,16 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
     medications: [],
   });
 
+  // Referral details — only used when visitType = 'referral'
+  const [referralDetails, setReferralDetails] = useState({
+    fromFacility: '',
+    toFacility: '',
+    referralReason: '',
+    urgency: 'routine' as 'routine' | 'urgent' | 'emergency',
+    transportMode: '',
+    accompanyingChp: '',
+  });
+
   const [symptomInput, setSymptomInput] = useState('');
   const [medicationInput, setMedicationInput] = useState({ name: '', dosage: '', frequency: '', duration: '' });
 
@@ -77,14 +91,59 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
   const handleSubmit = async () => {
     if (!user || !selectedPatient) return;
 
-    setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // ── Validate referral fields ──
+    if (formData.visitType === 'referral') {
+      if (!referralDetails.fromFacility.trim() || !referralDetails.toFacility.trim() || !referralDetails.referralReason.trim()) {
+        toast.error('Please fill in all required referral fields: From Facility, To Facility, and Referral Reason');
+        return;
+      }
+    }
 
-    addRecord({
+    setIsSubmitting(true);
+
+    // Build the record — include referral data if applicable
+    const recordData: Omit<MedicalRecord, 'id' | 'recordedAt'> = {
       ...formData,
       patientId: selectedPatient.id,
       recordedBy: user.id,
-    } as Omit<MedicalRecord, 'id' | 'recordedAt'>);
+      referrals: formData.visitType === 'referral'
+        ? [{
+            id: `ref_${Date.now()}`,
+            fromFacility: referralDetails.fromFacility,
+            toFacility: referralDetails.toFacility,
+            reason: referralDetails.referralReason,
+            urgency: referralDetails.urgency,
+            status: 'referred' as const,
+            referredAt: new Date(),
+            notes: `Transport: ${referralDetails.transportMode || 'N/A'} | CHP: ${referralDetails.accompanyingChp || 'N/A'}`,
+          }]
+        : undefined,
+    } as any;
+
+    await addRecord(recordData);
+
+    // ── If referral, update patient's referralStages and status ──
+    if (formData.visitType === 'referral') {
+      const updatedStages = [
+        ...selectedPatient.referralStages,
+        {
+          stage: selectedPatient.referralStages.length + 1,
+          fromFacility: referralDetails.fromFacility,
+          toFacility: referralDetails.toFacility,
+          status: 'pending' as const,
+          date: new Date(),
+          notes: referralDetails.referralReason,
+          chpName: referralDetails.accompanyingChp || selectedPatient.assignedChpName,
+        },
+      ];
+
+      await updatePatient(selectedPatient.id, {
+        referralStages: updatedStages,
+        referralStatus: 'referred',
+      });
+
+      toast.success(`Referral created: ${referralDetails.fromFacility} → ${referralDetails.toFacility}`);
+    }
 
     setIsSubmitting(false);
     setShowSuccess(true);
@@ -123,6 +182,14 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
         clinicalNotes: '',
         followUpInstructions: '',
         medications: [],
+      });
+      setReferralDetails({
+        fromFacility: '',
+        toFacility: '',
+        referralReason: '',
+        urgency: 'routine',
+        transportMode: '',
+        accompanyingChp: '',
       });
     }, 2000);
   };
@@ -333,6 +400,91 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
             </div>
           </div>
         </div>
+
+        {/* Referral Details — only shown when visitType = 'referral' */}
+        {formData.visitType === 'referral' && (
+          <div className="bg-amber-50 rounded-xl shadow-sm border border-amber-200 p-6">
+            <h3 className="text-lg font-semibold text-amber-800 mb-4 flex items-center gap-2">
+              <ArrowRightLeft className="w-5 h-5" />
+              Referral Details
+            </h3>
+            <p className="text-sm text-amber-600 mb-4">
+              This patient is being referred to another facility. Complete the details below so the admin can track the referral.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-amber-800 mb-1">From Facility *</label>
+                <input
+                  type="text"
+                  value={referralDetails.fromFacility}
+                  onChange={(e) => setReferralDetails(prev => ({ ...prev, fromFacility: e.target.value }))}
+                  placeholder="e.g., Kikambala Dispensary"
+                  className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400 transition-all bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-amber-800 mb-1">To Facility *</label>
+                <input
+                  type="text"
+                  value={referralDetails.toFacility}
+                  onChange={(e) => setReferralDetails(prev => ({ ...prev, toFacility: e.target.value }))}
+                  placeholder="e.g., Oasis Hospital"
+                  className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400 transition-all bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-amber-800 mb-1">Urgency Level *</label>
+                <select
+                  value={referralDetails.urgency}
+                  onChange={(e) => setReferralDetails(prev => ({ ...prev, urgency: e.target.value as any }))}
+                  className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400 transition-all bg-white"
+                >
+                  <option value="routine">Routine</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="emergency">Emergency</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-amber-800 mb-1">Transport Mode</label>
+                <select
+                  value={referralDetails.transportMode}
+                  onChange={(e) => setReferralDetails(prev => ({ ...prev, transportMode: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400 transition-all bg-white"
+                >
+                  <option value="">Select transport</option>
+                  <option value="ambulance">Ambulance</option>
+                  <option value="private-vehicle">Private Vehicle</option>
+                  <option value="public-transport">Public Transport</option>
+                  <option value="walking">Walking</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-amber-800 mb-1">Referral Reason *</label>
+              <textarea
+                value={referralDetails.referralReason}
+                onChange={(e) => setReferralDetails(prev => ({ ...prev, referralReason: e.target.value }))}
+                placeholder="Why is this patient being referred? e.g., Emergency surgery needed, specialist consultation required"
+                className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400 transition-all bg-white"
+                rows={2}
+              />
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-amber-800 mb-1">Accompanying CHP</label>
+              <input
+                type="text"
+                value={referralDetails.accompanyingChp}
+                onChange={(e) => setReferralDetails(prev => ({ ...prev, accompanyingChp: e.target.value }))}
+                placeholder="Name of CHP accompanying the patient"
+                className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400 transition-all bg-white"
+              />
+            </div>
+          </div>
+        )}
 
         {/* {t('medical.vitals')} */}
         <div className="bg-white rounded-xl shadow-sm border border-border/50 p-6">

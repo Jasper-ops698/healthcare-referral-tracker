@@ -6,7 +6,8 @@ import {
   ArrowRight, Search, User, Clock, AlertTriangle,
   MapPin, Stethoscope, UserCheck, Download,
   Loader2, TrendingUp, Building2, Activity,
-  ChevronRight, ArrowUpRight, ArrowDownRight, Minus
+  ChevronRight, ArrowUpRight, ArrowDownRight, Minus,
+  ArrowRightLeft
 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
@@ -423,6 +424,53 @@ export default function ReferralTracking({
               {/* Expanded detail panel */}
               {expanded && (
                 <div className="border-t border-gray-100 px-4 sm:px-5 py-4 bg-gray-50/50">
+
+                  {/* ── Referral Stages (from/to facilities) ── */}
+                  {patient.referralStages && patient.referralStages.length > 0 && (
+                    <div className="mb-4">
+                      <label className="text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1 mb-2">
+                        <ArrowRightLeft className="w-3.5 h-3.5" />
+                        Referral Journey
+                      </label>
+                      <div className="space-y-2">
+                        {patient.referralStages.map((stage) => (
+                          <div key={stage.stage} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200">
+                            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-sky-100 flex items-center justify-center text-xs font-bold text-sky-700">
+                              {stage.stage}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-gray-700">{stage.fromFacility}</span>
+                                <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                                <span className="text-sm font-medium text-emerald-700">{stage.toFacility}</span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                <span>{format(new Date(stage.date), 'MMM d, yyyy')}</span>
+                                                                {stage.chpName && (
+                                  <span className="flex items-center gap-1">
+                                    <UserCheck className="w-3 h-3" />
+                                    CHP: {stage.chpName}
+                                  </span>
+                                )}
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                  stage.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                                  stage.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {stage.status}
+                                </span>
+                              </div>
+                              {stage.notes && (
+                                <p className="text-xs text-gray-500 mt-1 italic">{stage.notes}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Medical Details ── */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                     <div>
                       <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">{t('referrals.fullAddress')}</label>
