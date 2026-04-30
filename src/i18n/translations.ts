@@ -308,6 +308,7 @@ export const translations = {
     // ── Patient Management ──
     'patients.title': 'Patient Management',
     'patients.subtitle': 'View and manage all registered patients in the system.',
+    'patients.adminSubtitle': 'Patients registered by collectors across all facilities. View only — collectors handle registration.',
     'patients.addPatient': 'Add Patient',
     'patients.totalPatients': 'Total Patients',
     'patients.active': 'Active',
@@ -1058,6 +1059,7 @@ export const translations = {
     // ── Patient Management ──
     'patients.title': 'Usimamizi wa Wagonjwa',
     'patients.subtitle': 'Tazama na simamia wagonjwa wote waliosajiliwa katika mfumo.',
+    'patients.adminSubtitle': 'Wagonjwa waliosajiliwa na wakusanya katika vituo vyote. Tazama pekee — wakusanya hushughulikia usajili.',
     'patients.addPatient': 'Ongeza Mgonjwa',
     'patients.totalPatients': 'Wagonjwa Wote',
     'patients.active': 'Wanaofanya Kazi',

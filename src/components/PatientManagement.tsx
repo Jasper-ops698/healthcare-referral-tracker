@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { usePatients, useUsers, useMedicalRecords } from '@/hooks/useData';
-import { useAuth } from '@/hooks/useAuth';
 import { useI18n } from '@/i18n/useI18n';
 import { useFormatDate } from '@/i18n/dateFormat';
 import { useStatusConfig } from '@/i18n/statusLabels';
@@ -13,7 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  Plus,
   Calendar,
   HeartPulse,
   AlertCircle,
@@ -25,8 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { toast } from 'sonner';
-import AddPatientForm from './AddPatientForm';
+
 
 /* ═══════════════════════════ Patient Management ═══════════════════════════ */
 
@@ -38,14 +35,12 @@ export default function PatientManagement() {
   const { t } = useI18n();
   const formatDate = useFormatDate();
   const statusConfig = useStatusConfig();
-  const { patients, addPatient } = usePatients();
+  const { patients } = usePatients();
   const { users } = useUsers();
   const { getRecordsByPatient } = useMedicalRecords();
-  const { user: currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<ReferralStatus | 'all'>('all');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -86,19 +81,12 @@ export default function PatientManagement() {
 
   return (
     <div className="space-y-6 animate-in">
-      {/* ── Header with Add Patient button ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('patients.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('patients.subtitle')}</p>
-        </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-sky-500 text-white font-semibold text-sm shadow-lg shadow-sky-500/30 hover:bg-sky-600 hover:shadow-sky-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-        >
-          <Plus className="w-4 h-4" />
-          {t('patients.addPatient')}
-        </button>
+      {/* ── Header ── */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">{t('patients.title')}</h1>
+        <p className="text-gray-500 mt-1">
+          {t('patients.adminSubtitle') || 'Patients registered by collectors across all facilities.'}
+        </p>
       </div>
 
       {/* ── Quick Stats ── */}
@@ -290,29 +278,6 @@ export default function PatientManagement() {
           </div>
         )}
       </div>
-
-      {/* ── Add Patient Modal ── */}
-      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-3 text-lg">
-              <div className="w-10 h-10 rounded-full bg-sky-50 flex items-center justify-center">
-                <Plus className="w-5 h-5 text-sky-600" />
-              </div>
-              <span className="font-bold">{t('patients.addPatient')}</span>
-            </DialogTitle>
-          </DialogHeader>
-          <AddPatientForm
-            onSubmit={(data) => {
-              addPatient(data);
-              setShowAddModal(false);
-              toast.success(t('toast.patientRegistered'));
-            }}
-            onCancel={() => setShowAddModal(false)}
-            registeredBy={currentUser?.id || 'admin-primary'}
-          />
-        </DialogContent>
-      </Dialog>
 
       {/* ── Patient Detail Modal ── */}
       <Dialog open={!!selectedPatient} onOpenChange={() => setSelectedPatient(null)}>

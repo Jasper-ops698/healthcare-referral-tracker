@@ -7,7 +7,7 @@ import type { User } from '@/types';
 import ResponsiveSidebar from '@/components/ResponsiveSidebar';
 import NotificationBell from '@/components/NotificationBell';
 import ProfileModal from '@/components/ProfileModal';
-import CHPOverview from '@/components/CHPOverview';
+import CollectorOverview from '@/components/CollectorOverview';
 import PatientRegistration from '@/components/PatientRegistration';
 import MedicalRecordsEntry from '@/components/MedicalRecordsEntry';
 import MyPatients from '@/components/MyPatients';
@@ -95,7 +95,7 @@ export default function CollectorDashboard() {
     switch (activeTab) {
       case 'dashboard':
         return collectorStats ? (
-          <CHPOverview
+          <CollectorOverview
             stats={collectorStats}
             onRegisterPatient={() => setActiveTab('register')}
             onAddRecord={() => setActiveTab('records')}
@@ -117,7 +117,13 @@ export default function CollectorDashboard() {
       case 'settings':
         return <Settings />;
       default:
-        return collectorStats ? <CHPOverview stats={collectorStats} /> : null;
+        return collectorStats ? (
+          <CollectorOverview
+            stats={collectorStats}
+            onRegisterPatient={() => setActiveTab('register')}
+            onAddRecord={() => setActiveTab('records')}
+          />
+        ) : null;
     }
   };
 
