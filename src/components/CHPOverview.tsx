@@ -1,22 +1,22 @@
 import type { CollectorStats } from '@/types';
-import { 
-  Users, 
-  FileText, 
-  ArrowRightLeft, 
+import {
+  Users,
+  FileText,
+  ArrowRightLeft,
   ClipboardList,
-  Calendar,
   UserPlus,
-  Activity
+  Activity,
+  CalendarClock,
 } from 'lucide-react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
-  Legend
+  Legend,
 } from 'recharts';
 import { format } from 'date-fns';
 
@@ -25,13 +25,16 @@ interface CollectorOverviewProps {
 }
 
 export default function CollectorOverview({ stats }: CollectorOverviewProps) {
+  const hasActivity = stats.monthlyActivity && stats.monthlyActivity.length > 0;
+  const hasRecentPatients = stats.recentPatients && stats.recentPatients.length > 0;
+
   return (
     <div className="space-y-6 animate-in">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Collector Dashboard</h1>
         <p className="text-muted-foreground mt-1">
-          Welcome back! Here's your activity overview.
+          Your activity summary and patient overview.
         </p>
       </div>
 
@@ -68,201 +71,153 @@ export default function CollectorOverview({ stats }: CollectorOverviewProps) {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards — Real data only */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="kpi-card card-hover">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Users className="w-6 h-6 text-primary" />
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center">
+              <Users className="w-5 h-5 text-sky-600" />
             </div>
-            <span className="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">
-              +5 this week
-            </span>
           </div>
-          <p className="kpi-value">{stats.patientsRegistered}</p>
-          <p className="kpi-label">Patients Registered</p>
+          <p className="text-2xl font-bold text-foreground">{stats.patientsRegistered}</p>
+          <p className="text-sm text-muted-foreground mt-1">Patients Registered</p>
         </div>
 
-        <div className="kpi-card card-hover">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
-              <FileText className="w-6 h-6 text-emerald-600" />
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+              <FileText className="w-5 h-5 text-emerald-600" />
             </div>
-            <span className="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">
-              +12 this week
-            </span>
           </div>
-          <p className="kpi-value">{stats.recordsEntered}</p>
-          <p className="kpi-label">Records Entered</p>
+          <p className="text-2xl font-bold text-foreground">{stats.recordsEntered}</p>
+          <p className="text-sm text-muted-foreground mt-1">Records Entered</p>
         </div>
 
-        <div className="kpi-card card-hover">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-              <ArrowRightLeft className="w-6 h-6 text-amber-600" />
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+              <ArrowRightLeft className="w-5 h-5 text-amber-600" />
             </div>
-            <span className="text-xs font-medium text-amber-600 bg-amber-100 px-2 py-1 rounded-full">
-              Active
-            </span>
           </div>
-          <p className="kpi-value">{stats.referralsMade}</p>
-          <p className="kpi-label">Referrals Made</p>
+          <p className="text-2xl font-bold text-foreground">{stats.referralsMade}</p>
+          <p className="text-sm text-muted-foreground mt-1">Referrals Made</p>
         </div>
 
-        <div className="kpi-card card-hover">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center">
-              <ClipboardList className="w-6 h-6 text-rose-600" />
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center">
+              <ClipboardList className="w-5 h-5 text-rose-600" />
             </div>
-            <span className="text-xs font-medium text-rose-600 bg-rose-100 px-2 py-1 rounded-full">
-              Attention
-            </span>
           </div>
-          <p className="kpi-value">{stats.pendingTasks}</p>
-          <p className="kpi-label">Pending Tasks</p>
+          <p className="text-2xl font-bold text-foreground">{stats.pendingTasks}</p>
+          <p className="text-sm text-muted-foreground mt-1">Pending Tasks</p>
         </div>
       </div>
 
-      {/* Charts */}
+      {/* Charts + Recent Patients */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Monthly Activity */}
-        <div className="chart-container">
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
           <h3 className="text-lg font-semibold text-foreground mb-4">Your Monthly Activity</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.monthlyActivity}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                  }} 
-                />
-                <Legend />
-                <Bar dataKey="patients" name="New Patients" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="records" name="Medical Records" fill="#14b8a6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {hasActivity ? (
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.monthlyActivity}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
+                  />
+                  <Legend />
+                  <Bar dataKey="patients" name="New Patients" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="records" name="Medical Records" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-72 flex flex-col items-center justify-center text-muted-foreground">
+              <Activity className="w-10 h-10 mb-3 text-muted-foreground/40" />
+              <p className="text-sm font-medium">No activity yet</p>
+              <p className="text-xs mt-1">Register patients to see your monthly activity.</p>
+            </div>
+          )}
         </div>
 
         {/* Recent Patients */}
-        <div className="chart-container">
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
           <h3 className="text-lg font-semibold text-foreground mb-4">Recently Registered Patients</h3>
-          <div className="space-y-3 max-h-72 overflow-y-auto">
-            {stats.recentPatients.map((patient) => (
-              <div 
-                key={patient.id}
-                className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-              >
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Users className="w-5 h-5 text-primary" />
+          {hasRecentPatients ? (
+            <div className="space-y-3 max-h-72 overflow-y-auto">
+              {stats.recentPatients.map((patient) => (
+                <div
+                  key={patient.id}
+                  className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Users className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate">
+                      {patient.firstName} {patient.lastName}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {patient.patientId} • {format(patient.registrationDate, 'MMM d, yyyy')}
+                    </p>
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    patient.referralStatus === 'completed'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : patient.referralStatus === 'referred'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {patient.referralStatus.replace('-', ' ')}
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground truncate">
-                    {patient.firstName} {patient.lastName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {patient.patientId} • {format(patient.registrationDate, 'MMM d, yyyy')}
-                  </p>
-                </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  patient.referralStatus === 'completed' 
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : patient.referralStatus === 'referred'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-blue-100 text-blue-700'
-                }`}>
-                  {patient.referralStatus.replace('-', ' ')}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="h-72 flex flex-col items-center justify-center text-muted-foreground">
+              <Users className="w-10 h-10 mb-3 text-muted-foreground/40" />
+              <p className="text-sm font-medium">No patients yet</p>
+              <p className="text-xs mt-1">Your recently registered patients will appear here.</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Today's Schedule */}
-      <div className="chart-container">
-        <h3 className="text-lg font-semibold text-foreground mb-4">Today's Schedule</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 rounded-lg border border-border/50 bg-muted/20">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Patient Follow-ups</p>
-                <p className="text-xs text-muted-foreground">3 scheduled</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">10:00 AM</span>
-                <span className="font-medium">John Smith</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">2:00 PM</span>
-                <span className="font-medium">Mary Johnson</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">4:30 PM</span>
-                <span className="font-medium">Robert Brown</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-lg border border-border/50 bg-muted/20">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <Activity className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Health Screenings</p>
-                <p className="text-xs text-muted-foreground">2 scheduled</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">11:30 AM</span>
-                <span className="font-medium">Community Center</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">3:00 PM</span>
-                <span className="font-medium">Mobile Clinic</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-lg border border-border/50 bg-muted/20">
-            <div className="flex items-center gap-3 mb-3">
+      {/* Pending Tasks / Summary */}
+      <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-foreground mb-4">Task Summary</h3>
+        {stats.pendingTasks > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 border border-amber-100">
               <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <ClipboardList className="w-5 h-5 text-amber-600" />
+                <CalendarClock className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <p className="font-medium text-foreground">Pending Tasks</p>
-                <p className="text-xs text-muted-foreground">5 items</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Data Entry</span>
-                <span className="font-medium text-amber-600">3 pending</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Referrals</span>
-                <span className="font-medium text-amber-600">1 pending</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Reports</span>
-                <span className="font-medium text-amber-600">1 pending</span>
+                <p className="font-medium text-amber-800">{stats.pendingTasks} pending</p>
+                <p className="text-xs text-amber-600">tasks need attention</p>
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-emerald-50 border border-emerald-100">
+            <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+              <ClipboardList className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="font-medium text-emerald-800">All caught up</p>
+              <p className="text-xs text-emerald-600">No pending tasks at the moment.</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
