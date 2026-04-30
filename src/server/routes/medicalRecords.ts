@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { authenticateJWT } from '../middleware/auth.js';
-import { authorizeRoles } from '../middleware/regionalAuth.js';
+import { authenticateJWT, requireRole } from '../middleware/regionalAuth.js';
 import {
   handleListMedicalRecords,
   handleGetMedicalRecord,
@@ -13,10 +12,10 @@ const router = Router();
 
 router.use(authenticateJWT);
 
-router.get('/', authorizeRoles('admin', 'collector'), handleListMedicalRecords);
-router.post('/', authorizeRoles('admin', 'collector'), handleCreateMedicalRecord);
-router.get('/:id', authorizeRoles('admin', 'collector'), handleGetMedicalRecord);
-router.put('/:id', authorizeRoles('admin', 'collector'), handleUpdateMedicalRecord);
-router.delete('/:id', authorizeRoles('admin', 'collector'), handleDeleteMedicalRecord);
+router.get('/', requireRole('admin', 'collector'), handleListMedicalRecords);
+router.post('/', requireRole('admin', 'collector'), handleCreateMedicalRecord);
+router.get('/:id', requireRole('admin', 'collector'), handleGetMedicalRecord);
+router.put('/:id', requireRole('admin', 'collector'), handleUpdateMedicalRecord);
+router.delete('/:id', requireRole('admin', 'collector'), handleDeleteMedicalRecord);
 
 export default router;

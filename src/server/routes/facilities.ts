@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { authenticateJWT } from '../middleware/auth.js';
-import { authorizeRoles } from '../middleware/regionalAuth.js';
+import { authenticateJWT, requireRole } from '../middleware/regionalAuth.js';
 import {
   handleListFacilities,
   handleGetFacility,
@@ -14,12 +13,12 @@ const router = Router();
 router.use(authenticateJWT);
 
 // List and get are available to all authenticated users
-router.get('/', authorizeRoles('admin', 'collector'), handleListFacilities);
-router.get('/:id', authorizeRoles('admin', 'collector'), handleGetFacility);
+router.get('/', requireRole('admin', 'collector'), handleListFacilities);
+router.get('/:id', requireRole('admin', 'collector'), handleGetFacility);
 
 // Mutations restricted to admin
-router.post('/', authorizeRoles('admin'), handleCreateFacility);
-router.put('/:id', authorizeRoles('admin'), handleUpdateFacility);
-router.delete('/:id', authorizeRoles('admin'), handleToggleFacilityStatus);
+router.post('/', requireRole('admin'), handleCreateFacility);
+router.put('/:id', requireRole('admin'), handleUpdateFacility);
+router.delete('/:id', requireRole('admin'), handleToggleFacilityStatus);
 
 export default router;

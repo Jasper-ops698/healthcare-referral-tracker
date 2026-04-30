@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { authenticateJWT } from '../middleware/auth.js';
-import { authorizeRoles } from '../middleware/regionalAuth.js';
+import { authenticateJWT, requireRole } from '../middleware/regionalAuth.js';
 import {
   handleListPatients,
   handleGetPatient,
@@ -13,10 +12,10 @@ const router = Router();
 
 router.use(authenticateJWT);
 
-router.get('/', authorizeRoles('admin', 'collector'), handleListPatients);
-router.post('/', authorizeRoles('admin', 'collector'), handleCreatePatient);
-router.get('/:id', authorizeRoles('admin', 'collector'), handleGetPatient);
-router.put('/:id', authorizeRoles('admin', 'collector'), handleUpdatePatient);
-router.delete('/:id', authorizeRoles('admin', 'collector'), handleDeletePatient);
+router.get('/', requireRole('admin', 'collector'), handleListPatients);
+router.post('/', requireRole('admin', 'collector'), handleCreatePatient);
+router.get('/:id', requireRole('admin', 'collector'), handleGetPatient);
+router.put('/:id', requireRole('admin', 'collector'), handleUpdatePatient);
+router.delete('/:id', requireRole('admin', 'collector'), handleDeletePatient);
 
 export default router;
