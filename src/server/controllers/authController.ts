@@ -15,6 +15,19 @@ import { signJWT } from '../middleware/regionalAuth.js';
 
 export async function bootstrapPrimaryAdmin(): Promise<void> {
   try {
+    // Check for duplicate primary admins and clean them up
+    const allWithEmail = await User.find({ email: PRIMARY_ADMIN_EMAIL }).exec();
+    if (allWithEmail.length > 1) {
+      console.warn(`[Auth] Found ${allWithEmail.length} users with email ${PRIMARY_ADMIN_EMAIL}. Removing duplicates...`);
+      // Keep the one with isPrimaryAdmin=true, or the first one if none have it
+      const primary = allWithEmail.find(u => u.isPrimaryAdmin) || allWithEmail[0];
+      const idsToRemove = allWithEmail
+        .filter(u => u._id.toString() !== primary._id.toString())
+        .map(u => u._id);
+      await User.deleteMany({ _id: { $in: idsToRemove } });
+      console.log(`[Auth] Removed ${idsToRemove.length} duplicate(s). Kept ${primary._id}`);
+    }
+
     const existing = await User.findOne({ email: PRIMARY_ADMIN_EMAIL }).exec();
     if (existing) {
       console.log(`[Auth] Primary admin ${PRIMARY_ADMIN_EMAIL} exists`);
