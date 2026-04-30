@@ -393,7 +393,7 @@ export function useChps() {
           const result = await res.json();
           const chpsArray = Array.isArray(result.data) ? result.data : [];
           if (result.success && chpsArray.length > 0) {
-            await localDB.clearAllChps();
+            // Merge: update existing, add new — NEVER clear all
             for (const c of chpsArray) {
               await localDB.putChp({
                 id: c._id || c.id,
@@ -577,7 +577,7 @@ export function usePatients() {
             ? result.data
             : result.data?.patients || [];
           if (result.success && patientsArray.length > 0) {
-            await localDB.clearAllPatients();
+            // Merge: update existing, add new — NEVER clear all
             for (const p of patientsArray) {
               await localDB.putPatient({
                 id: p._id || p.id,
@@ -635,7 +635,33 @@ export function usePatients() {
     const jwtToken = localStorage.getItem('healthtrack_jwt_token');
     const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
 
-    // Backend-first: try API first
+    // ── STEP 1: Save locally FIRST with temp ID ──
+    const count = patients.length;
+    const tempId = `local_p_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const localPatient: DBPatient = {
+      ...patientData,
+      id: tempId,
+      patientId: `P1-${String(count + 1).padStart(6, '0')}`,
+      registrationDate: new Date(),
+      lastUpdated: new Date(),
+      _sync: {
+        version: 1,
+        modifiedAt: new Date().toISOString(),
+        modifiedBy: localDB.getDeviceId(),
+        checksum: '',
+        isDeleted: false,
+        createdAt: new Date().toISOString(),
+        createdBy: localDB.getDeviceId(),
+      },
+    } as DBPatient;
+    await localDB.putPatient(localPatient);
+
+    // ── STEP 2: Queue in outbox for sync engine ──
+    if (!isLocalToken) {
+      await localDB.enqueueChange('patient', tempId, 'create', { ...patientData });
+    }
+
+    // ── STEP 3: Try backend API ──
     if (!isLocalToken) {
       try {
         const controller = new AbortController();
@@ -658,10 +684,10 @@ export function usePatients() {
           const result = await res.json();
           const backendPatient = result.data?.patient || result.data;
           if (backendPatient) {
-            const newPatient: DBPatient = {
+            const updatedPatient: DBPatient = {
               ...patientData,
-              id: backendPatient._id || backendPatient.id || uuidv4(),
-              patientId: backendPatient.patientId,
+              id: backendPatient._id || backendPatient.id || tempId,
+              patientId: backendPatient.patientId || localPatient.patientId,
               registrationDate: backendPatient.createdAt ? new Date(backendPatient.createdAt) : new Date(),
               lastUpdated: backendPatient.updatedAt ? new Date(backendPatient.updatedAt) : new Date(),
               _sync: {
@@ -674,40 +700,18 @@ export function usePatients() {
                 createdBy: localDB.getDeviceId(),
               },
             } as DBPatient;
-            await localDB.putPatient(newPatient);
+            await localDB.putPatient(updatedPatient);
             await loadPatients();
-            return newPatient as Patient;
+            return updatedPatient as Patient;
           }
         }
       } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.warn('[addPatient] Backend create failed, falling back to local:', err.message);
-        }
+        console.warn('[addPatient] Backend create failed — patient saved locally, sync engine will retry:', err.message);
       }
     }
 
-    // Fallback: save locally
-    const count = patients.length;
-    const newPatient: DBPatient = {
-      ...patientData,
-      id: uuidv4(),
-      patientId: `P1-${String(count + 1).padStart(6, '0')}`,
-      registrationDate: new Date(),
-      lastUpdated: new Date(),
-      _sync: {
-        version: 1,
-        modifiedAt: new Date().toISOString(),
-        modifiedBy: localDB.getDeviceId(),
-        checksum: '',
-        isDeleted: false,
-        createdAt: new Date().toISOString(),
-        createdBy: localDB.getDeviceId(),
-      },
-    } as DBPatient;
-
-    await localDB.putPatient(newPatient);
     await loadPatients();
-    return newPatient as Patient;
+    return localPatient as Patient;
   }, [patients.length, loadPatients]);
 
   const updatePatient = useCallback(async (id: string, updates: Partial<Patient>): Promise<Patient | null> => {
@@ -815,7 +819,7 @@ export function useMedicalRecords() {
             ? result.data
             : result.data?.records || [];
           if (result.success && recordsArray.length > 0) {
-            await localDB.clearAllMedicalRecords();
+            // Merge: update existing, add new — NEVER clear all
             for (const r of recordsArray) {
               await localDB.putMedicalRecord({
                 id: r._id || r.id,
@@ -891,7 +895,31 @@ export function useMedicalRecords() {
     const jwtToken = localStorage.getItem('healthtrack_jwt_token');
     const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
 
-    // Backend-first
+    // ── STEP 1: Save locally FIRST with temp ID ──
+    setIsLoading(true);
+    const tempId = `local_r_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const localRecord: DBMedicalRecord = {
+      ...recordData,
+      id: tempId,
+      recordedAt: new Date(),
+      _sync: {
+        version: 1,
+        modifiedAt: new Date().toISOString(),
+        modifiedBy: localDB.getDeviceId(),
+        checksum: '',
+        isDeleted: false,
+        createdAt: new Date().toISOString(),
+        createdBy: localDB.getDeviceId(),
+      },
+    } as DBMedicalRecord;
+    await localDB.putMedicalRecord(localRecord);
+
+    // ── STEP 2: Queue in outbox for sync engine ──
+    if (!isLocalToken) {
+      await localDB.enqueueChange('medicalRecord', tempId, 'create', { ...recordData });
+    }
+
+    // ── STEP 3: Try backend API ──
     if (!isLocalToken) {
       try {
         const controller = new AbortController();
@@ -914,9 +942,9 @@ export function useMedicalRecords() {
           const result = await res.json();
           const backendRecord = result.data?.record || result.data;
           if (backendRecord) {
-            const newRecord: DBMedicalRecord = {
+            const updatedRecord: DBMedicalRecord = {
               ...recordData,
-              id: backendRecord._id || backendRecord.id || uuidv4(),
+              id: backendRecord._id || backendRecord.id || tempId,
               recordedAt: backendRecord.createdAt ? new Date(backendRecord.createdAt) : new Date(),
               _sync: {
                 version: 1,
@@ -928,38 +956,20 @@ export function useMedicalRecords() {
                 createdBy: localDB.getDeviceId(),
               },
             } as DBMedicalRecord;
-            await localDB.putMedicalRecord(newRecord);
+            await localDB.putMedicalRecord(updatedRecord);
             await loadRecords();
-            return newRecord as MedicalRecord;
+            setIsLoading(false);
+            return updatedRecord as MedicalRecord;
           }
         }
       } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.warn('[addRecord] Backend create failed, falling back to local:', err.message);
-        }
+        console.warn('[addRecord] Backend create failed — record saved locally, sync engine will retry:', err.message);
       }
     }
 
-    // Local fallback
-    setIsLoading(true);
-    const newRecord: DBMedicalRecord = {
-      ...recordData,
-      id: uuidv4(),
-      recordedAt: new Date(),
-      _sync: {
-        version: 1,
-        modifiedAt: new Date().toISOString(),
-        modifiedBy: localDB.getDeviceId(),
-        checksum: '',
-        isDeleted: false,
-        createdAt: new Date().toISOString(),
-        createdBy: localDB.getDeviceId(),
-      },
-    } as DBMedicalRecord;
-
-    await localDB.putMedicalRecord(newRecord);
     await loadRecords();
-    return newRecord as MedicalRecord;
+    setIsLoading(false);
+    return localRecord as MedicalRecord;
   }, [loadRecords]);
 
   return { records, isLoading, addRecord, getRecordsByPatient, getRecordsByCollector, getRecordById, loadRecords };

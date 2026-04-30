@@ -221,31 +221,6 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
           <option value="O-">O-</option>
         </select>
       </div>
-
-      {/* Assigned CHP */}
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-1">{t('patients.chpAssigned')}</label>
-        <p className="text-xs text-muted-foreground mb-1">{t('patients.assignChpDesc')}</p>
-        <select
-          value={formData.assignedChpId || ''}
-          onChange={(e) => {
-            const chpId = e.target.value;
-            const selected = facilityChps.find(c => c.id === chpId);
-            setFormData({ ...formData, assignedChpId: chpId, assignedChpName: selected?.fullName || '' });
-          }}
-          className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-white"
-        >
-          <option value="">{t('patients.selectCollector')}</option>
-          {facilityChps.map((chp) => (
-            <option key={chp.id} value={chp.id}>
-              {chp.fullName} — {chp.village}, {chp.ward}
-            </option>
-          ))}
-        </select>
-        {facilityChps.length === 0 && (
-          <p className="text-xs text-amber-600 mt-1">{t('patients.noChpsForFacility')}</p>
-        )}
-      </div>
     </div>
   );
 
