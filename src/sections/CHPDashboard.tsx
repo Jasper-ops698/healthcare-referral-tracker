@@ -94,7 +94,13 @@ export default function CollectorDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return collectorStats ? <CHPOverview stats={collectorStats} /> : null;
+        return collectorStats ? (
+          <CHPOverview
+            stats={collectorStats}
+            onRegisterPatient={() => setActiveTab('register')}
+            onAddRecord={() => setActiveTab('records')}
+          />
+        ) : null;
       case 'register':
         return <PatientRegistration onSuccess={() => setActiveTab('patients')} />;
       case 'records':

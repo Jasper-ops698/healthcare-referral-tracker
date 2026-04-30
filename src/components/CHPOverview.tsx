@@ -22,9 +22,11 @@ import { format } from 'date-fns';
 
 interface CollectorOverviewProps {
   stats: CollectorStats;
+  onRegisterPatient?: () => void;
+  onAddRecord?: () => void;
 }
 
-export default function CollectorOverview({ stats }: CollectorOverviewProps) {
+export default function CollectorOverview({ stats, onRegisterPatient, onAddRecord }: CollectorOverviewProps) {
   const hasActivity = stats.monthlyActivity && stats.monthlyActivity.length > 0;
   const hasRecentPatients = stats.recentPatients && stats.recentPatients.length > 0;
 
@@ -40,35 +42,41 @@ export default function CollectorOverview({ stats }: CollectorOverviewProps) {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gradient-to-r from-primary to-primary/80 rounded-xl p-6 text-white">
+        <button
+          onClick={onRegisterPatient}
+          className="group text-left bg-gradient-to-r from-primary to-primary/80 rounded-xl p-6 text-white cursor-pointer hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/40"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-primary-foreground/80 text-sm">Quick Action</p>
-              <h3 className="text-xl font-bold mt-1">Register New Patient</h3>
+              <h3 className="text-xl font-bold mt-1 group-hover:underline underline-offset-2">Register New Patient</h3>
               <p className="text-primary-foreground/80 text-sm mt-1">
                 Add a new patient to the system
               </p>
             </div>
-            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center group-hover:bg-white/30 transition-colors">
               <UserPlus className="w-7 h-7" />
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl p-6 text-white">
+        <button
+          onClick={onAddRecord}
+          className="group text-left bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl p-6 text-white cursor-pointer hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-white/80 text-sm">Quick Action</p>
-              <h3 className="text-xl font-bold mt-1">Add Medical Record</h3>
+              <h3 className="text-xl font-bold mt-1 group-hover:underline underline-offset-2">Add Medical Record</h3>
               <p className="text-white/80 text-sm mt-1">
                 Record patient visit details
               </p>
             </div>
-            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center group-hover:bg-white/30 transition-colors">
               <FileText className="w-7 h-7" />
             </div>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Stats Cards — Real data only */}
