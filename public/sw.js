@@ -10,7 +10,10 @@
  *   - Images: Cache-first
  */
 
-const CACHE_NAME = 'healthtrack-v1';
+// Cache version BUMPED whenever index.html (and its hashed asset references) changes.
+// Vite builds produce new hashed filenames (e.g., index-ABC123.js) on every deploy,
+// so the old cached index.html becomes invalid. Bumping this forces a clean cache.
+const CACHE_NAME = 'healthtrack-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
