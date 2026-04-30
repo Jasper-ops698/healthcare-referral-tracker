@@ -1,9 +1,8 @@
 /**
  * AddCHPModal — Community Health Promoter Registration
  *
- * Tailored for African community health contexts.
+ * Uses shadcn/ui Dialog for consistent modal behavior with Add User modal.
  * CHPs are NOT system users — they have no login account.
- * They are managed by admin and assigned to patients by collectors.
  */
 
 import { useState } from 'react';
@@ -11,13 +10,21 @@ import { useI18n } from '@/i18n/useI18n';
 import { useAuth } from '@/hooks/useAuth';
 import type { Chp } from '@/types';
 import {
-  X, UserPlus, MapPin, Phone, Shield, Award,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  UserPlus, MapPin, Phone, Award,
   Users, Languages, CalendarDays, Hash, Mail
 } from 'lucide-react';
 
 interface AddCHPModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSubmit: (chp: Omit<Chp, 'id' | 'chpId' | 'createdAt'>) => void;
-  onCancel: () => void;
 }
 
 const KENYAN_COUNTIES = [
@@ -34,7 +41,7 @@ const KENYAN_COUNTIES = [
 
 const COMMON_LANGUAGES = ['Swahili', 'English', 'Kikuyu', 'Luo', 'Kalenjin', 'Kamba', 'Kisii', 'Meru', 'Mijikenda', 'Somali'];
 
-export default function AddCHPModal({ onSubmit, onCancel }: AddCHPModalProps) {
+export default function AddCHPModal({ open, onOpenChange, onSubmit }: AddCHPModalProps) {
   const { t } = useI18n();
   const { user } = useAuth();
 
@@ -79,6 +86,15 @@ export default function AddCHPModal({ onSubmit, onCancel }: AddCHPModalProps) {
     e.preventDefault();
     if (!validate()) return;
     onSubmit(form);
+    // Reset form
+    setForm({
+      fullName: '', email: '', nationalId: '', phone: '', alternatePhone: '',
+      gender: 'male', dateOfBirth: '', village: '', subLocation: '',
+      ward: '', county: '', languages: [], yearsOfExperience: 0,
+      chpRegNumber: '', supervisorName: '', supervisorPhone: '',
+      facilityId: user?.assignedFacility || '', facilityName: '', status: 'active',
+    });
+    setErrors({});
   };
 
   const update = (field: string, value: any) => {
@@ -95,282 +111,280 @@ export default function AddCHPModal({ onSubmit, onCancel }: AddCHPModalProps) {
     }));
   };
 
-  const field = (label: string, fieldName: string, icon: React.ReactNode, required = false) => (
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-foreground">
-        {icon && <span className="inline-flex items-center justify-center w-4 h-4 mr-1.5 text-muted-foreground align-text-bottom">{icon}</span>}
-        {label} {required && <span className="text-destructive">*</span>}
-      </label>
-      {errors[fieldName] && (
-        <p className="text-xs text-destructive">{errors[fieldName]}</p>
-      )}
-    </div>
-  );
-
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-transparent p-4 overflow-y-auto" onClick={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="bg-white dark:bg-card rounded-2xl shadow-2xl w-full max-w-3xl my-4">
-        {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-card border-b border-border px-6 py-4 flex items-center justify-between z-10 rounded-t-2xl">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <UserPlus className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-foreground">{t('chp.addTitle')}</h2>
-              <p className="text-xs text-muted-foreground">{t('chp.addSubtitle')}</p>
-            </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-emerald-600" />
+            {t('chp.addTitle')}
+          </DialogTitle>
+          <DialogDescription>{t('chp.addSubtitle')}</DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+
+          {/* Full Name */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              <Users className="w-3.5 h-3.5 inline mr-1 text-muted-foreground" />
+              {t('chp.fullName')} <span className="text-destructive">*</span>
+            </label>
+            {errors.fullName && <p className="text-xs text-destructive mb-1">{errors.fullName}</p>}
+            <input
+              type="text" value={form.fullName}
+              onChange={e => update('fullName', e.target.value)}
+              placeholder={t('chp.fullNamePlaceholder')}
+              className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
           </div>
-          <button onClick={onCancel} className="p-2 rounded-lg hover:bg-muted transition-colors">
-            <X className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-
-          {/* ── Personal Information ── */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b border-border pb-2">
-              {t('chp.personalInfo')}
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                {field(t('chp.fullName'), 'fullName', <Users className="w-4 h-4" />, true)}
-                <input
-                  type="text" value={form.fullName}
-                  onChange={e => update('fullName', e.target.value)}
-                  placeholder={t('chp.fullNamePlaceholder')}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                {field(t('chp.nationalId'), 'nationalId', <Hash className="w-4 h-4" />, true)}
-                <input
-                  type="text" value={form.nationalId}
-                  onChange={e => update('nationalId', e.target.value)}
-                  placeholder={t('chp.nationalIdPlaceholder')}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                {field(t('reg.gender'), 'gender', null, true)}
-                <select
-                  value={form.gender}
-                  onChange={e => update('gender', e.target.value)}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-white"
-                >
-                  <option value="male">{t('reg.male')}</option>
-                  <option value="female">{t('reg.female')}</option>
-                  <option value="other">{t('reg.other')}</option>
-                </select>
-              </div>
-              <div>
-                {field(t('chp.email'), 'email', <Mail className="w-4 h-4" />)}
-                <input
-                  type="email" value={form.email}
-                  onChange={e => update('email', e.target.value)}
-                  placeholder="chp@email.com"
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                {field(t('chp.phone'), 'phone', <Phone className="w-4 h-4" />, true)}
-                <input
-                  type="tel" value={form.phone}
-                  onChange={e => update('phone', e.target.value)}
-                  placeholder="+254 7XX XXX XXX"
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                {field(t('chp.alternatePhone'), 'alternatePhone', <Phone className="w-4 h-4" />)}
-                <input
-                  type="tel" value={form.alternatePhone}
-                  onChange={e => update('alternatePhone', e.target.value)}
-                  placeholder="+254 7XX XXX XXX"
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-            </div>
-
+          {/* National ID & Phone */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              {field(t('chp.dateOfBirth'), 'dateOfBirth', <CalendarDays className="w-4 h-4" />)}
+              <label className="block text-sm font-medium mb-1">
+                <Hash className="w-3.5 h-3.5 inline mr-1 text-muted-foreground" />
+                {t('chp.nationalId')} <span className="text-destructive">*</span>
+              </label>
+              {errors.nationalId && <p className="text-xs text-destructive mb-1">{errors.nationalId}</p>}
               <input
-                type="date" value={form.dateOfBirth}
-                onChange={e => update('dateOfBirth', e.target.value)}
-                className="mt-1 w-full md:w-1/3 px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                type="text" value={form.nationalId}
+                onChange={e => update('nationalId', e.target.value)}
+                placeholder={t('chp.nationalIdPlaceholder')}
+                className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                <Phone className="w-3.5 h-3.5 inline mr-1 text-muted-foreground" />
+                {t('chp.phone')} <span className="text-destructive">*</span>
+              </label>
+              {errors.phone && <p className="text-xs text-destructive mb-1">{errors.phone}</p>}
+              <input
+                type="tel" value={form.phone}
+                onChange={e => update('phone', e.target.value)}
+                placeholder="+254 7XX XXX XXX"
+                className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
             </div>
           </div>
 
-          {/* ── Location ── */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b border-border pb-2 flex items-center gap-2">
-              <MapPin className="w-4 h-4" /> {t('chp.locationInfo')}
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                {field(t('chp.village'), 'village', null, true)}
-                <input
-                  type="text" value={form.village}
-                  onChange={e => update('village', e.target.value)}
-                  placeholder={t('chp.villagePlaceholder')}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                {field(t('chp.subLocation'), 'subLocation', null, true)}
-                <input
-                  type="text" value={form.subLocation}
-                  onChange={e => update('subLocation', e.target.value)}
-                  placeholder={t('chp.subLocationPlaceholder')}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                {field(t('chp.ward'), 'ward', null, true)}
-                <input
-                  type="text" value={form.ward}
-                  onChange={e => update('ward', e.target.value)}
-                  placeholder={t('chp.wardPlaceholder')}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                {field(t('chp.county'), 'county', null, true)}
-                <select
-                  value={form.county}
-                  onChange={e => update('county', e.target.value)}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-white"
-                >
-                  <option value="">{t('chp.selectCounty')}</option>
-                  {KENYAN_COUNTIES.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Professional ── */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b border-border pb-2 flex items-center gap-2">
-              <Award className="w-4 h-4" /> {t('chp.professionalInfo')}
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                {field(t('chp.yearsOfExperience'), 'yearsOfExperience', null)}
-                <input
-                  type="number" min={0} max={50}
-                  value={form.yearsOfExperience}
-                  onChange={e => update('yearsOfExperience', parseInt(e.target.value) || 0)}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                {field(t('chp.chpRegNumber'), 'chpRegNumber', <Award className="w-4 h-4" />)}
-                <input
-                  type="text" value={form.chpRegNumber}
-                  onChange={e => update('chpRegNumber', e.target.value)}
-                  placeholder={t('chp.chpRegNumberPlaceholder')}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-            </div>
-
+          {/* Gender & Date of Birth */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              {field(t('chp.languages'), 'languages', <Languages className="w-4 h-4" />)}
-              <div className="mt-2 flex flex-wrap gap-2">
-                {COMMON_LANGUAGES.map(lang => (
-                  <button
-                    key={lang}
-                    type="button"
-                    onClick={() => toggleLanguage(lang)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                      form.languages.includes(lang)
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}
+              <label className="block text-sm font-medium mb-1">Gender <span className="text-destructive">*</span></label>
+              <select
+                value={form.gender}
+                onChange={e => update('gender', e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-background"
+              >
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                <CalendarDays className="w-3.5 h-3.5 inline mr-1 text-muted-foreground" />
+                {t('chp.dateOfBirth')}
+              </label>
+              <input
+                type="date" value={form.dateOfBirth}
+                onChange={e => update('dateOfBirth', e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              <Mail className="w-3.5 h-3.5 inline mr-1 text-muted-foreground" />
+              {t('chp.email')}
+            </label>
+            <input
+              type="email" value={form.email}
+              onChange={e => update('email', e.target.value)}
+              placeholder="chp@email.com"
+              className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Alternate Phone */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              <Phone className="w-3.5 h-3.5 inline mr-1 text-muted-foreground" />
+              {t('chp.alternatePhone')}
+            </label>
+            <input
+              type="tel" value={form.alternatePhone}
+              onChange={e => update('alternatePhone', e.target.value)}
+              placeholder="+254 7XX XXX XXX"
+              className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Location Section */}
+          <div className="pt-2 border-t border-border">
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-3 flex items-center gap-1">
+              <MapPin className="w-4 h-4 text-muted-foreground" />
+              {t('chp.locationInfo')}
+            </h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t('chp.village')} <span className="text-destructive">*</span></label>
+                  {errors.village && <p className="text-xs text-destructive mb-1">{errors.village}</p>}
+                  <input
+                    type="text" value={form.village}
+                    onChange={e => update('village', e.target.value)}
+                    placeholder={t('chp.villagePlaceholder')}
+                    className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t('chp.subLocation')} <span className="text-destructive">*</span></label>
+                  {errors.subLocation && <p className="text-xs text-destructive mb-1">{errors.subLocation}</p>}
+                  <input
+                    type="text" value={form.subLocation}
+                    onChange={e => update('subLocation', e.target.value)}
+                    placeholder={t('chp.subLocationPlaceholder')}
+                    className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t('chp.ward')} <span className="text-destructive">*</span></label>
+                  {errors.ward && <p className="text-xs text-destructive mb-1">{errors.ward}</p>}
+                  <input
+                    type="text" value={form.ward}
+                    onChange={e => update('ward', e.target.value)}
+                    placeholder={t('chp.wardPlaceholder')}
+                    className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t('chp.county')} <span className="text-destructive">*</span></label>
+                  {errors.county && <p className="text-xs text-destructive mb-1">{errors.county}</p>}
+                  <select
+                    value={form.county}
+                    onChange={e => update('county', e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-background"
                   >
-                    {lang}
-                  </button>
-                ))}
+                    <option value="">{t('chp.selectCounty')}</option>
+                    {KENYAN_COUNTIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* ── Supervisor ── */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b border-border pb-2 flex items-center gap-2">
-              <Shield className="w-4 h-4" /> {t('chp.supervisorInfo')}
+          {/* Work Details */}
+          <div className="pt-2 border-t border-border">
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-3 flex items-center gap-1">
+              <Award className="w-4 h-4 text-muted-foreground" />
+              {t('chp.professionalInfo')}
             </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                {field(t('chp.supervisorName'), 'supervisorName', null)}
-                <input
-                  type="text" value={form.supervisorName}
-                  onChange={e => update('supervisorName', e.target.value)}
-                  placeholder={t('chp.supervisorNamePlaceholder')}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t('chp.chpRegNumber')}</label>
+                  <input
+                    type="text" value={form.chpRegNumber}
+                    onChange={e => update('chpRegNumber', e.target.value)}
+                    placeholder={t('chp.chpRegNumberPlaceholder')}
+                    className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t('chp.yearsOfExperience')}</label>
+                  <input
+                    type="number" min={0} max={50}
+                    value={form.yearsOfExperience}
+                    onChange={e => update('yearsOfExperience', parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
               </div>
-              <div>
-                {field(t('chp.supervisorPhone'), 'supervisorPhone', <Phone className="w-4 h-4" />)}
-                <input
-                  type="tel" value={form.supervisorPhone}
-                  onChange={e => update('supervisorPhone', e.target.value)}
-                  placeholder="+254 7XX XXX XXX"
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t('chp.supervisorName')}</label>
+                  <input
+                    type="text" value={form.supervisorName}
+                    onChange={e => update('supervisorName', e.target.value)}
+                    placeholder={t('chp.supervisorNamePlaceholder')}
+                    className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t('chp.supervisorPhone')}</label>
+                  <input
+                    type="tel" value={form.supervisorPhone}
+                    onChange={e => update('supervisorPhone', e.target.value)}
+                    placeholder="+254 7XX XXX XXX"
+                    className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* ── Facility Assignment ── */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b border-border pb-2">
-              {t('chp.facilityAssignment')}
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                {field(t('chp.facilityName'), 'facilityName', null)}
-                <input
-                  type="text" value={form.facilityName}
-                  onChange={e => update('facilityName', e.target.value)}
-                  placeholder={t('chp.facilityNamePlaceholder')}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
+          {/* Languages */}
+          <div className="pt-2 border-t border-border">
+            <label className="block text-sm font-semibold uppercase tracking-wide mb-2 flex items-center gap-1">
+              <Languages className="w-4 h-4 text-muted-foreground" />
+              {t('chp.languages')}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {COMMON_LANGUAGES.map(lang => (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => toggleLanguage(lang)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    form.languages.includes(lang)
+                      ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  {lang}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* ── Actions ── */}
-          <div className="sticky bottom-0 bg-white dark:bg-card border-t border-border pt-4 flex justify-end gap-3">
+          {/* Facility */}
+          <div>
+            <label className="block text-sm font-medium mb-1">{t('chp.facilityName')}</label>
+            <input
+              type="text" value={form.facilityName}
+              onChange={e => update('facilityName', e.target.value)}
+              placeholder={t('chp.facilityNamePlaceholder')}
+              className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-4 border-t border-border">
             <button
               type="button"
-              onClick={onCancel}
-              className="px-5 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+              onClick={() => onOpenChange(false)}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-input bg-background text-foreground hover:bg-muted transition-colors font-medium"
             >
               {t('common.cancel')}
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-2"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors font-medium flex items-center justify-center gap-2"
             >
               <UserPlus className="w-4 h-4" />
               {t('chp.registerButton')}
             </button>
           </div>
+
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

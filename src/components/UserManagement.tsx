@@ -491,20 +491,19 @@ export default function UserManagement() {
       )}
 
       {/* ── Add CHP Modal ── */}
-      {showAddCHPModal && (
-        <AddCHPModal
-          onSubmit={async (chpData) => {
-            try {
-              const chp = await addChp(chpData);
-              setShowAddCHPModal(false);
-              toast.success(`${chp.fullName} ${t('chp.addedSuccess') || 'registered as CHP'}`);
-            } catch (err: any) {
-              toast.error(err.message || t('chp.addError') || 'Failed to register CHP');
-            }
-          }}
-          onCancel={() => setShowAddCHPModal(false)}
-        />
-      )}
+      <AddCHPModal
+        open={showAddCHPModal}
+        onOpenChange={setShowAddCHPModal}
+        onSubmit={async (chpData) => {
+          try {
+            const chp = await addChp(chpData);
+            setShowAddCHPModal(false);
+            toast.success(`${chp.fullName} ${t('chp.addedSuccess') || 'registered as CHP'}`);
+          } catch (err: any) {
+            toast.error(err.message || t('chp.addError') || 'Failed to register CHP');
+          }
+        }}
+      />
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
