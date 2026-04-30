@@ -108,8 +108,8 @@ export default function AddCHPModal({ onSubmit, onCancel }: AddCHPModalProps) {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4" onClick={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="bg-white dark:bg-card rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-transparent p-4 overflow-y-auto" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="bg-white dark:bg-card rounded-2xl shadow-2xl w-full max-w-3xl my-4">
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-card border-b border-border px-6 py-4 flex items-center justify-between z-10 rounded-t-2xl">
           <div className="flex items-center gap-3">
