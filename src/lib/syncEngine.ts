@@ -321,26 +321,26 @@ export class MedSyncManager {
 
       if (entry.entityType === 'patient' && entry.changeType === 'create') {
         const payload = entry.payload as Record<string, unknown>;
-        const res = await fetch(`${apiUrl}/sync/push`, {
+        const res = await fetch(`${apiUrl}/patients`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            clientVersion: 1,
-            deviceId: 'direct-api',
-            region: payload.region || 'default',
-            changes: [{
-              changeId: entry.changeId,
-              entityType: 'patient',
-              entityId: entry.entityId,
-              operation: 'create',
-              previousVersion: 0,
-              checksum: entry.checksum,
-              payload,
-              clientTimestamp: entry.timestamp,
-            }],
-          }),
+          body: JSON.stringify(payload),
         });
-        if (res.ok) {
+        if (res.ok || res.status === 409) {
+          await this.localDB.markAsSent(entry.changeId);
+          return true;
+        }
+        if (res.status === 401) return false;
+      }
+
+      if (entry.entityType === 'medicalRecord' && entry.changeType === 'create') {
+        const payload = entry.payload as Record<string, unknown>;
+        const res = await fetch(`${apiUrl}/medical-records`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+        });
+        if (res.ok || res.status === 409) {
           await this.localDB.markAsSent(entry.changeId);
           return true;
         }
@@ -383,6 +383,7 @@ export class MedSyncManager {
       this.saveStats();
       this.setStatus('idle');
       this.localDB.cleanupSentItems(24);
+      this.localDB.cleanupOldErrors(7).then((n) => { if (n > 0) console.log(`[Sync] Purged ${n} old errors`); });
       return true;
     }
 
@@ -464,8 +465,9 @@ export class MedSyncManager {
         this.updateLatency(performance.now() - t0);
         this.setStatus('idle');
 
-        // Cleanup old sent items (fire and forget)
+        // Cleanup old sent items and stale errors (fire and forget)
         this.localDB.cleanupSentItems(24);
+        this.localDB.cleanupOldErrors(7).then((n) => { if (n > 0) console.log(`[Sync] Purged ${n} old errors`); });
 
         return true;
       }
