@@ -3,7 +3,8 @@ import type {
   Patient,
   MedicalRecord,
   User,
-  Chp
+  Chp,
+  Facility,
 } from '@/types';
 import { getLocalDatabase } from '@/lib/dexieDatabase';
 import type { DBPatient, DBUser, DBMedicalRecord } from '@/lib/dexieDatabase';
@@ -546,9 +547,88 @@ export function usePatients() {
 
   useEffect(() => {
     loadPatients();
+
+    const handleSyncSuccess = () => loadPatients();
+    window.addEventListener('healthtrack-sync-success', handleSyncSuccess);
+    return () => window.removeEventListener('healthtrack-sync-success', handleSyncSuccess);
   }, []);
 
+  /**
+   * Load Patients — BACKEND-FIRST sync with REPLACE strategy.
+   */
   const loadPatients = useCallback(async () => {
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    if (!isLocalToken) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 45000);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/patients?_t=${Date.now()}`, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+
+        if (res.ok) {
+          const result = await res.json();
+          const patientsArray = Array.isArray(result.data)
+            ? result.data
+            : result.data?.patients || [];
+          if (result.success && patientsArray.length > 0) {
+            await localDB.clearAllPatients();
+            for (const p of patientsArray) {
+              await localDB.putPatient({
+                id: p._id || p.id,
+                patientId: p.patientId,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : new Date(),
+                gender: p.gender,
+                phone: p.phone,
+                email: p.email,
+                address: p.address,
+                emergencyContact: p.emergencyContact,
+                bloodType: p.bloodType,
+                allergies: p.allergies || [],
+                chronicConditions: p.chronicConditions || [],
+                insuranceInfo: p.insuranceInfo,
+                registeredBy: p.registeredBy?.toString() || '',
+                assignedChpId: p.assignedChpId?.toString(),
+                assignedChpName: p.assignedChpName,
+                referralStages: p.referralStages || [],
+                referralStatus: p.referralStatus || 'registered',
+                registrationDate: p.createdAt ? new Date(p.createdAt) : new Date(),
+                lastUpdated: p.updatedAt ? new Date(p.updatedAt) : new Date(),
+                status: p.status || 'active',
+                _sync: {
+                  version: p._sync?.version || 1,
+                  modifiedAt: p.updatedAt || new Date().toISOString(),
+                  modifiedBy: localDB.getDeviceId(),
+                  checksum: '',
+                  isDeleted: false,
+                  createdAt: p.createdAt || new Date().toISOString(),
+                  createdBy: localDB.getDeviceId(),
+                },
+              } as DBPatient);
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.warn('[loadPatients] Backend fetch timed out (45s). Server may be cold-starting.');
+        } else {
+          console.warn('[loadPatients] Backend fetch failed:', err.message || err);
+        }
+      }
+    }
+
     const all = await localDB.getAllPatients();
     setPatients(all as Patient[]);
     setIsLoading(false);
@@ -557,6 +637,61 @@ export function usePatients() {
   const addPatient = useCallback(async (
     patientData: Omit<Patient, 'id' | 'patientId' | 'registrationDate' | 'lastUpdated'>
   ): Promise<Patient> => {
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    // Backend-first: try API first
+    if (!isLocalToken) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 45000);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/patients?_t=${Date.now()}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToken}`,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+          body: JSON.stringify(patientData),
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+
+        if (res.ok || res.status === 201) {
+          const result = await res.json();
+          const backendPatient = result.data?.patient || result.data;
+          if (backendPatient) {
+            const newPatient: DBPatient = {
+              ...patientData,
+              id: backendPatient._id || backendPatient.id || uuidv4(),
+              patientId: backendPatient.patientId,
+              registrationDate: backendPatient.createdAt ? new Date(backendPatient.createdAt) : new Date(),
+              lastUpdated: backendPatient.updatedAt ? new Date(backendPatient.updatedAt) : new Date(),
+              _sync: {
+                version: 1,
+                modifiedAt: new Date().toISOString(),
+                modifiedBy: localDB.getDeviceId(),
+                checksum: '',
+                isDeleted: false,
+                createdAt: new Date().toISOString(),
+                createdBy: localDB.getDeviceId(),
+              },
+            } as DBPatient;
+            await localDB.putPatient(newPatient);
+            await loadPatients();
+            return newPatient as Patient;
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.warn('[addPatient] Backend create failed, falling back to local:', err.message);
+        }
+      }
+    }
+
+    // Fallback: save locally
     const count = patients.length;
     const newPatient: DBPatient = {
       ...patientData,
@@ -581,9 +716,48 @@ export function usePatients() {
   }, [patients.length, loadPatients]);
 
   const updatePatient = useCallback(async (id: string, updates: Partial<Patient>): Promise<Patient | null> => {
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    // Try backend update first
+    if (!isLocalToken && !id.startsWith('local_') && id.length === 24) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 45000);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/patients/${id}?_t=${Date.now()}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToken}`,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+          body: JSON.stringify(updates),
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+
+        if (res.ok) {
+          const existing = await localDB.getPatientById(id);
+          if (existing) {
+            const updated = { ...existing, ...updates, lastUpdated: new Date() } as DBPatient;
+            await localDB.putPatient(updated);
+            await loadPatients();
+            return updated as Patient;
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.warn('[updatePatient] Backend update failed, falling back to local:', err.message);
+        }
+      }
+    }
+
+    // Local fallback
     const existing = await localDB.getPatientById(id);
     if (!existing) return null;
-    const updated = { ...existing, ...updates } as DBPatient;
+    const updated = { ...existing, ...updates, lastUpdated: new Date() } as DBPatient;
     await localDB.putPatient(updated);
     await loadPatients();
     return updated as Patient;
@@ -611,9 +785,94 @@ export function useMedicalRecords() {
 
   useEffect(() => {
     loadRecords();
+
+    const handleSyncSuccess = () => loadRecords();
+    window.addEventListener('healthtrack-sync-success', handleSyncSuccess);
+    return () => window.removeEventListener('healthtrack-sync-success', handleSyncSuccess);
   }, []);
 
+  /**
+   * Load Medical Records — BACKEND-FIRST sync with REPLACE strategy.
+   */
   const loadRecords = useCallback(async () => {
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    if (!isLocalToken) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 45000);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/medical-records?_t=${Date.now()}`, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+
+        if (res.ok) {
+          const result = await res.json();
+          const recordsArray = Array.isArray(result.data)
+            ? result.data
+            : result.data?.records || [];
+          if (result.success && recordsArray.length > 0) {
+            await localDB.clearAllMedicalRecords();
+            for (const r of recordsArray) {
+              await localDB.putMedicalRecord({
+                id: r._id || r.id,
+                patientId: r.patientId?.toString() || '',
+                recordedBy: r.recordedBy?.toString() || '',
+                recordedAt: r.createdAt ? new Date(r.createdAt) : new Date(),
+                visitType: r.recordType || 'routine',
+                vitalSigns: r.vitalSigns || { temperatureUnit: 'celsius', weightUnit: 'kg', recordedAt: new Date() },
+                chiefComplaint: r.chiefComplaint || '',
+                symptoms: [],
+                physicalExamination: r.physicalExamination,
+                preliminaryDiagnosis: Array.isArray(r.diagnosis) ? r.diagnosis[0] : r.diagnosis,
+                icd10Code: undefined,
+                testsOrdered: undefined,
+                testResults: undefined,
+                medications: r.medications,
+                procedures: r.procedures,
+                referrals: r.referralDetails ? [{
+                  id: uuidv4(),
+                  fromFacility: '',
+                  toFacility: r.referralDetails.referredToFacility,
+                  toDepartment: r.referralDetails.referredToDepartment,
+                  reason: r.referralDetails.reasonForReferral,
+                  urgency: r.referralDetails.urgency,
+                  status: r.referralDetails.referralStatus,
+                  referredAt: new Date(r.encounterDate),
+                }] : undefined,
+                clinicalNotes: r.clinicalNotes,
+                followUpInstructions: r.followUpInstructions,
+                attachments: undefined,
+                _sync: {
+                  version: r._sync?.version || 1,
+                  modifiedAt: r.updatedAt || new Date().toISOString(),
+                  modifiedBy: localDB.getDeviceId(),
+                  checksum: '',
+                  isDeleted: false,
+                  createdAt: r.createdAt || new Date().toISOString(),
+                  createdBy: localDB.getDeviceId(),
+                },
+              } as DBMedicalRecord);
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.warn('[loadMedicalRecords] Backend fetch timed out (45s). Server may be cold-starting.');
+        } else {
+          console.warn('[loadMedicalRecords] Backend fetch failed:', err.message || err);
+        }
+      }
+    }
+
     const all = await localDB.getAllMedicalRecords();
     setRecords(all as MedicalRecord[]);
     setIsLoading(false);
@@ -634,6 +893,59 @@ export function useMedicalRecords() {
   const addRecord = useCallback(async (
     recordData: Omit<MedicalRecord, 'id' | 'recordedAt'>
   ): Promise<MedicalRecord> => {
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    // Backend-first
+    if (!isLocalToken) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 45000);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/medical-records?_t=${Date.now()}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToken}`,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+          body: JSON.stringify(recordData),
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+
+        if (res.ok || res.status === 201) {
+          const result = await res.json();
+          const backendRecord = result.data?.record || result.data;
+          if (backendRecord) {
+            const newRecord: DBMedicalRecord = {
+              ...recordData,
+              id: backendRecord._id || backendRecord.id || uuidv4(),
+              recordedAt: backendRecord.createdAt ? new Date(backendRecord.createdAt) : new Date(),
+              _sync: {
+                version: 1,
+                modifiedAt: new Date().toISOString(),
+                modifiedBy: localDB.getDeviceId(),
+                checksum: '',
+                isDeleted: false,
+                createdAt: new Date().toISOString(),
+                createdBy: localDB.getDeviceId(),
+              },
+            } as DBMedicalRecord;
+            await localDB.putMedicalRecord(newRecord);
+            await loadRecords();
+            return newRecord as MedicalRecord;
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.warn('[addRecord] Backend create failed, falling back to local:', err.message);
+        }
+      }
+    }
+
+    // Local fallback
     setIsLoading(true);
     const newRecord: DBMedicalRecord = {
       ...recordData,
@@ -658,6 +970,90 @@ export function useMedicalRecords() {
   return { records, isLoading, addRecord, getRecordsByPatient, getRecordsByCollector, getRecordById, loadRecords };
 }
 
+// ─── Facilities Hook ───
+
+export function useFacilities() {
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadFacilities();
+
+    const handleSyncSuccess = () => loadFacilities();
+    window.addEventListener('healthtrack-sync-success', handleSyncSuccess);
+    return () => window.removeEventListener('healthtrack-sync-success', handleSyncSuccess);
+  }, []);
+
+  /**
+   * Load Facilities — BACKEND-FIRST sync with REPLACE strategy.
+   */
+  const loadFacilities = useCallback(async () => {
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
+
+    if (!isLocalToken) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 45000);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/facilities?_t=${Date.now()}`, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+
+        if (res.ok) {
+          const result = await res.json();
+          const facilitiesArray = Array.isArray(result.data)
+            ? result.data
+            : result.data?.facilities || [];
+          if (result.success && facilitiesArray.length > 0) {
+            await localDB.clearAllFacilities();
+            for (const f of facilitiesArray) {
+              await localDB.putFacility({
+                id: f._id || f.id,
+                name: f.name,
+                type: f.type,
+                address: f.address || { street: '', city: '', state: '', postalCode: '', country: 'Kenya' },
+                phone: f.phone,
+                email: f.email,
+                departments: f.departments || [],
+                services: f.services || [],
+                isActive: f.isActive !== false,
+              } as Facility);
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.warn('[loadFacilities] Backend fetch timed out (45s). Server may be cold-starting.');
+        } else {
+          console.warn('[loadFacilities] Backend fetch failed:', err.message || err);
+        }
+      }
+    }
+
+    const all = await localDB.getAllFacilities();
+    setFacilities(all);
+    setIsLoading(false);
+  }, []);
+
+  const getFacilityById = useCallback((id: string): Facility | undefined => {
+    return facilities.find(f => f.id === id);
+  }, [facilities]);
+
+  const getFacilitiesByCounty = useCallback((county: string): Facility[] => {
+    return facilities.filter(f => f.address?.state === county);
+  }, [facilities]);
+
+  return { facilities, isLoading, loadFacilities, getFacilityById, getFacilitiesByCounty };
+}
+
 // ─── Aggregated Healthcare Hook ───
 
 export function useHealthcareData() {
@@ -665,6 +1061,7 @@ export function useHealthcareData() {
   const medicalRecords = useMedicalRecords();
   const users = useUsers();
   const chps = useChps();
+  const facilities = useFacilities();
   const dashboard = useDashboard();
-  return { patients, medicalRecords, users, chps, dashboard };
+  return { patients, medicalRecords, users, chps, facilities, dashboard };
 }

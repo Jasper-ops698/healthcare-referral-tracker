@@ -7,7 +7,7 @@
  */
 
 import Dexie, { type EntityTable } from 'dexie';
-import type { Patient, MedicalRecord, User, Chp } from '@/types';
+import type { Patient, MedicalRecord, User, Chp, Facility } from '@/types';
 
 // ─── Outbox Status Lifecycle ───
 
@@ -74,6 +74,7 @@ class HealthTrackDB extends Dexie {
   chps!: EntityTable<Chp, 'id'>;
   users!: EntityTable<DBUser, 'id'>;
   medicalRecords!: EntityTable<DBMedicalRecord, 'id'>;
+  facilities!: EntityTable<Facility, 'id'>;
   outbox!: EntityTable<OutboxEntry, 'changeId'>;
   syncMeta!: EntityTable<DBSyncCheckpoint, 'key'>;
 
@@ -85,6 +86,7 @@ class HealthTrackDB extends Dexie {
       chps: 'id, chpId, nationalId, facilityId, county, status, [facilityId+status], [county+status]',
       users: 'id, email, role, isActive',
       medicalRecords: 'id, patientId, recordedBy, [patientId+recordedAt]',
+      facilities: 'id, name, type, county, isActive',
       outbox: 'changeId, status, [status+timestamp], [entityType+entityId], timestamp, nextRetryAt',
       syncMeta: 'key',
     });
@@ -499,6 +501,18 @@ export class LocalDatabase {
     await db.chps.clear();
   }
 
+  async clearAllPatients(): Promise<void> {
+    await db.patients.clear();
+  }
+
+  async clearAllMedicalRecords(): Promise<void> {
+    await db.medicalRecords.clear();
+  }
+
+  async clearAllFacilities(): Promise<void> {
+    await db.facilities.clear();
+  }
+
   /** Get CHPs filtered by facility (for collector dropdown) */
   async getChpsByFacility(facilityId: string): Promise<Chp[]> {
     return db.chps
@@ -513,6 +527,31 @@ export class LocalDatabase {
       .where('[county+status]')
       .between([county, 'active'], [county, 'active'])
       .toArray();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FACILITY CRUD
+  // ═══════════════════════════════════════════════════════════════════════
+
+  async getAllFacilities(): Promise<Facility[]> {
+    return db.facilities.toArray();
+  }
+
+  async getFacilityById(id: string): Promise<Facility | undefined> {
+    return db.facilities.get(id);
+  }
+
+  async getFacilitiesByCounty(county: string): Promise<Facility[]> {
+    return db.facilities.where('county').equals(county).toArray();
+  }
+
+  async putFacility(facility: Facility): Promise<Facility> {
+    await db.facilities.put(facility);
+    return facility;
+  }
+
+  async bulkPutFacilities(facilities: Facility[]): Promise<void> {
+    await db.facilities.bulkPut(facilities);
   }
 
   // ═══════════════════════════════════════════════════════════════════════

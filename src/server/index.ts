@@ -27,6 +27,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { processPendingEmails } from './services/emailService.js';
 import userRoutes from './routes/users.js';
+import patientRoutes from './routes/patients.js';
+import medicalRecordRoutes from './routes/medicalRecords.js';
+import facilityRoutes from './routes/facilities.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -87,6 +90,15 @@ app.use(`${API_PREFIX}/users`, userRoutes);
 
 // CHP routes (admin only — auth enforced per-route)
 app.use(`${API_PREFIX}/chps`, chpRoutes);
+
+// Patient routes (admin + collector)
+app.use(`${API_PREFIX}/patients`, patientRoutes);
+
+// Medical Record routes (admin + collector)
+app.use(`${API_PREFIX}/medical-records`, medicalRecordRoutes);
+
+// Facility routes (list for all, mutations admin only)
+app.use(`${API_PREFIX}/facilities`, facilityRoutes);
 
 // Email routes
 app.use(`${API_PREFIX}/email`, emailRoutes);
