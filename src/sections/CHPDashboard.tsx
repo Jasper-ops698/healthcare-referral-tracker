@@ -1,30 +1,84 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useHealthcareData } from '@/hooks/useData';
+import { useSync } from '@/hooks/useSync';
+import { useHealthcareData, useUsers } from '@/hooks/useData';
 import { useI18n } from '@/i18n/useI18n';
+import type { User } from '@/types';
 import ResponsiveSidebar from '@/components/ResponsiveSidebar';
 import NotificationBell from '@/components/NotificationBell';
-import CollectorOverview from '@/components/CHPOverview';
+import ProfileModal from '@/components/ProfileModal';
+import CHPOverview from '@/components/CHPOverview';
 import PatientRegistration from '@/components/PatientRegistration';
 import MedicalRecordsEntry from '@/components/MedicalRecordsEntry';
 import MyPatients from '@/components/MyPatients';
-import CollectorProfile from '@/components/CHPProfile';
+import CHPProfile from '@/components/CHPProfile';
+import Settings from '@/components/Settings';
+import { toast } from 'sonner';
 import {
   LayoutDashboard,
   UserPlus,
   FileText,
   Users,
   UserCircle,
+  Settings as SettingsIcon,
+  CloudOff,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 
-type CollectorTab = 'dashboard' | 'register' | 'records' | 'patients' | 'profile';
+type CollectorTab = 'dashboard' | 'register' | 'records' | 'patients' | 'profile' | 'settings';
+
+/* ═══════════ Sync Status Chip ═══════════ */
+function SyncStatusChip({ status, pendingCount, isOnline, onSync }: {
+  status: import('@/lib/syncTypes').SyncStatus;
+  pendingCount: number;
+  isOnline: boolean;
+  onSync: () => void;
+}) {
+  const config: Record<string, { icon: React.ReactNode; label: string; dot: string }> = {
+    idle: { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: 'sync.synced', dot: 'bg-emerald-500' },
+    pulling: { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: 'sync.syncing', dot: 'bg-sky-500' },
+    pushing: { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: 'sync.syncing', dot: 'bg-amber-500' },
+    offline: { icon: <CloudOff className="w-3.5 h-3.5" />, label: 'sync.offline', dot: 'bg-gray-400' },
+    error: { icon: <AlertTriangle className="w-3.5 h-3.5" />, label: 'sync.error', dot: 'bg-rose-500' },
+    conflict: { icon: <AlertTriangle className="w-3.5 h-3.5" />, label: 'sync.error', dot: 'bg-orange-500' },
+  };
+  const c = config[status] || config.idle;
+  const isSyncing = status === 'pulling' || status === 'pushing';
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={onSync}
+        disabled={isSyncing || !isOnline}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+        title="Click to sync"
+      >
+        <span className={`w-2 h-2 rounded-full ${c.dot} ${isSyncing ? 'animate-pulse' : ''}`} />
+        <span className="capitalize">{c.label}</span>
+        {c.icon}
+      </button>
+      {pendingCount > 0 && (
+        <span className="text-xs text-amber-600 font-medium">({pendingCount})</span>
+      )}
+    </div>
+  );
+}
 
 export default function CollectorDashboard() {
   const [activeTab, setActiveTab] = useState<CollectorTab>('dashboard');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [profileUser, setProfileUser] = useState<User | null>(null);
   const { user, logout } = useAuth();
+  const { status, pendingCount, isOnline, triggerSync } = useSync();
   const { dashboard, patients } = useHealthcareData();
+  const { updateUser } = useUsers();
   const { t } = useI18n();
+
+  const handleOpenMyProfile = () => {
+    if (user) setProfileUser(user);
+  };
 
   const menuItems = useMemo(() => [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: LayoutDashboard },
@@ -32,6 +86,7 @@ export default function CollectorDashboard() {
     { id: 'records', label: t('sidebar.records'), icon: FileText },
     { id: 'patients', label: t('sidebar.myPatients'), icon: Users },
     { id: 'profile', label: t('sidebar.profile'), icon: UserCircle },
+    { id: 'settings', label: t('sidebar.settings'), icon: SettingsIcon },
   ], [t]);
 
   const collectorStats = user ? dashboard.getCollectorStats(user.id) : null;
@@ -39,26 +94,30 @@ export default function CollectorDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return collectorStats ? <CollectorOverview stats={collectorStats} /> : null;
+        return collectorStats ? <CHPOverview stats={collectorStats} /> : null;
       case 'register':
         return <PatientRegistration onSuccess={() => setActiveTab('patients')} />;
       case 'records':
         return <MedicalRecordsEntry patients={patients.patients} />;
       case 'patients':
-        return <MyPatients
-          patients={patients.getPatientsByCollector(user?.id || '')}
-          onAddRecord={() => setActiveTab('records')}
-        />;
+        return (
+          <MyPatients
+            patients={patients.getPatientsByCollector(user?.id || '')}
+            onAddRecord={() => setActiveTab('records')}
+          />
+        );
       case 'profile':
-        return <CollectorProfile />;
+        return <CHPProfile />;
+      case 'settings':
+        return <Settings />;
       default:
-        return collectorStats ? <CollectorOverview stats={collectorStats} /> : null;
+        return collectorStats ? <CHPOverview stats={collectorStats} /> : null;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Fixed sidebar */}
+    <div className="min-h-screen bg-muted/30 flex">
+      {/* Sidebar */}
       <ResponsiveSidebar
         items={menuItems}
         activeTab={activeTab}
@@ -66,30 +125,61 @@ export default function CollectorDashboard() {
         user={user}
         onLogout={logout}
         title="HealthTrack"
-        subtitle="Collector Portal"
+        subtitle="Collector"
         logoImage="/brand-logo.png"
         isCollapsed={isCollapsed}
         onToggleCollapse={() => setIsCollapsed((c) => !c)}
-        onOpenProfile={() => setActiveTab('profile')}
+        onOpenProfile={handleOpenMyProfile}
       />
 
       {/* Main content */}
-      <main className={`flex-1 overflow-auto pt-16 lg:pt-0 transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+      <main className={`flex-1 min-h-screen overflow-auto transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
         {/* Top app bar */}
-        <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-sm border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {menuItems.find(m => m.id === activeTab)?.label || t('sidebar.dashboard')}
-            </h2>
+        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm border-b border-border px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-foreground">
+            {menuItems.find((m) => m.id === activeTab)?.label || t('sidebar.dashboard')}
+          </h1>
+          <div className="flex items-center gap-3">
+            <SyncStatusChip
+              status={status}
+              pendingCount={pendingCount}
+              isOnline={isOnline}
+              onSync={triggerSync}
+            />
+            {!isOnline && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-red-600 bg-red-50 px-2 py-1 rounded-md">
+                <CloudOff className="w-3 h-3" />
+                Offline
+              </span>
+            )}
             <NotificationBell />
           </div>
-        </div>
+        </header>
+
+        {/* Content */}
         <div className="p-4 sm:p-6 lg:p-8">
           <div className="page-transition">
             {renderContent()}
           </div>
         </div>
       </main>
+
+      {/* Profile Modal */}
+      {profileUser && (
+        <ProfileModal
+          user={profileUser}
+          onClose={() => setProfileUser(null)}
+          onSave={async (data) => {
+            try {
+              await updateUser(profileUser.id, data);
+              toast.success(t('toast.profileUpdated'));
+              setProfileUser(null);
+            } catch (err: any) {
+              toast.error(err.message || t('toast.profileUpdateFailed'));
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

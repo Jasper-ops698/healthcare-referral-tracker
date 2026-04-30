@@ -200,6 +200,17 @@ export const translations = {
     'toast.2faCodeRequired': 'Please enter a code',
     'toast.2faSetupSuccess': 'Two-factor authentication enabled!',
     'toast.2faDisabled': 'Two-factor authentication disabled',
+    'toast.profileUpdated': 'Profile updated successfully!',
+    'toast.profileUpdateFailed': 'Failed to update profile.',
+
+    // ── Sync ──
+    'sync.synced': 'Synced',
+    'sync.syncing': 'Syncing...',
+    'sync.error': 'Sync error',
+    'sync.offline': 'Offline',
+    'sync.pending': 'pending',
+    'sync.lastSync': 'Last sync',
+    'sync.syncNow': 'Sync now',
 
     // ── Logout Modal ──
     'logout.title': 'Sign Out',
@@ -920,6 +931,17 @@ export const translations = {
     'toast.2faCodeRequired': 'Tafadhali weka nambari',
     'toast.2faSetupSuccess': 'Uhalalishaji wa hatua mbili umeanzishwa!',
     'toast.2faDisabled': 'Uhalalishaji wa hatua mbili umezimwa',
+    'toast.profileUpdated': 'Wasifu umesasishwa!',
+    'toast.profileUpdateFailed': 'Imeshindwa kusasisha wasifu.',
+
+    // ── Sync ──
+    'sync.synced': 'Imesawazishwa',
+    'sync.syncing': 'Inasawazisha...',
+    'sync.error': 'Hitilafu ya usawazishaji',
+    'sync.offline': 'Nje ya mtandao',
+    'sync.pending': 'zinasubiri',
+    'sync.lastSync': 'Usawazishaji wa mwisho',
+    'sync.syncNow': 'Sawazisha sasa',
 
     // ── Logout Modal ──
     'logout.title': 'Toka',

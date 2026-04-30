@@ -62,7 +62,7 @@ function saveLocal(s: typeof defaultSettings) {
 /* ═══════════════════════════ Settings ═══════════════════════════ */
 
 export default function Settings() {
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
   const { t, lang, setLang } = useI18n();
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(loadSettings);
@@ -80,7 +80,7 @@ export default function Settings() {
     { id: 'general', label: t('settings.general'), icon: Globe, color: 'text-sky-600', bg: 'bg-sky-50', activeBg: 'bg-sky-500', activeText: 'text-white' },
     { id: 'notifications', label: t('settings.notifications'), icon: Bell, color: 'text-amber-600', bg: 'bg-amber-50', activeBg: 'bg-amber-500', activeText: 'text-white' },
     { id: 'security', label: t('settings.security'), icon: Shield, color: 'text-emerald-600', bg: 'bg-emerald-50', activeBg: 'bg-emerald-500', activeText: 'text-white' },
-    { id: 'data', label: t('settings.dataPrivacy'), icon: Database, color: 'text-purple-600', bg: 'bg-purple-50', activeBg: 'bg-purple-500', activeText: 'text-white' },
+    ...(isAdmin ? [{ id: 'data', label: t('settings.dataPrivacy'), icon: Database, color: 'text-purple-600', bg: 'bg-purple-50', activeBg: 'bg-purple-500', activeText: 'text-white' }] : []),
   ];
 
 
