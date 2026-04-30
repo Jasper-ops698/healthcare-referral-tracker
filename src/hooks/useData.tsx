@@ -178,8 +178,13 @@ export function useUsers() {
   }, [users]);
 
   /**
-   * Add user — BACKEND-FIRST.
-   * Only saves locally after backend confirms success.
+   * Add user — OFFLINE-FIRST with outbox queue.
+   *
+   * 1. Save user locally with a temp ID
+   * 2. Add to outbox so sync engine can retry later
+   * 3. Try backend API call
+   * 4. On success: update with server ID, mark outbox as sent
+   * 5. On failure: outbox entry stays pending → sync engine retries
    */
   const addUser = useCallback(async (
     userData: Omit<User, 'id' | 'createdAt'> & { id?: string; password?: string },
@@ -207,6 +212,39 @@ export function useUsers() {
       };
     }
 
+    // ── STEP 1: Save locally FIRST with temp ID ──
+    const tempId = `local_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const localUser: DBUser = {
+      ...userData,
+      id: tempId,
+      createdAt: new Date(),
+      lastSyncedAt: undefined,
+      _sync: {
+        version: 1,
+        modifiedAt: new Date().toISOString(),
+        modifiedBy: localDB.getDeviceId(),
+        checksum: '',
+        isDeleted: false,
+        createdAt: new Date().toISOString(),
+        createdBy: localDB.getDeviceId(),
+      },
+    } as DBUser;
+    await localDB.putUser(localUser);
+
+    // ── STEP 2: Queue in outbox for sync engine ──
+    const outboxPayload = apiPayload || {
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      email: userData.email,
+      phone: userData.phone,
+      role: userData.role,
+      assignedFacility: userData.assignedFacility,
+      region: userData.region || 'default',
+    };
+    const outboxEntry = await localDB.enqueueChange('user', tempId, 'create', outboxPayload);
+    setUsers(prev => [...prev, localUser as User]);
+
+    // ── STEP 3: Try backend API ──
     try {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 45000);
@@ -219,15 +257,7 @@ export function useUsers() {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
         },
-        body: JSON.stringify(apiPayload || {
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          email: userData.email,
-          phone: userData.phone,
-          role: userData.role,
-          assignedFacility: userData.assignedFacility,
-          region: userData.region || 'default',
-        }),
+        body: JSON.stringify(outboxPayload),
         signal: controller.signal,
       });
       clearTimeout(t);
@@ -237,85 +267,46 @@ export function useUsers() {
         const text = await res.text();
         console.error('[AddUser] Non-JSON response:', text.substring(0, 200));
         setIsLoading(false);
-        return {
-          user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
-          serverSynced: false,
-          error: 'Backend returned an invalid response. The server may be restarting — try again in 30 seconds.',
-        };
+        return { user: localUser as User, serverSynced: false };
       }
 
       const result = await res.json();
 
       if (!res.ok || !result.success) {
-        const errorMsg = result.error?.message || result.error || `Server error: ${res.status}`;
+        console.error('[AddUser] Backend error:', result.error);
         setIsLoading(false);
-        return {
-          user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
-          serverSynced: false,
-          error: errorMsg,
-        };
+        return { user: localUser as User, serverSynced: false };
       }
 
+      // ── STEP 4: Backend success — update with server ID, mark synced ──
       const backendUser = result.data?.user || result.data;
-      const serverId = backendUser?._id || backendUser?.id || uuidv4();
+      const serverId = backendUser?._id || backendUser?.id || tempId;
 
-      const newUser: DBUser = {
-        ...userData,
+      const updatedUser: DBUser = {
+        ...localUser,
         id: serverId,
-        createdAt: backendUser?.createdAt ? new Date(backendUser.createdAt) : new Date(),
         lastSyncedAt: new Date(),
-        _sync: {
-          version: 1,
-          modifiedAt: new Date().toISOString(),
-          modifiedBy: localDB.getDeviceId(),
-          checksum: '',
-          isDeleted: false,
-          createdAt: new Date().toISOString(),
-          createdBy: localDB.getDeviceId(),
-        },
-      } as DBUser;
-
-      await localDB.putUser(newUser);
+      };
+      await localDB.putUser(updatedUser);
+      await localDB.markAsSent(outboxEntry.changeId); // Mark outbox entry as sent
       await loadUsers();
       setIsLoading(false);
 
       return {
-        user: newUser as User,
+        user: updatedUser as User,
         serverSynced: true,
         error: result.data?.tempPassword ? `Temp password: ${result.data.tempPassword}` : undefined,
       };
 
     } catch (err: any) {
+      // ── STEP 5: Backend failed — outbox stays pending, sync engine will retry ──
       if (err.name === 'AbortError') {
-        setIsLoading(false);
-        return {
-          user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
-          serverSynced: false,
-          error: 'Server is taking too long to respond. The backend may be waking up — try again in 30–60 seconds.',
-        };
+        console.warn('[AddUser] Backend timed out — user saved locally, sync engine will retry');
+      } else {
+        console.warn('[AddUser] Backend error — user saved locally, sync engine will retry:', err.message);
       }
-
-      const isNetworkError =
-        err.message?.includes('fetch') ||
-        err.message?.includes('network') ||
-        err.message?.includes('Failed to fetch') ||
-        !navigator.onLine;
-
-      if (isNetworkError) {
-        setIsLoading(false);
-        return {
-          user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
-          serverSynced: false,
-          error: 'Network error — cannot reach the backend server. Please check your connection and try again.',
-        };
-      }
-
       setIsLoading(false);
-      return {
-        user: { ...userData, id: '', createdAt: new Date() } as unknown as User,
-        serverSynced: false,
-        error: err.message || 'Failed to create user',
-      };
+      return { user: localUser as User, serverSynced: false };
     }
   }, [loadUsers, users]);
 
@@ -451,7 +442,28 @@ export function useChps() {
     const jwtToken = localStorage.getItem('healthtrack_jwt_token');
     const isLocalToken = !jwtToken || jwtToken.startsWith('local_');
 
-    // Backend-first: try API first
+    // ── STEP 1: Save locally FIRST ──
+    const existing = chps.find(c => c.nationalId === chpData.nationalId);
+    if (existing) return existing;
+
+    const tempId = `local_chp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const count = chps.length;
+    const localChp: Chp = {
+      ...chpData,
+      id: tempId,
+      chpId: `CHP-${String(count + 1).padStart(4, '0')}`,
+      createdAt: new Date(),
+    };
+    await localDB.putChp(localChp);
+
+    // ── STEP 2: Queue in outbox for sync engine ──
+    let chpOutboxEntry: { changeId: string } | null = null;
+    if (!isLocalToken) {
+      chpOutboxEntry = await localDB.enqueueChange('chp', tempId, 'create', { ...chpData });
+    }
+    setChps(prev => [...prev, localChp]);
+
+    // ── STEP 3: Try backend API ──
     if (!isLocalToken) {
       try {
         const controller = new AbortController();
@@ -474,43 +486,26 @@ export function useChps() {
           const result = await res.json();
           const backendChp = result.data?.chp || result.data;
           if (backendChp) {
-            const newChp: Chp = {
+            const updatedChp: Chp = {
               ...chpData,
-              id: backendChp._id || backendChp.id || uuidv4(),
-              chpId: backendChp.chpId,
+              id: backendChp._id || backendChp.id || tempId,
+              chpId: backendChp.chpId || localChp.chpId,
               createdAt: backendChp.createdAt ? new Date(backendChp.createdAt) : new Date(),
               lastSyncedAt: new Date(),
             };
-            await localDB.putChp(newChp);
+            await localDB.putChp(updatedChp);
+            if (chpOutboxEntry) await localDB.markAsSent(chpOutboxEntry.changeId);
             await loadChps();
-            return newChp;
+            return updatedChp;
           }
         }
       } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.warn('[addChp] Backend create failed, falling back to local:', err.message);
-        }
+        console.warn('[addChp] Backend create failed — CHP saved locally, sync engine will retry:', err.message);
       }
     }
 
-    // Fallback: save locally (offline mode)
-    const existing = chps.find(c => c.nationalId === chpData.nationalId);
-    if (existing) return existing;
-
-    const id = uuidv4();
-    const count = chps.length;
-    const chpId = `CHP-${String(count + 1).padStart(4, '0')}`;
-
-    const newChp: Chp = {
-      ...chpData,
-      id,
-      chpId,
-      createdAt: new Date(),
-    };
-
-    await localDB.putChp(newChp);
     await loadChps();
-    return newChp;
+    return localChp;
   }, [chps, loadChps]);
 
   const getChpsByFacility = useCallback(async (facilityId: string): Promise<Chp[]> => {
