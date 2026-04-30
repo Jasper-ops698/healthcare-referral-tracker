@@ -1,16 +1,10 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import type { DashboardKPIs, ActivityLog, CollectorStats } from '@/types';
-import { getLocalDatabase } from '@/lib/dexieDatabase';
-import { differenceInDays, differenceInYears, format, startOfDay, startOfWeek, startOfMonth, subMonths, isAfter, isSameDay } from 'date-fns';
-import { API_BASE_URL } from '@/lib/config';
-
-const localDB = getLocalDatabase();
-
-// ───────────────────────────────────────────────────────────────────────────
-//  REAL KPI COMPUTATION FROM INDEXEDDB
-//  Computes all dashboard metrics from the actual patient / record / user
-//  data stored in Dexie.js.  This runs entirely offline.
-// ───────────────────────────────────────────────────────────────────────────
+import { useMemo, useCallback } from 'react';
+import type { DashboardKPIs, ActivityLog, CollectorStats, Patient, MedicalRecord } from '@/types';
+import { usePatients, useMedicalRecords, useUsers } from './useData';
+import {
+  differenceInDays, differenceInYears, format, startOfDay, startOfWeek,
+  startOfMonth, subMonths, isAfter, isSameDay,
+} from 'date-fns';
 
 function calculateAge(dateOfBirth: Date | string): number {
   try {
@@ -38,19 +32,17 @@ function toDate(d: Date | string | undefined): Date | null {
   }
 }
 
-async function computeKPIsFromIndexedDB(): Promise<DashboardKPIs> {
-  const [patients, records, users] = await Promise.all([
-    localDB.getAllPatients(),
-    localDB.getAllMedicalRecords(),
-    localDB.getAllUsers(),
-  ]);
-
+// ─── Compute KPIs from live patient/record/user data ───
+function computeKPIs(
+  patients: Patient[],
+  records: MedicalRecord[],
+  users: { id: string; firstName: string; lastName: string }[],
+): DashboardKPIs {
   const now = new Date();
   const today = startOfDay(now);
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
   const monthStart = startOfMonth(now);
 
-  // ── Basic counts ──
   const totalPatients = patients.length;
 
   const newPatientsToday = patients.filter((p) => {
@@ -68,35 +60,32 @@ async function computeKPIsFromIndexedDB(): Promise<DashboardKPIs> {
     return d && (isAfter(d, monthStart) || isSameDay(d, monthStart));
   }).length;
 
-  // ── Referral counts ──
   const activeReferrals = patients.filter((p) =>
-    ['referred', 'accepted', 'in-treatment'].includes(p.referralStatus)
+    ['referred', 'accepted', 'in-treatment'].includes(p.referralStatus),
   ).length;
 
   const pendingReferrals = patients.filter((p) =>
-    p.referralStatus === 'screened'
+    p.referralStatus === 'screened',
   ).length;
 
   const completedReferrals = patients.filter((p) =>
-    p.referralStatus === 'completed'
+    p.referralStatus === 'completed',
   ).length;
 
   const rejectedReferrals = patients.filter((p) =>
-    p.referralStatus === 'rejected'
+    p.referralStatus === 'rejected',
   ).length;
 
   const pendingScreenings = patients.filter((p) =>
-    p.referralStatus === 'registered'
+    p.referralStatus === 'registered',
   ).length;
 
-  // ── Gender breakdown ──
   const patientsByGender = {
     male: patients.filter((p) => p.gender === 'male').length,
     female: patients.filter((p) => p.gender === 'female').length,
     other: patients.filter((p) => p.gender === 'other').length,
   };
 
-  // ── Age groups ──
   const ageGroups: Record<string, number> = { '0-18': 0, '19-35': 0, '36-50': 0, '51-65': 0, '65+': 0 };
   patients.forEach((p) => {
     const age = calculateAge(p.dateOfBirth);
@@ -104,16 +93,14 @@ async function computeKPIsFromIndexedDB(): Promise<DashboardKPIs> {
     ageGroups[group] = (ageGroups[group] || 0) + 1;
   });
 
-  // ── Referrals by status ──
   const statusKeys: Array<keyof DashboardKPIs['referralsByStatus']> = [
     'registered', 'screened', 'referred', 'accepted',
     'in-treatment', 'completed', 'rejected',
   ];
   const referralsByStatus = Object.fromEntries(
-    statusKeys.map((s) => [s, patients.filter((p) => p.referralStatus === s).length])
+    statusKeys.map((s) => [s, patients.filter((p) => p.referralStatus === s).length]),
   ) as DashboardKPIs['referralsByStatus'];
 
-  // ── Referrals by month (last 12 months) ──
   const referralsByMonth: DashboardKPIs['referralsByMonth'] = [];
   for (let i = 11; i >= 0; i--) {
     const monthStartDate = startOfMonth(subMonths(now, i));
@@ -122,14 +109,9 @@ async function computeKPIsFromIndexedDB(): Promise<DashboardKPIs> {
       const d = toDate(p.registrationDate);
       return d && (isAfter(d, monthStartDate) || isSameDay(d, monthStartDate)) && d < monthEndDate;
     }).length;
-    referralsByMonth.push({
-      month: format(monthStartDate, 'MMM yyyy'),
-      count,
-    });
+    referralsByMonth.push({ month: format(monthStartDate, 'MMM yyyy'), count });
   }
 
-  // ── Top conditions from medical records ──
-  // Use preliminaryDiagnosis only. Do NOT double-count chiefComplaint.
   const conditionCounts = new Map<string, number>();
   records.forEach((r) => {
     const diagnosis = r.preliminaryDiagnosis?.trim();
@@ -137,7 +119,6 @@ async function computeKPIsFromIndexedDB(): Promise<DashboardKPIs> {
       conditionCounts.set(diagnosis, (conditionCounts.get(diagnosis) || 0) + 1);
     }
   });
-  // If no preliminaryDiagnoses exist, fall back to chiefComplaint
   if (conditionCounts.size === 0) {
     records.forEach((r) => {
       const complaint = r.chiefComplaint?.trim();
@@ -151,8 +132,6 @@ async function computeKPIsFromIndexedDB(): Promise<DashboardKPIs> {
     .slice(0, 5)
     .map(([condition, count]) => ({ condition, count }));
 
-  // ── Average wait time: registrationDate → lastUpdated for completed patients ──
-  // (Proxy for "how long from registration to completion")
   let totalWaitDays = 0;
   let waitCount = 0;
   patients.filter((p) => p.referralStatus === 'completed').forEach((patient) => {
@@ -168,11 +147,9 @@ async function computeKPIsFromIndexedDB(): Promise<DashboardKPIs> {
   });
   const avgWaitTimeDays = waitCount > 0 ? Math.round(totalWaitDays / waitCount) : 0;
 
-  // ── Rejection rate ──
   const totalWithOutcome = completedReferrals + rejectedReferrals;
   const rejectionRate = totalWithOutcome > 0 ? Math.round((rejectedReferrals / totalWithOutcome) * 100) : 0;
 
-  // ── Recent activity ──
   const recentActivity: ActivityLog[] = [
     ...patients
       .sort((a, b) => {
@@ -208,16 +185,14 @@ async function computeKPIsFromIndexedDB(): Promise<DashboardKPIs> {
           id: `act-r-${r.id}`,
           userId: r.recordedBy,
           userName: collector ? `${collector.firstName} ${collector.lastName}` : '_system_',
-          action: 'record_created',
+          action: 'record_added',
           entityType: 'medical-record' as const,
           entityId: r.id,
-          description: `record_created|${patient ? `${patient.firstName} ${patient.lastName}` : '_unknown_'}`,
+          description: `record_added|${patient ? `${patient.firstName} ${patient.lastName}` : r.patientId}`,
           timestamp: toDate(r.recordedAt) || new Date(),
         };
       }),
-  ]
-    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-    .slice(0, 10);
+  ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 10);
 
   return {
     totalPatients,
@@ -240,134 +215,74 @@ async function computeKPIsFromIndexedDB(): Promise<DashboardKPIs> {
   };
 }
 
-// ─── API-first fetch with IndexedDB fallback ───
+// ─── Collector Stats ───
+function computeCollectorStats(
+  allPatients: Patient[],
+  allRecords: MedicalRecord[],
+  collectorId: string,
+): CollectorStats {
+  const myPatients = allPatients.filter((p) => p.registeredBy === collectorId);
+  const myRecords = allRecords.filter((r) => r.recordedBy === collectorId);
+  const myReferrals = myPatients.filter((p) => p.referralStatus === 'referred');
 
-async function fetchDashboardFromAPI(): Promise<DashboardKPIs | null> {
-  try {
-    const token = localStorage.getItem('healthtrack_jwt_token');
-    const apiUrl = import.meta.env.VITE_API_URL || API_BASE_URL;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
+  // Pending = patients that need attention (registered but not yet screened/referred)
+  const pendingTasks = myPatients.filter((p) =>
+    ['registered', 'screened'].includes(p.referralStatus),
+  ).length;
 
-    const res = await fetch(`${apiUrl}/api/v1/analytics/dashboard?_t=${Date.now()}`, {
-      headers: token ? { 
-        Authorization: `Bearer ${token}`,
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-      } : {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && data.kpis) return data.kpis as DashboardKPIs;
-    }
-  } catch {
-    // Network error — fall through to IndexedDB
+  // Monthly activity for the last 6 months
+  const now = new Date();
+  const monthlyActivity: { month: string; patients: number; records: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const monthStart = startOfMonth(subMonths(now, i));
+    const monthEnd = startOfMonth(subMonths(now, i - 1));
+    const monthLabel = format(monthStart, 'MMM');
+    const patientsThisMonth = myPatients.filter((p) => {
+      const d = toDate(p.registrationDate);
+      return d && (isAfter(d, monthStart) || isSameDay(d, monthStart)) && d < monthEnd;
+    }).length;
+    const recordsThisMonth = myRecords.filter((r) => {
+      const d = toDate(r.recordedAt);
+      return d && (isAfter(d, monthStart) || isSameDay(d, monthStart)) && d < monthEnd;
+    }).length;
+    monthlyActivity.push({ month: monthLabel, patients: patientsThisMonth, records: recordsThisMonth });
   }
-  return null;
+
+  const recentPatients = myPatients
+    .sort((a, b) => {
+      const da = toDate(a.registrationDate);
+      const db = toDate(b.registrationDate);
+      return (db?.getTime() || 0) - (da?.getTime() || 0);
+    })
+    .slice(0, 5);
+
+  return {
+    patientsRegistered: myPatients.length,
+    recordsEntered: myRecords.length,
+    referralsMade: myReferrals.length,
+    pendingTasks,
+    recentPatients,
+    monthlyActivity,
+  };
 }
 
 // ─── Dashboard Hook ───
-
 export function useDashboard() {
-  const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const refreshCount = useRef(0);
+  const { patients, isLoading: patientsLoading } = usePatients();
+  const { records, isLoading: recordsLoading } = useMedicalRecords();
+  const { users } = useUsers();
 
-  const loadKPIs = useCallback(async () => {
-    setIsLoading(true);
+  const kpis = useMemo(() => {
+    return computeKPIs(patients, records, users);
+  }, [patients, records, users]);
 
-    // Strategy 1: Try backend API first
-    const apiKpis = await fetchDashboardFromAPI();
-    if (apiKpis) {
-      setKpis(apiKpis);
-      setIsLoading(false);
-      return;
-    }
-
-    // Strategy 2: Compute from IndexedDB (offline mode)
-    const localKpis = await computeKPIsFromIndexedDB();
-    setKpis(localKpis);
-    setIsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    loadKPIs();
-  }, [loadKPIs]);
-
-  // Refresh every 30 seconds while online
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refreshCount.current++;
-      // Every 30s try to refresh from API
-      fetchDashboardFromAPI().then((apiKpis) => {
-        if (apiKpis) setKpis(apiKpis);
-      }).catch(() => {
-        // Silently fail — keep showing IndexedDB data
-      });
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const getCollectorStats = useCallback((_collectorId: string): CollectorStats => {
-    if (!kpis) {
-      return {
-        patientsRegistered: 0,
-        recordsEntered: 0,
-        referralsMade: 0,
-        pendingTasks: 0,
-        recentPatients: [],
-        monthlyActivity: [],
-      };
-    }
-
-    // These would need collector-scoped data; for now return from kpis
-    return {
-      patientsRegistered: kpis.totalPatients,
-      recordsEntered: 0,
-      referralsMade: kpis.activeReferrals,
-      pendingTasks: kpis.pendingScreenings + kpis.pendingReferrals,
-      recentPatients: [],
-      monthlyActivity: kpis.referralsByMonth.map((m) => ({
-        month: m.month,
-        patients: m.count,
-        records: 0,
-      })),
-    };
-  }, [kpis]);
-
-  const defaultKPIs: DashboardKPIs = useMemo(() => ({
-    totalPatients: 0,
-    newPatientsToday: 0,
-    newPatientsThisWeek: 0,
-    newPatientsThisMonth: 0,
-    activeReferrals: 0,
-    pendingReferrals: 0,
-    completedReferrals: 0,
-    rejectedReferrals: 0,
-    pendingScreenings: 0,
-    avgWaitTimeDays: 0,
-    rejectionRate: 0,
-    patientsByGender: { male: 0, female: 0, other: 0 },
-    patientsByAgeGroup: { '0-18': 0, '19-35': 0, '36-50': 0, '51-65': 0, '65+': 0 },
-    referralsByStatus: {
-      registered: 0, screened: 0, referred: 0, accepted: 0,
-      'in-treatment': 0, completed: 0, rejected: 0,
-    },
-    referralsByMonth: [],
-    topConditions: [],
-    recentActivity: [],
-  }), []);
+  const getCollectorStats = useCallback((collectorId: string): CollectorStats => {
+    return computeCollectorStats(patients, records, collectorId);
+  }, [patients, records]);
 
   return {
-    kpis: kpis ?? defaultKPIs,
-    isLoading,
-    refresh: loadKPIs,
+    kpis,
+    isLoading: patientsLoading || recordsLoading,
     getCollectorStats,
   };
 }
