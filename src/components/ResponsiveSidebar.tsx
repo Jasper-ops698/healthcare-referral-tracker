@@ -236,7 +236,7 @@ export default function ResponsiveSidebar({
 
       {/* ═══════════ LOGOUT CONFIRMATION MODAL ═══════════ */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={() => setShowLogoutConfirm(false)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/30 p-4" onClick={() => setShowLogoutConfirm(false)}>
           <div className="bg-white rounded-xl p-6 shadow-xl max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-gray-900">{t('logout.title')}</h3>
             <p className="text-sm text-gray-500">

@@ -685,7 +685,7 @@ export default function MedicalRecordsEntry({ patients }: MedicalRecordsEntryPro
 
       {/* Success Modal */}
       {showSuccess && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-slate-900/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-8 max-w-sm w-full shadow-2xl animate-in text-center border">
             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-8 h-8 text-emerald-600" />
