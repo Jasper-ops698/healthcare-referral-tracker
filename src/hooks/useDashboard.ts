@@ -223,12 +223,18 @@ function computeCollectorStats(
 ): CollectorStats {
   const myPatients = allPatients.filter((p) => p.registeredBy === collectorId);
   const myRecords = allRecords.filter((r) => r.recordedBy === collectorId);
-  const myReferrals = myPatients.filter((p) => p.referralStatus === 'referred');
 
-  // Pending = patients that need attention (registered but not yet screened/referred)
-  const pendingTasks = myPatients.filter((p) =>
-    ['registered', 'screened'].includes(p.referralStatus),
-  ).length;
+  // Referrals made = ANY patient who was ever referred (has referral stages)
+  // This catches patients whose status moved past 'referred' to 'accepted' or 'completed'
+  const referralsMade = myPatients.filter((p) => p.referralStages && p.referralStages.length > 0).length;
+
+  // Pending tasks = patients needing collector action
+  const needsScreening = myPatients.filter((p) => p.referralStatus === 'registered').length;
+  const needsReferral = myPatients.filter((p) => p.referralStatus === 'screened').length;
+  const waitingOnAdmin = myPatients.filter((p) => ['referred', 'accepted'].includes(p.referralStatus)).length;
+  const inTreatment = myPatients.filter((p) => p.referralStatus === 'in-treatment').length;
+  const completed = myPatients.filter((p) => p.referralStatus === 'completed').length;
+  const pendingTasks = needsScreening + needsReferral;
 
   // Monthly activity for the last 6 months
   const now = new Date();
@@ -259,10 +265,17 @@ function computeCollectorStats(
   return {
     patientsRegistered: myPatients.length,
     recordsEntered: myRecords.length,
-    referralsMade: myReferrals.length,
+    referralsMade,
     pendingTasks,
     recentPatients,
     monthlyActivity,
+    taskBreakdown: {
+      needsScreening,
+      needsReferral,
+      waitingOnAdmin,
+      inTreatment,
+      completed,
+    },
   };
 }
 

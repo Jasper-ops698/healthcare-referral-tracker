@@ -6,7 +6,7 @@ import {
   ClipboardList,
   UserPlus,
   Activity,
-  CalendarClock,
+  Stethoscope,
 } from 'lucide-react';
 import {
   BarChart,
@@ -79,7 +79,7 @@ export default function CollectorOverview({ stats, onRegisterPatient, onAddRecor
         </button>
       </div>
 
-      {/* Stats Cards — Real data only */}
+      {/* Stats Cards — Real data with clear labels */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
@@ -108,7 +108,8 @@ export default function CollectorOverview({ stats, onRegisterPatient, onAddRecor
             </div>
           </div>
           <p className="text-2xl font-bold text-foreground">{stats.referralsMade}</p>
-          <p className="text-sm text-muted-foreground mt-1">Referrals Made</p>
+          <p className="text-sm text-muted-foreground mt-1">Patients Referred</p>
+          <p className="text-xs text-muted-foreground/60">Total with referral stages</p>
         </div>
 
         <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
@@ -118,7 +119,8 @@ export default function CollectorOverview({ stats, onRegisterPatient, onAddRecor
             </div>
           </div>
           <p className="text-2xl font-bold text-foreground">{stats.pendingTasks}</p>
-          <p className="text-sm text-muted-foreground mt-1">Pending Tasks</p>
+          <p className="text-sm text-muted-foreground mt-1">Need Your Action</p>
+          <p className="text-xs text-muted-foreground/60">Screening or referral needed</p>
         </div>
       </div>
 
@@ -200,20 +202,41 @@ export default function CollectorOverview({ stats, onRegisterPatient, onAddRecor
         </div>
       </div>
 
-      {/* Pending Tasks / Summary */}
+      {/* Task Summary — Breakdown of what needs collector attention */}
       <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
-        <h3 className="text-lg font-semibold text-foreground mb-4">Task Summary</h3>
+        <h3 className="text-lg font-semibold text-foreground mb-4">Task Summary — Your Action Items</h3>
+
         {stats.pendingTasks > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 border border-amber-100">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <CalendarClock className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="font-medium text-amber-800">{stats.pendingTasks} pending</p>
-                <p className="text-xs text-amber-600">tasks need attention</p>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {stats.taskBreakdown.needsScreening > 0 && (
+              <button
+                onClick={onRegisterPatient}
+                className="flex items-start gap-3 p-4 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors text-left cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <Stethoscope className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-blue-800">{stats.taskBreakdown.needsScreening} need screening</p>
+                  <p className="text-xs text-blue-600 mt-0.5">Add medical record</p>
+                </div>
+              </button>
+            )}
+
+            {stats.taskBreakdown.needsReferral > 0 && (
+              <button
+                onClick={onAddRecord}
+                className="flex items-start gap-3 p-4 rounded-lg bg-amber-50 border border-amber-100 hover:bg-amber-100 transition-colors text-left cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <ArrowRightLeft className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-amber-800">{stats.taskBreakdown.needsReferral} need referral</p>
+                  <p className="text-xs text-amber-600 mt-0.5">Decide if refer to higher facility</p>
+                </div>
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-3 p-4 rounded-lg bg-emerald-50 border border-emerald-100">
@@ -222,8 +245,32 @@ export default function CollectorOverview({ stats, onRegisterPatient, onAddRecor
             </div>
             <div>
               <p className="font-medium text-emerald-800">All caught up</p>
-              <p className="text-xs text-emerald-600">No pending tasks at the moment.</p>
+              <p className="text-xs text-emerald-600">No patients need your attention right now.</p>
             </div>
+          </div>
+        )}
+
+        {/* Additional status rows — informational, not actionable */}
+        {(stats.taskBreakdown.waitingOnAdmin > 0 || stats.taskBreakdown.inTreatment > 0 || stats.taskBreakdown.completed > 0) && (
+          <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-3 gap-3">
+            {stats.taskBreakdown.waitingOnAdmin > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-purple-400" />
+                <span className="text-xs text-muted-foreground">{stats.taskBreakdown.waitingOnAdmin} with admin</span>
+              </div>
+            )}
+            {stats.taskBreakdown.inTreatment > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-pink-400" />
+                <span className="text-xs text-muted-foreground">{stats.taskBreakdown.inTreatment} in treatment</span>
+              </div>
+            )}
+            {stats.taskBreakdown.completed > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-xs text-muted-foreground">{stats.taskBreakdown.completed} completed</span>
+              </div>
+            )}
           </div>
         )}
       </div>

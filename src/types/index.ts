@@ -380,6 +380,13 @@ export interface CollectorStats {
   pendingTasks: number;
   recentPatients: Patient[];
   monthlyActivity: { month: string; patients: number; records: number }[];
+  taskBreakdown: {
+    needsScreening: number;    // status = registered → need first medical record
+    needsReferral: number;     // status = screened → need to decide if refer
+    waitingOnAdmin: number;    // status = referred or accepted → admin's turn
+    inTreatment: number;       // status = in-treatment
+    completed: number;         // status = completed
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
