@@ -210,7 +210,7 @@ export default function CollectorOverview({ stats, onRegisterPatient, onAddRecor
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {stats.taskBreakdown.needsScreening > 0 && (
               <button
-                onClick={onRegisterPatient}
+                onClick={onAddRecord}
                 className="flex items-start gap-3 p-4 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors text-left cursor-pointer"
               >
                 <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
