@@ -35,7 +35,7 @@ export default function AdminDashboard() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const { user, logout } = useAuth();
-  const { status, pendingCount, lastSyncTime, isOnline, triggerSync } = useSync();
+  const { status, pendingCount, lastSyncTime, isOnline, triggerSync, needsReLogin } = useSync();
   const { dashboard, patients, medicalRecords, users } = useHealthcareData();
   const { updateUser } = useUsers();
   const { t } = useI18n();
@@ -138,6 +138,23 @@ export default function AdminDashboard() {
 
       {/* Main content */}
       <main className={`flex-1 overflow-auto pt-16 lg:pt-0 transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+        {/* Re-login warning banner */}
+        {needsReLogin && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-amber-800">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <span>Data saved locally but not synced to server.</span>
+              <span className="font-semibold">Log out and log back in to sync.</span>
+            </div>
+            <button
+              onClick={() => logout()}
+              className="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-md hover:bg-amber-200 transition-colors font-medium"
+            >
+              Re-Login Now
+            </button>
+          </div>
+        )}
+
         {/* Top app bar */}
         <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-sm border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between">

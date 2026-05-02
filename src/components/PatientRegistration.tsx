@@ -26,10 +26,10 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
   const { t } = useI18n();
   const [step, setStep] = useState(1);
 
-  // Get available CHPs for the collector's facility
-  const facilityChps = user?.assignedFacility
-    ? chps.filter(c => c.facilityId === user.assignedFacility && c.status === 'active')
-    : chps.filter(c => c.status === 'active');
+  // Get available CHPs — ONLY those assigned to this collector's facility
+  const facilityChps = chps.filter(c =>
+    c.facilityId === user?.assignedFacility && c.status === 'active'
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);

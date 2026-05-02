@@ -391,7 +391,9 @@ export function useChps() {
 
         if (res.ok) {
           const result = await res.json();
-          const chpsArray = Array.isArray(result.data) ? result.data : [];
+          const chpsArray = Array.isArray(result.data)
+            ? result.data
+            : result.data?.chps || [];
           if (result.success && chpsArray.length > 0) {
             // Merge: update existing, add new — NEVER clear all
             for (const c of chpsArray) {

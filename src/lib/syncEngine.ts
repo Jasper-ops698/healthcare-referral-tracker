@@ -255,8 +255,10 @@ export class MedSyncManager {
    * real JWT token.
    */
   private async applyViaDirectApi(entry: OutboxEntry): Promise<boolean> {
-    // Skip if no token or using local token — can't call backend API
-    if (!this.authToken || this.authToken.startsWith('local_')) {
+    // Always try to sync — even with local_ token the backend may accept it
+    // (e.g., if the token was recently refreshed). If backend rejects with 401,
+    // we return false and the item stays in queue for retry after re-login.
+    if (!this.authToken) {
       return false;
     }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useI18n } from '@/i18n/useI18n';
-import { useMedicalRecords } from '@/hooks/useData';
-import type { Patient } from '@/types';
+import { useMedicalRecords, useUsers } from '@/hooks/useData';
+import type { Patient, MedicalRecord } from '@/types';
 import {
   Search,
   User,
@@ -16,6 +16,20 @@ import {
   Stethoscope,
   Thermometer,
   Heart,
+  Wind,
+  Droplets,
+  Weight,
+  Ruler,
+  Activity,
+  Pill,
+  FlaskConical,
+  ClipboardList,
+  AlertTriangle,
+  Clock,
+  ArrowRightLeft,
+  Ambulance,
+  UserCheck,
+  Gauge,
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -46,9 +60,403 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MEDICAL RECORD CARD — Rich clinical context for each visit
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface MedicalRecordCardProps {
+  record: MedicalRecord;
+  users: import('@/types').User[];
+  patientAllergies?: string[];
+  patientConditions?: string[];
+}
+
+function MedicalRecordCard({ record, users, patientAllergies, patientConditions }: MedicalRecordCardProps) {
+  // Resolve recorder name
+  const recorder = users.find((u) => u.id === record.recordedBy);
+  const recorderName = recorder
+    ? `${recorder.firstName} ${recorder.lastName}`
+    : record.recordedBy?.startsWith('local_')
+      ? 'Local Collector'
+      : record.recordedBy || 'Unknown';
+
+  // Visit type badge styling
+  const visitTypeConfig: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+    emergency: { bg: 'bg-red-100', text: 'text-red-700', icon: <AlertTriangle className="w-3 h-3" /> },
+    referral: { bg: 'bg-amber-100', text: 'text-amber-700', icon: <ArrowRightLeft className="w-3 h-3" /> },
+    'follow-up': { bg: 'bg-blue-100', text: 'text-blue-700', icon: <Clock className="w-3 h-3" /> },
+    routine: { bg: 'bg-gray-100', text: 'text-gray-700', icon: <Stethoscope className="w-3 h-3" /> },
+  };
+  const vt = visitTypeConfig[record.visitType] || visitTypeConfig.routine;
+
+  // Pain level color
+  const painColor =
+    !record.painLevel || record.painLevel === 0
+      ? 'bg-gray-200'
+      : record.painLevel <= 3
+        ? 'bg-green-500'
+        : record.painLevel <= 6
+          ? 'bg-amber-500'
+          : 'bg-red-500';
+
+  // Referral urgency
+  const urgencyConfig: Record<string, { bg: string; text: string }> = {
+    emergency: { bg: 'bg-red-100', text: 'text-red-700' },
+    urgent: { bg: 'bg-amber-100', text: 'text-amber-700' },
+    routine: { bg: 'bg-blue-100', text: 'text-blue-700' },
+  };
+
+  const vs = record.vitalSigns;
+  const exam = record.physicalExamination;
+
+  return (
+    <div className="rounded-xl border border-border bg-white overflow-hidden">
+      {/* ── Header: Visit type + Date + Recorder ── */}
+      <div className="px-4 py-3 bg-muted/20 border-b border-border flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold ${vt.bg} ${vt.text}`}>
+            {vt.icon}
+            {record.visitType}
+          </span>
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
+            <Calendar className="w-3 h-3" />
+            {format(new Date(record.recordedAt), 'MMM d, yyyy · h:mm a')}
+          </span>
+        </div>
+        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+          <UserCheck className="w-3 h-3" />
+          By {recorderName}
+        </span>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* ── Chief Complaint ── */}
+        <div>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1">
+            <Stethoscope className="w-3 h-3" /> Chief Complaint
+          </p>
+          <p className="text-sm font-semibold text-foreground">{record.chiefComplaint}</p>
+          {record.symptomDuration && (
+            <p className="text-[11px] text-muted-foreground mt-0.5">Duration: {record.symptomDuration}</p>
+          )}
+        </div>
+
+        {/* ── Symptoms ── */}
+        {record.symptoms && record.symptoms.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+              Symptoms
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {record.symptoms.map((s, i) => (
+                <span key={i} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-medium">
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Pain Level ── */}
+        {record.painLevel !== undefined && record.painLevel > 0 && (
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Pain Level</span>
+            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden max-w-[120px]">
+              <div
+                className={`h-full rounded-full ${painColor} transition-all`}
+                style={{ width: `${(record.painLevel / 10) * 100}%` }}
+              />
+            </div>
+            <span className={`text-xs font-bold ${record.painLevel >= 7 ? 'text-red-600' : record.painLevel >= 4 ? 'text-amber-600' : 'text-green-600'}`}>
+              {record.painLevel}/10
+            </span>
+          </div>
+        )}
+
+        {/* ── Vital Signs ── */}
+        {vs && (
+          <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
+              <Activity className="w-3 h-3" /> Vital Signs
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+              {vs.temperature !== undefined && (
+                <div className="flex items-center gap-1.5">
+                  <Thermometer className="w-3.5 h-3.5 text-rose-500" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Temp</p>
+                    <p className="text-xs font-semibold">{vs.temperature}°C</p>
+                  </div>
+                </div>
+              )}
+              {vs.bloodPressureSystolic !== undefined && (
+                <div className="flex items-center gap-1.5">
+                  <Heart className="w-3.5 h-3.5 text-rose-500" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">BP</p>
+                    <p className="text-xs font-semibold">{vs.bloodPressureSystolic}/{vs.bloodPressureDiastolic}</p>
+                  </div>
+                </div>
+              )}
+              {vs.heartRate !== undefined && (
+                <div className="flex items-center gap-1.5">
+                  <Heart className="w-3.5 h-3.5 text-rose-500" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">HR</p>
+                    <p className="text-xs font-semibold">{vs.heartRate} <span className="text-[10px] font-normal">bpm</span></p>
+                  </div>
+                </div>
+              )}
+              {vs.respiratoryRate !== undefined && (
+                <div className="flex items-center gap-1.5">
+                  <Wind className="w-3.5 h-3.5 text-sky-500" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">RR</p>
+                    <p className="text-xs font-semibold">{vs.respiratoryRate} <span className="text-[10px] font-normal">/min</span></p>
+                  </div>
+                </div>
+              )}
+              {vs.oxygenSaturation !== undefined && (
+                <div className="flex items-center gap-1.5">
+                  <Droplets className="w-3.5 h-3.5 text-sky-500" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">SpO₂</p>
+                    <p className="text-xs font-semibold">{vs.oxygenSaturation}%</p>
+                  </div>
+                </div>
+              )}
+              {vs.weight !== undefined && (
+                <div className="flex items-center gap-1.5">
+                  <Weight className="w-3.5 h-3.5 text-emerald-500" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Weight</p>
+                    <p className="text-xs font-semibold">{vs.weight} {vs.weightUnit}</p>
+                  </div>
+                </div>
+              )}
+              {vs.height !== undefined && (
+                <div className="flex items-center gap-1.5">
+                  <Ruler className="w-3.5 h-3.5 text-emerald-500" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Height</p>
+                    <p className="text-xs font-semibold">{vs.height} {vs.heightUnit}</p>
+                  </div>
+                </div>
+              )}
+              {vs.bmi !== undefined && (
+                <div className="flex items-center gap-1.5">
+                  <Gauge className="w-3.5 h-3.5 text-violet-500" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">BMI</p>
+                    <p className="text-xs font-semibold">{vs.bmi.toFixed(1)}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Physical Examination ── */}
+        {exam && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1">
+              <ClipboardList className="w-3 h-3" /> Physical Examination
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+              {exam.generalAppearance && (
+                <p><span className="text-muted-foreground">General:</span> <span className="text-foreground font-medium">{exam.generalAppearance}</span></p>
+              )}
+              {exam.skin && (
+                <p><span className="text-muted-foreground">Skin:</span> <span className="text-foreground font-medium">{exam.skin}</span></p>
+              )}
+              {exam.headNeck && (
+                <p><span className="text-muted-foreground">Head/Neck:</span> <span className="text-foreground font-medium">{exam.headNeck}</span></p>
+              )}
+              {exam.cardiovascular && (
+                <p><span className="text-muted-foreground">Cardiovascular:</span> <span className="text-foreground font-medium">{exam.cardiovascular}</span></p>
+              )}
+              {exam.respiratory && (
+                <p><span className="text-muted-foreground">Respiratory:</span> <span className="text-foreground font-medium">{exam.respiratory}</span></p>
+              )}
+              {exam.abdominal && (
+                <p><span className="text-muted-foreground">Abdominal:</span> <span className="text-foreground font-medium">{exam.abdominal}</span></p>
+              )}
+              {exam.musculoskeletal && (
+                <p><span className="text-muted-foreground">Musculoskeletal:</span> <span className="text-foreground font-medium">{exam.musculoskeletal}</span></p>
+              )}
+              {exam.neurological && (
+                <p><span className="text-muted-foreground">Neurological:</span> <span className="text-foreground font-medium">{exam.neurological}</span></p>
+              )}
+              {exam.otherFindings && (
+                <p className="sm:col-span-2"><span className="text-muted-foreground">Other:</span> <span className="text-foreground font-medium">{exam.otherFindings}</span></p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Diagnosis ── */}
+        {record.preliminaryDiagnosis && (
+          <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+            <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide mb-0.5">Preliminary Diagnosis</p>
+            <p className="text-sm font-semibold text-blue-900">{record.preliminaryDiagnosis}</p>
+            {record.icd10Code && (
+              <p className="text-[10px] text-blue-600 mt-0.5 font-mono">ICD-10: {record.icd10Code}</p>
+            )}
+          </div>
+        )}
+
+        {/* ── Medications ── */}
+        {record.medications && record.medications.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1">
+              <Pill className="w-3 h-3" /> Medications Prescribed
+            </p>
+            <div className="space-y-1.5">
+              {record.medications.map((med) => (
+                <div key={med.id} className="flex items-start gap-2 bg-emerald-50 rounded-lg p-2.5 border border-emerald-100">
+                  <Pill className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-emerald-900">{med.name}</p>
+                    <p className="text-[11px] text-emerald-700">
+                      {med.dosage} · {med.frequency} · {med.duration}
+                    </p>
+                    {med.instructions && (
+                      <p className="text-[10px] text-emerald-600 mt-0.5 italic">{med.instructions}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Procedures ── */}
+        {record.procedures && record.procedures.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Procedures</p>
+            <div className="flex flex-wrap gap-1.5">
+              {record.procedures.map((p, i) => (
+                <span key={i} className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-[11px] font-medium">
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tests Ordered ── */}
+        {record.testsOrdered && record.testsOrdered.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1">
+              <FlaskConical className="w-3 h-3" /> Tests Ordered
+            </p>
+            <div className="space-y-1">
+              {record.testsOrdered.map((test) => (
+                <div key={test.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-2 border border-slate-100">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FlaskConical className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{test.testName}</p>
+                      <p className="text-[10px] text-muted-foreground">{test.testCategory}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      test.urgency === 'stat' ? 'bg-red-100 text-red-700' :
+                      test.urgency === 'urgent' ? 'bg-amber-100 text-amber-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {test.urgency}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground capitalize">{test.status}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Clinical Notes ── */}
+        {record.clinicalNotes && (
+          <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
+            <p className="text-[10px] font-semibold text-yellow-700 uppercase tracking-wide mb-1 flex items-center gap-1">
+              <ClipboardList className="w-3 h-3" /> Clinical Notes
+            </p>
+            <p className="text-xs text-yellow-900 whitespace-pre-wrap">{record.clinicalNotes}</p>
+          </div>
+        )}
+
+        {/* ── Follow-up Instructions ── */}
+        {record.followUpInstructions && (
+          <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
+            <p className="text-[10px] font-semibold text-teal-700 uppercase tracking-wide mb-1 flex items-center gap-1">
+              <Clock className="w-3 h-3" /> Follow-up
+            </p>
+            <p className="text-xs text-teal-900">{record.followUpInstructions}</p>
+          </div>
+        )}
+
+        {/* ── Referrals ── */}
+        {record.referrals && record.referrals.length > 0 && (
+          <div className="space-y-2">
+            {record.referrals.map((ref) => {
+              const uc = urgencyConfig[ref.urgency] || urgencyConfig.routine;
+              return (
+                <div key={ref.id} className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide flex items-center gap-1">
+                      <Ambulance className="w-3 h-3" /> Referral
+                    </p>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${uc.bg} ${uc.text}`}>
+                      {ref.urgency}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-amber-900 mb-1">
+                    <span className="font-medium">{ref.fromFacility}</span>
+                    <ArrowRightLeft className="w-3 h-3 text-amber-600" />
+                    <span className="font-medium">{ref.toFacility}</span>
+                  </div>
+                  {ref.toDepartment && (
+                    <p className="text-[11px] text-amber-700">Dept: {ref.toDepartment}</p>
+                  )}
+                  <p className="text-[11px] text-amber-800 mt-1">Reason: {ref.reason}</p>
+                  {ref.notes && (
+                    <p className="text-[10px] text-amber-600 mt-1 italic">{ref.notes}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Patient Safety Alerts ── */}
+        {(patientAllergies?.length || patientConditions?.length) ? (
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-dashed border-border">
+            {patientAllergies && patientAllergies.length > 0 && (
+              <div className="flex items-center gap-1 text-[10px] text-rose-600">
+                <AlertTriangle className="w-3 h-3" />
+                <span className="font-semibold">Allergies:</span>
+                <span>{patientAllergies.join(', ')}</span>
+              </div>
+            )}
+            {patientConditions && patientConditions.length > 0 && (
+              <div className="flex items-center gap-1 text-[10px] text-amber-600">
+                <AlertTriangle className="w-3 h-3" />
+                <span className="font-semibold">Chronic:</span>
+                <span>{patientConditions.join(', ')}</span>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
   const { t } = useI18n();
   const { getRecordsByPatient } = useMedicalRecords();
+  const { users } = useUsers();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -349,58 +757,17 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
                   </div>
 
                   {getRecordsByPatient(selectedPatient.id).length > 0 ? (
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                    <div className="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
                       {getRecordsByPatient(selectedPatient.id)
                         .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
                         .map((record) => (
-                          <div key={record.id} className="p-3 rounded-lg bg-muted/20 border border-border/50">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                                  record.visitType === 'emergency' ? 'bg-red-100 text-red-700' :
-                                  record.visitType === 'referral' ? 'bg-amber-100 text-amber-700' :
-                                  record.visitType === 'follow-up' ? 'bg-blue-100 text-blue-700' :
-                                  'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {record.visitType}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {format(new Date(record.recordedAt), 'MMM d, yyyy')}
-                                </span>
-                              </div>
-                            </div>
-                            <p className="text-sm font-medium text-foreground mt-1.5">{record.chiefComplaint}</p>
-                            {record.preliminaryDiagnosis && (
-                              <p className="text-xs text-muted-foreground mt-0.5">Diagnosis: {record.preliminaryDiagnosis}</p>
-                            )}
-                            {record.vitalSigns && (
-                              <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
-                                {record.vitalSigns.temperature && (
-                                  <span className="flex items-center gap-1">
-                                    <Thermometer className="w-3 h-3" />
-                                    {record.vitalSigns.temperature}°C
-                                  </span>
-                                )}
-                                {record.vitalSigns.bloodPressureSystolic && (
-                                  <span className="flex items-center gap-1">
-                                    <Heart className="w-3 h-3" />
-                                    {record.vitalSigns.bloodPressureSystolic}/{record.vitalSigns.bloodPressureDiastolic}
-                                  </span>
-                                )}
-                                {record.vitalSigns.heartRate && (
-                                  <span className="flex items-center gap-1">HR: {record.vitalSigns.heartRate} bpm</span>
-                                )}
-                              </div>
-                            )}
-                            {record.referrals && record.referrals.length > 0 && (
-                              <div className="mt-2 p-2 bg-amber-50 rounded border border-amber-100">
-                                <p className="text-[10px] font-medium text-amber-700 uppercase">Referral</p>
-                                <p className="text-xs text-amber-800 mt-0.5">
-                                  {record.referrals[0].fromFacility} → {record.referrals[0].toFacility}
-                                </p>
-                              </div>
-                            )}
-                          </div>
+                          <MedicalRecordCard
+                            key={record.id}
+                            record={record}
+                            users={users}
+                            patientAllergies={selectedPatient.allergies}
+                            patientConditions={selectedPatient.chronicConditions}
+                          />
                         ))}
                     </div>
                   ) : (

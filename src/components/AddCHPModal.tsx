@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useI18n } from '@/i18n/useI18n';
 import { useAuth } from '@/hooks/useAuth';
+import { useFacilities } from '@/hooks/useData';
 import type { Chp } from '@/types';
 import {
   Dialog,
@@ -18,7 +19,8 @@ import {
 } from '@/components/ui/dialog';
 import {
   UserPlus, MapPin, Phone, Award,
-  Users, Languages, CalendarDays, Hash, Mail
+  Users, Languages, CalendarDays, Hash, Mail,
+  Building2,
 } from 'lucide-react';
 
 interface AddCHPModalProps {
@@ -44,6 +46,7 @@ const COMMON_LANGUAGES = ['Swahili', 'English', 'Kikuyu', 'Luo', 'Kalenjin', 'Ka
 export default function AddCHPModal({ open, onOpenChange, onSubmit }: AddCHPModalProps) {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { facilities } = useFacilities();
 
   const [form, setForm] = useState({
     fullName: '',
@@ -78,6 +81,7 @@ export default function AddCHPModal({ open, onOpenChange, onSubmit }: AddCHPModa
     if (!form.subLocation.trim()) e.subLocation = t('chp.fieldRequired');
     if (!form.ward.trim()) e.ward = t('chp.fieldRequired');
     if (!form.county.trim()) e.county = t('chp.fieldRequired');
+    if (!form.facilityId.trim()) e.facilityId = 'Please select a facility for this CHP';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -277,6 +281,40 @@ export default function AddCHPModal({ open, onOpenChange, onSubmit }: AddCHPModa
                   </select>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Facility Assignment */}
+          <div className="pt-2 border-t border-border">
+            <h3 className="text-sm font-semibold uppercase tracking-wide mb-3 flex items-center gap-1">
+              <Building2 className="w-4 h-4 text-muted-foreground" />
+              Facility Assignment <span className="text-destructive">*</span>
+            </h3>
+            <div>
+              {errors.facilityId && <p className="text-xs text-destructive mb-1">{errors.facilityId}</p>}
+              <select
+                value={form.facilityId}
+                onChange={(e) => {
+                  const selected = facilities.find(f => f.id === e.target.value);
+                  setForm(prev => ({
+                    ...prev,
+                    facilityId: e.target.value,
+                    facilityName: selected?.name || '',
+                  }));
+                  if (errors.facilityId) setErrors(prev => { const n = { ...prev }; delete n.facilityId; return n; });
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-background"
+              >
+                <option value="">Select a facility...</option>
+                {facilities.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name} — {f.address?.city || 'Unknown city'}
+                  </option>
+                ))}
+              </select>
+              {facilities.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">No facilities available. Add facilities first.</p>
+              )}
             </div>
           </div>
 

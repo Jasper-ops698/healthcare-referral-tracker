@@ -76,7 +76,7 @@ export default function CollectorDashboard() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const { user, logout } = useAuth();
-  const { status, pendingCount, isOnline, triggerSync } = useSync();
+  const { status, pendingCount, isOnline, triggerSync, needsReLogin } = useSync();
   const { dashboard, patients } = useHealthcareData();
   const { updateUser } = useUsers();
   const { t } = useI18n();
@@ -151,6 +151,23 @@ export default function CollectorDashboard() {
 
       {/* Main content */}
       <main className={`flex-1 min-h-screen overflow-auto transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+        {/* Re-login warning banner */}
+        {needsReLogin && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-amber-800">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <span>Your data is saved on this device but not synced to the server.</span>
+              <span className="font-semibold">Please log out and log back in to sync.</span>
+            </div>
+            <button
+              onClick={() => logout()}
+              className="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-md hover:bg-amber-200 transition-colors font-medium"
+            >
+              Re-Login Now
+            </button>
+          </div>
+        )}
+
         {/* Top app bar */}
         <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm border-b border-border px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <h1 className="text-lg font-semibold text-foreground">

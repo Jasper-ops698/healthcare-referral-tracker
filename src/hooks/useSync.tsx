@@ -9,7 +9,9 @@
 import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { getSyncManager } from '@/lib/syncEngine';
+import { API_BASE_URL } from '@/lib/config';
 import type { SyncStatus } from '@/lib/syncTypes';
+import { toast } from 'sonner';
 
 interface SyncContextType {
   status: SyncStatus;
@@ -17,6 +19,7 @@ interface SyncContextType {
   lastSyncTime: string | null;
   isOnline: boolean;
   triggerSync: () => Promise<boolean>;
+  needsReLogin: boolean;
 }
 
 const SyncContext = createContext<SyncContextType | undefined>(undefined);
@@ -33,8 +36,53 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [needsReLogin, setNeedsReLogin] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncManagerRef = useRef<ReturnType<typeof getSyncManager> | null>(null);
+  const warnedRef = useRef(false);
+
+  // ── Detect if user has local token but backend is online ──
+  useEffect(() => {
+    if (!isAuthenticated || !isOnline) return;
+
+    const token = localStorage.getItem('healthtrack_jwt_token') || '';
+    if (!token.startsWith('local_')) {
+      setNeedsReLogin(false);
+      warnedRef.current = false;
+      return;
+    }
+
+    // User has local token and we're online — check if backend is reachable
+    const checkBackend = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/users`, {
+          method: 'HEAD',
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        // If we get 401, the backend is awake but rejects our local token
+        if (res.status === 401 && !warnedRef.current) {
+          warnedRef.current = true;
+          setNeedsReLogin(true);
+          toast.error('Your session is in offline mode. Please log out and log back in to sync your data to the server.', {
+            duration: 10000,
+            action: {
+              label: 'Re-Login',
+              onClick: () => {
+                window.location.href = '/logout';
+              },
+            },
+          });
+        }
+      } catch {
+        // Backend still cold — don't warn yet
+      }
+    };
+
+    // Check after 5s delay (give backend time to wake up if just came online)
+    const t = setTimeout(checkBackend, 5000);
+    return () => clearTimeout(t);
+  }, [isAuthenticated, isOnline]);
 
   // ── Initialize / teardown based on auth state ──
   useEffect(() => {
@@ -48,6 +96,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         intervalRef.current = null;
       }
       setStatus('idle');
+      setNeedsReLogin(false);
+      warnedRef.current = false;
       return;
     }
 
@@ -56,7 +106,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     const manager = getSyncManager();
     syncManagerRef.current = manager;
 
-    // Set auth token (may be local_ token — sync engine handles this)
+    // Set auth token — sync engine will try even with local_ token
     manager.setAuthToken(token);
 
     // Recover items stuck in 'syncing' from previous crashed sessions
@@ -118,7 +168,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SyncContext.Provider value={{ status, pendingCount, lastSyncTime, isOnline, triggerSync }}>
+    <SyncContext.Provider value={{ status, pendingCount, lastSyncTime, isOnline, triggerSync, needsReLogin }}>
       {children}
     </SyncContext.Provider>
   );
