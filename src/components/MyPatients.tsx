@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useI18n } from '@/i18n/useI18n';
+import { useMedicalRecords } from '@/hooks/useData';
 import type { Patient } from '@/types';
 import {
   Search,
@@ -13,6 +14,8 @@ import {
   Calendar,
   MapPin,
   Stethoscope,
+  Thermometer,
+  Heart,
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -45,6 +48,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
   const { t } = useI18n();
+  const { getRecordsByPatient } = useMedicalRecords();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -331,6 +335,82 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
                     <p className="text-sm text-emerald-800 font-medium">{selectedPatient.assignedChpName}</p>
                   </div>
                 )}
+
+                {/* Medical Records History */}
+                <div className="bg-white rounded-lg border border-border p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5" />
+                      Medical Records History
+                    </p>
+                    <span className="text-xs text-muted-foreground">
+                      {getRecordsByPatient(selectedPatient.id).length} record(s)
+                    </span>
+                  </div>
+
+                  {getRecordsByPatient(selectedPatient.id).length > 0 ? (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {getRecordsByPatient(selectedPatient.id)
+                        .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
+                        .map((record) => (
+                          <div key={record.id} className="p-3 rounded-lg bg-muted/20 border border-border/50">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                                  record.visitType === 'emergency' ? 'bg-red-100 text-red-700' :
+                                  record.visitType === 'referral' ? 'bg-amber-100 text-amber-700' :
+                                  record.visitType === 'follow-up' ? 'bg-blue-100 text-blue-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {record.visitType}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {format(new Date(record.recordedAt), 'MMM d, yyyy')}
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-sm font-medium text-foreground mt-1.5">{record.chiefComplaint}</p>
+                            {record.preliminaryDiagnosis && (
+                              <p className="text-xs text-muted-foreground mt-0.5">Diagnosis: {record.preliminaryDiagnosis}</p>
+                            )}
+                            {record.vitalSigns && (
+                              <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+                                {record.vitalSigns.temperature && (
+                                  <span className="flex items-center gap-1">
+                                    <Thermometer className="w-3 h-3" />
+                                    {record.vitalSigns.temperature}°C
+                                  </span>
+                                )}
+                                {record.vitalSigns.bloodPressureSystolic && (
+                                  <span className="flex items-center gap-1">
+                                    <Heart className="w-3 h-3" />
+                                    {record.vitalSigns.bloodPressureSystolic}/{record.vitalSigns.bloodPressureDiastolic}
+                                  </span>
+                                )}
+                                {record.vitalSigns.heartRate && (
+                                  <span className="flex items-center gap-1">HR: {record.vitalSigns.heartRate} bpm</span>
+                                )}
+                              </div>
+                            )}
+                            {record.referrals && record.referrals.length > 0 && (
+                              <div className="mt-2 p-2 bg-amber-50 rounded border border-amber-100">
+                                <p className="text-[10px] font-medium text-amber-700 uppercase">Referral</p>
+                                <p className="text-xs text-amber-800 mt-0.5">
+                                  {record.referrals[0].fromFacility} → {record.referrals[0].toFacility}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center py-4 text-muted-foreground">
+                      <FileText className="w-6 h-6 mb-2 text-muted-foreground/40" />
+                      <p className="text-xs">No medical records yet</p>
+                      <p className="text-[10px] mt-0.5">Click "Add Medical Record" below to create one</p>
+                    </div>
+                  )}
+                </div>
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-4 border-t border-border">
