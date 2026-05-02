@@ -185,16 +185,21 @@ export class MedSyncManager {
 
         const body: PullResponse = await res.json();
 
+        // Backend wraps response in body.data — handle both formats
+        const changes = body.changes || (body as any).data?.changes || [];
+        const serverVersion = body.serverVersion || (body as any).data?.serverVersion || checkpoint.lastSyncVersion;
+        const hasMoreResponse = body.hasMore ?? (body as any).data?.hasMore ?? false;
+
         // Apply each remote change to IndexedDB
-        for (const change of body.changes) {
+        for (const change of changes) {
           await this.applyRemoteChange(change);
           total++;
         }
 
-        hasMore = body.hasMore;
+        hasMore = hasMoreResponse;
 
         // Update checkpoint
-        checkpoint.lastSyncVersion = body.serverVersion;
+        checkpoint.lastSyncVersion = serverVersion;
         checkpoint.lastSyncTime = new Date().toISOString();
         await this.localDB.saveCheckpoint(checkpoint);
       }
@@ -262,9 +267,11 @@ export class MedSyncManager {
     };
 
     try {
+      let res: Response | null = null;
+
       if (entry.entityType === 'user' && entry.changeType === 'create') {
         const payload = entry.payload as Record<string, unknown>;
-        const res = await fetch(`${apiUrl}/users`, {
+        res = await this.fetchWithRetry(`${apiUrl}/users`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -277,18 +284,11 @@ export class MedSyncManager {
             region: payload.region || 'default',
           }),
         });
-        if (res.ok || res.status === 409) {
-          // 201 Created or 409 Conflict (already exists)
-          await this.localDB.markAsSent(entry.changeId);
-          return true;
-        }
-        // 401 = token expired — don't mark as error, let it retry later
-        if (res.status === 401) return false;
       }
 
       if (entry.entityType === 'chp' && entry.changeType === 'create') {
         const payload = entry.payload as Record<string, unknown>;
-        const res = await fetch(`${apiUrl}/chps`, {
+        res = await this.fetchWithRetry(`${apiUrl}/chps`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -312,42 +312,35 @@ export class MedSyncManager {
             status: payload.status || 'active',
           }),
         });
-        if (res.ok || res.status === 409) {
-          await this.localDB.markAsSent(entry.changeId);
-          return true;
-        }
-        if (res.status === 401) return false;
       }
 
       if (entry.entityType === 'patient' && entry.changeType === 'create') {
         const payload = entry.payload as Record<string, unknown>;
-        const res = await fetch(`${apiUrl}/patients`, {
+        res = await this.fetchWithRetry(`${apiUrl}/patients`, {
           method: 'POST',
           headers,
           body: JSON.stringify(payload),
         });
-        if (res.ok || res.status === 409) {
-          await this.localDB.markAsSent(entry.changeId);
-          return true;
-        }
-        if (res.status === 401) return false;
       }
 
       if (entry.entityType === 'medicalRecord' && entry.changeType === 'create') {
         const payload = entry.payload as Record<string, unknown>;
-        const res = await fetch(`${apiUrl}/medical-records`, {
+        res = await this.fetchWithRetry(`${apiUrl}/medical-records`, {
           method: 'POST',
           headers,
           body: JSON.stringify(payload),
         });
-        if (res.ok || res.status === 409) {
-          await this.localDB.markAsSent(entry.changeId);
-          return true;
-        }
-        if (res.status === 401) return false;
       }
 
-      // Fallback: push via sync endpoint for audit logging
+      if (!res) return false;
+
+      if (res.ok || res.status === 409) {
+        await this.localDB.markAsSent(entry.changeId);
+        return true;
+      }
+      if (res.status === 401) return false;
+
+      console.warn(`[Sync] Direct API returned ${res.status} for ${entry.entityType}`);
       return false;
     } catch {
       return false; // Network error — will retry via sync endpoint
@@ -382,8 +375,6 @@ export class MedSyncManager {
       this.stats.totalPushes++;
       this.saveStats();
       this.setStatus('idle');
-      this.localDB.cleanupSentItems(24);
-      this.localDB.cleanupOldErrors(7).then((n) => { if (n > 0) console.log(`[Sync] Purged ${n} old errors`); });
       return true;
     }
 
@@ -465,9 +456,8 @@ export class MedSyncManager {
         this.updateLatency(performance.now() - t0);
         this.setStatus('idle');
 
-        // Cleanup old sent items and stale errors (fire and forget)
+        // Cleanup old sent items (fire and forget)
         this.localDB.cleanupSentItems(24);
-        this.localDB.cleanupOldErrors(7).then((n) => { if (n > 0) console.log(`[Sync] Purged ${n} old errors`); });
 
         return true;
       }

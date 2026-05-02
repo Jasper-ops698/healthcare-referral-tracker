@@ -220,6 +220,78 @@ export async function handlePush(req: Request, res: Response): Promise<void> {
       body.clientVersion
     );
 
+    // ── Gate 5: Create REAL MongoDB documents for accepted changes ──
+    // The ChangeRecord is only an audit log. We must also create the
+    // actual entity documents (Patient, User, CHP, MedicalRecord) so
+    // the admin dashboard and other queries can find them.
+    const User = (await import('../models/User')).default;
+    const Chp = (await import('../models/Chp')).default;
+    const Patient = (await import('../schemas/Patient')).default;
+    const MedicalRecord = (await import('../models/MedicalRecord')).default;
+
+    for (const change of body.changes) {
+      if (!result.acceptedIds.includes(change.changeId)) continue;
+      if (change.operation !== 'create') continue;
+
+      try {
+        if (change.entityType === 'user') {
+          const exists = await User.findOne({ email: change.payload?.email }).exec();
+          if (!exists) {
+            await new User({
+              firstName: change.payload?.firstName,
+              lastName: change.payload?.lastName,
+              email: change.payload?.email,
+              phone: change.payload?.phone,
+              role: change.payload?.role,
+              assignedFacility: change.payload?.assignedFacility,
+              region: change.payload?.region || 'default',
+              isPrimaryAdmin: false,
+            }).save();
+          }
+        }
+
+        if (change.entityType === 'chp') {
+          const exists = await Chp.findOne({ nationalId: change.payload?.nationalId }).exec();
+          if (!exists) {
+            await new Chp({
+              fullName: change.payload?.fullName,
+              nationalId: change.payload?.nationalId,
+              phone: change.payload?.phone,
+              alternatePhone: change.payload?.alternatePhone,
+              gender: change.payload?.gender,
+              dateOfBirth: change.payload?.dateOfBirth,
+              village: change.payload?.village,
+              subLocation: change.payload?.subLocation,
+              ward: change.payload?.ward,
+              county: change.payload?.county,
+              languages: change.payload?.languages,
+              yearsOfExperience: change.payload?.yearsOfExperience,
+              chpRegNumber: change.payload?.chpRegNumber,
+              supervisorName: change.payload?.supervisorName,
+              supervisorPhone: change.payload?.supervisorPhone,
+              facilityId: change.payload?.facilityId,
+              facilityName: change.payload?.facilityName,
+              status: change.payload?.status || 'active',
+            }).save();
+          }
+        }
+
+        if (change.entityType === 'patient') {
+          const exists = await Patient.findOne({ patientId: change.payload?.patientId }).exec();
+          if (!exists) {
+            await new Patient(change.payload).save();
+          }
+        }
+
+        if (change.entityType === 'medicalRecord') {
+          await new MedicalRecord(change.payload).save();
+        }
+      } catch (docErr: any) {
+        console.error(`[Sync Push] Failed to create real document for ${change.entityType}:`, docErr.message);
+        // Don't fail the whole sync — the ChangeRecord audit log is already saved
+      }
+    }
+
     // ── Audit logging ──
     const authReq = req as AuthenticatedRequest;
     for (const change of body.changes) {

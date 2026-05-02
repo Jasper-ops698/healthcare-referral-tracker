@@ -321,15 +321,6 @@ export class LocalDatabase {
     return oldSent.length;
   }
 
-  async cleanupOldErrors(maxAgeDays = 7): Promise<number> {
-    const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
-    const oldErrors = await db.outbox
-      .where('status').equals('error')
-      .filter(e => e.timestamp < cutoff)
-      .primaryKeys();
-    if (oldErrors.length > 0) await db.outbox.bulkDelete(oldErrors);
-    return oldErrors.length;
-  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // PATIENT CRUD — Wrapped in Dexie Transactions

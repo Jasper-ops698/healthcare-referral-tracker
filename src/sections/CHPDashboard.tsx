@@ -60,7 +60,12 @@ function SyncStatusChip({ status, pendingCount, isOnline, onSync }: {
         {c.icon}
       </button>
       {pendingCount > 0 && (
-        <span className="text-xs text-amber-600 font-medium">({pendingCount})</span>
+        <span 
+          className="text-xs text-amber-600 font-medium cursor-help" 
+          title={`${pendingCount} items saved on this device. They will sync automatically when the server is online.`}
+        >
+          ({pendingCount} saved)
+        </span>
       )}
     </div>
   );
