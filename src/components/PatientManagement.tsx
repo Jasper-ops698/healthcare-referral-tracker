@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePatients, useUsers, useMedicalRecords } from '@/hooks/useData';
+import { MedicalRecordCard } from './MyPatients';
 import { useI18n } from '@/i18n/useI18n';
 import { useFormatDate } from '@/i18n/dateFormat';
 import { useStatusConfig } from '@/i18n/statusLabels';
@@ -321,6 +322,7 @@ function PatientDetailView({ patient, collectorName, records }: PatientDetailVie
   const { t } = useI18n();
   const formatDate = useFormatDate();
   const statusConfig = useStatusConfig();
+  const { users } = useUsers();
   const cfg = statusConfig[patient.referralStatus];
 
   const getGenderLabel = (gender: string) => {
@@ -429,6 +431,40 @@ function PatientDetailView({ patient, collectorName, records }: PatientDetailVie
         <Field label={t('patients.lastUpdated')} value={formatDate(patient.lastUpdated, 'long')} />
         <Field label={t('patients.medicalRecords')} value={`${records.length} ${records.length === 1 ? t('patients.record_one') : t('patients.record_other')}`} />
       </Section>
+
+      {/* Medical Records History */}
+      <div className="mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" />
+            Medical Records History
+          </p>
+          <span className="text-xs text-muted-foreground">
+            {records.length} record(s)
+          </span>
+        </div>
+
+        {records.length > 0 ? (
+          <div className="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
+            {records
+              .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
+              .map((record) => (
+                <MedicalRecordCard
+                  key={record.id}
+                  record={record}
+                  users={users}
+                  patientAllergies={patient.allergies}
+                  patientConditions={patient.chronicConditions}
+                />
+              ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center py-4 text-muted-foreground">
+            <FileText className="w-6 h-6 mb-2 text-muted-foreground/40" />
+            <p className="text-xs">No medical records yet</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

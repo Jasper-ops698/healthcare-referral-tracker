@@ -24,6 +24,8 @@ import {
   Pill,
   FlaskConical,
   ClipboardList,
+  Mail,
+  Shield,
   AlertTriangle,
   Clock,
   ArrowRightLeft,
@@ -64,14 +66,15 @@ function StatusBadge({ status }: { status: string }) {
 // MEDICAL RECORD CARD — Rich clinical context for each visit
 // ═══════════════════════════════════════════════════════════════════════════
 
-interface MedicalRecordCardProps {
+export interface MedicalRecordCardProps {
   record: MedicalRecord;
   users: import('@/types').User[];
   patientAllergies?: string[];
   patientConditions?: string[];
 }
 
-function MedicalRecordCard({ record, users, patientAllergies, patientConditions }: MedicalRecordCardProps) {
+// Exported for use in PatientManagement (admin) detail view
+export function MedicalRecordCard({ record, users, patientAllergies, patientConditions }: MedicalRecordCardProps) {
   // Resolve recorder name
   const recorder = users.find((u) => u.id === record.recordedBy);
   const recorderName = recorder
@@ -706,35 +709,48 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
                   </p>
                 </div>
 
-                {/* Medical Info */}
-                {(selectedPatient.allergies?.length || selectedPatient.chronicConditions?.length) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {selectedPatient.allergies && selectedPatient.allergies.length > 0 && (
-                      <div className="bg-rose-50 rounded-lg p-4 border border-rose-100">
-                        <p className="text-xs font-semibold text-rose-700 uppercase tracking-wide mb-2">Allergies</p>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedPatient.allergies.map((allergy, i) => (
-                            <span key={i} className="px-2.5 py-1 bg-rose-100 text-rose-700 rounded-md text-xs font-medium">
-                              {allergy}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {selectedPatient.chronicConditions && selectedPatient.chronicConditions.length > 0 && (
-                      <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
-                        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2">Chronic Conditions</p>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedPatient.chronicConditions.map((condition, i) => (
-                            <span key={i} className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-md text-xs font-medium">
-                              {condition}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                {/* Email */}
+                {selectedPatient.email && (
+                  <div className="bg-muted/20 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                      <Mail className="w-3.5 h-3.5" />
+                      <span className="text-xs uppercase tracking-wide">Email</span>
+                    </div>
+                    <p className="font-semibold text-foreground text-sm">{selectedPatient.email}</p>
                   </div>
                 )}
+
+                {/* Medical Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="bg-rose-50 rounded-lg p-4 border border-rose-100">
+                    <p className="text-xs font-semibold text-rose-700 uppercase tracking-wide mb-2">Allergies</p>
+                    {selectedPatient.allergies && selectedPatient.allergies.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPatient.allergies.map((allergy, i) => (
+                          <span key={i} className="px-2.5 py-1 bg-rose-100 text-rose-700 rounded-md text-xs font-medium">
+                            {allergy}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-rose-600">No known allergies</p>
+                    )}
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2">Chronic Conditions</p>
+                    {selectedPatient.chronicConditions && selectedPatient.chronicConditions.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPatient.chronicConditions.map((condition, i) => (
+                          <span key={i} className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-md text-xs font-medium">
+                            {condition}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-amber-600">No chronic conditions</p>
+                    )}
+                  </div>
+                </div>
 
                 {/* Assigned CHP */}
                 {selectedPatient.assignedChpName && (
@@ -743,6 +759,66 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
                     <p className="text-sm text-emerald-800 font-medium">{selectedPatient.assignedChpName}</p>
                   </div>
                 )}
+
+                {/* Emergency Contact */}
+                {selectedPatient.emergencyContact && (
+                  <div className="bg-red-50 rounded-lg p-4 border border-red-100">
+                    <div className="flex items-center gap-2 text-red-700 mb-2">
+                      <Shield className="w-3.5 h-3.5" />
+                      <span className="text-xs font-semibold uppercase tracking-wide">Emergency Contact</span>
+                    </div>
+                    <p className="text-sm font-semibold text-red-900">
+                      {selectedPatient.emergencyContact.name}
+                      {selectedPatient.emergencyContact.relationship && (
+                        <span className="font-normal text-red-700"> — {selectedPatient.emergencyContact.relationship}</span>
+                      )}
+                    </p>
+                    {selectedPatient.emergencyContact.phone && (
+                      <p className="text-sm text-red-800 mt-1 flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        {selectedPatient.emergencyContact.phone}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Insurance */}
+                {selectedPatient.insuranceInfo && (
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                    <div className="flex items-center gap-2 text-blue-700 mb-2">
+                      <ClipboardList className="w-3.5 h-3.5" />
+                      <span className="text-xs font-semibold uppercase tracking-wide">Insurance</span>
+                    </div>
+                    <p className="text-sm text-blue-900">
+                      <span className="font-semibold">{selectedPatient.insuranceInfo.provider}</span>
+                      {selectedPatient.insuranceInfo.policyNumber && (
+                        <span className="text-blue-700"> — Policy: {selectedPatient.insuranceInfo.policyNumber}</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                {/* Registration Details */}
+                <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                  <div className="flex items-center gap-2 text-slate-600 mb-2">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span className="text-xs font-semibold uppercase tracking-wide">Registration Details</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-slate-500">Registered by:</span>
+                      <p className="font-medium text-slate-800">
+                        {users.find((u) => u.id === selectedPatient.registeredBy)
+                          ? `${users.find((u) => u.id === selectedPatient.registeredBy)!.firstName} ${users.find((u) => u.id === selectedPatient.registeredBy)!.lastName}`
+                          : selectedPatient.registeredBy || 'Unknown'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Date:</span>
+                      <p className="font-medium text-slate-800">{format(new Date(selectedPatient.registrationDate), 'MMM d, yyyy')}</p>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Medical Records History */}
                 <div className="bg-white rounded-lg border border-border p-4">
