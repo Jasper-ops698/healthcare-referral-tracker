@@ -239,7 +239,7 @@ export const translations = {
     'dashboard.genderDistribution': 'Gender Distribution',
     'dashboard.ageGroups': 'Patients by Age Group',
     'dashboard.referralStatus': 'Referral Status Distribution',
-    'dashboard.topConditions': 'Most Common Conditions',
+    'dashboard.topConditions': 'Disease Prevalence',
     'dashboard.recentActivity': 'Recent Activity',
     'dashboard.topCollectors': 'Top Collectors',
     'dashboard.topFacilities': 'Top Facilities',
