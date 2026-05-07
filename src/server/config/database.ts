@@ -7,8 +7,11 @@
 
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI ||
-  'mongodb+srv://bkitib:j5jfSsYB9rP6Iw0W@referralsystem.v9bhz03.mongodb.net/healthtrack?retryWrites=true&w=majority&appName=Referralsystem';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error('[Startup] Missing required env var: MONGODB_URI');
+}
 
 export async function connectDatabase(): Promise<void> {
   const maxRetries = 5;

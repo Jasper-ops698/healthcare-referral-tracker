@@ -17,10 +17,11 @@ import {
   handle2FAStatus,
 } from '../controllers/twoFactorController.js';
 import { authenticateJWT } from '../middleware/regionalAuth.js';
+import { loginRateLimiter, twoFactorRateLimiter } from '../middleware/authRateLimit.js';
 
 const router = Router();
 
-router.post('/login', handleLogin);
+router.post('/login', loginRateLimiter, handleLogin);
 router.post('/logout', handleLogout);
 router.post('/change-password', authenticateJWT, handleChangePassword);
 router.post('/set-password', handleSetPassword);
@@ -31,7 +32,7 @@ router.get('/me', authenticateJWT, handleMe);
 router.post('/2fa/setup', authenticateJWT, handle2FASetup);
 router.post('/2fa/verify-setup', authenticateJWT, handle2FAVerifySetup);
 router.post('/2fa/disable', authenticateJWT, handle2FADisable);
-router.post('/2fa/login-verify', handle2FALoginVerify);
+router.post('/2fa/login-verify', twoFactorRateLimiter, handle2FALoginVerify);
 router.get('/2fa/status', authenticateJWT, handle2FAStatus);
 
 export default router;

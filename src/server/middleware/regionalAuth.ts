@@ -53,8 +53,12 @@ interface JWTPayload {
 
 // ─── JWT CONFIG ───
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRY = '7d';
+
+if (!JWT_SECRET) {
+  throw new Error('[Startup] Missing required env var: JWT_SECRET');
+}
 
 // ─── JWT HELPER FUNCTIONS ───
 

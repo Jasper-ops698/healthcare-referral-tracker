@@ -1,73 +1,137 @@
-# React + TypeScript + Vite
+# Healthcare Referral Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Healthcare Referral Tracker is an offline-capable referral workflow platform for facility teams and field collectors. The app supports patient registration, referral lifecycle tracking, role-based dashboards, analytics, and synchronized data flow between local IndexedDB storage and a MongoDB-backed API.
 
-Currently, two official plugins are available:
+## Core Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Role-based access (`admin`, `collector`) with scoped operations
+- Login with JWT, optional 2FA, and forced first-time password change
+- Offline-first local storage with background sync and retry queue
+- Referral and patient management with facility and medical record modules
+- Email notifications with persistent retry queue
+- Analytics endpoints and dashboard-level KPI reporting
+- Internationalization support in the frontend
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Frontend: React, TypeScript, Vite, Tailwind, Radix UI
+- Backend: Express, TypeScript, Mongoose, JWT
+- Local storage/sync: Dexie (IndexedDB) + custom sync engine
+- Messaging: Nodemailer + MongoDB email job queue
 
-## Expanding the ESLint configuration
+## Repository Structure
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```text
+src/
+  components/         UI components and feature screens
+  hooks/              Auth, data, sync, notifications hooks
+  i18n/               Translation dictionaries and i18n hook
+  lib/                API client, config, sync engine, local DB bindings
+  sections/           Dashboard-level page sections
+  server/             Express app (routes, controllers, models, middleware)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Prerequisites
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- Node.js 20+
+- npm 10+
+- MongoDB instance (local or Atlas)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Environment Variables
+
+Create a `.env` file in the project root for server runtime:
+
+```bash
+NODE_ENV=development
+PORT=3001
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>/<db>?retryWrites=true&w=majority
+JWT_SECRET=<strong-random-secret>
+
+# Optional
+CORS_ORIGIN=http://localhost:5173
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=<smtp-user>
+SMTP_PASS=<smtp-app-password>
+SMTP_FROM=Healthcare Referral Tracker <no-reply@example.com>
+
+# Optional: Redis-backed auth rate limiting (Upstash Redis REST)
+REDIS_REST_URL=https://<your-upstash-endpoint>.upstash.io
+REDIS_REST_TOKEN=<upstash-rest-token>
 ```
+
+For frontend API targeting, optionally set:
+
+```bash
+VITE_API_URL=http://localhost:3001
+```
+
+## Local Development
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run frontend (Vite):
+
+```bash
+npm run dev
+```
+
+Run backend API (watch mode):
+
+```bash
+npm run server:dev
+```
+
+Build:
+
+```bash
+npm run build
+npm run server:build
+```
+
+Start server directly:
+
+```bash
+npm run start
+```
+
+## API Surface (high-level)
+
+Versioned routes are mounted under `/api/v1`:
+
+- `/auth` authentication, profile, password, 2FA
+- `/users` user administration
+- `/chps` collector/CHP administration
+- `/patients` patient CRUD and referral workflows
+- `/medical-records` medical records
+- `/facilities` facility metadata
+- `/notifications` push subscription/notification operations
+- `/system` system configuration and exports
+- `/analytics` dashboard metrics
+- `/sync` bidirectional sync endpoints
+
+Health endpoint:
+
+- `GET /health`
+
+## Security and Architecture Docs
+
+- Security review and remediation plan: `docs/SECURITY_REVIEW.md`
+- End-to-end data flow walkthrough: `docs/DATA_FLOW.md`
+
+## Known Operational Notes
+
+- Offline mode uses a local token (`local_*`) to keep the UI usable until online re-authentication.
+- Sync runs in the background and retries failed network operations automatically.
+- Email sending falls back to a MongoDB-backed queue when SMTP delivery fails.
+
+## Next Improvements (recommended)
+
+- Move all hardcoded fallback secrets/config values to required env vars
+- Add automated tests for auth, sync conflict handling, and role-based route protection
+- Add CI gates for lint + typecheck + core API smoke tests
