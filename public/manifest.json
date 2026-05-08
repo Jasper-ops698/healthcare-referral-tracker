@@ -1,7 +1,7 @@
 {
-  "name": "Healthcare Referral Tracker",
-  "short_name": "HealthTrack",
-  "description": "Healthcare Referral Management System - Track patients from lower-level to higher-tier facilities",
+  "name": "Patient Referral Tracker",
+  "short_name": "PatientTrack",
+  "description": "Patient Referral Management System - Track patients from lower-level to higher-tier facilities",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

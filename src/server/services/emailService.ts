@@ -21,11 +21,11 @@ const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
 // CRITICAL: Port 465 requires SSL (secure=true). Port 587 uses STARTTLS (secure=false).
 // Force correct setting based on port to prevent "Connection closed" errors.
 const SMTP_SECURE = SMTP_PORT === 465 ? true : (process.env.SMTP_SECURE === 'true');
-const SMTP_USER = process.env.SMTP_USER || 'bkitib@gmail.com';
+const SMTP_USER = process.env.SMTP_USER || 'your-email@gmail.com';
 // Remove ALL spaces from Gmail app passwords (e.g., "ab cd ef gh" -> "abcdefgh")
 const SMTP_PASS_RAW = process.env.SMTP_PASS || '';
 const SMTP_PASS = SMTP_PASS_RAW.replace(/^"|"$/g, '').replace(/\s/g, '');
-const SMTP_FROM = process.env.SMTP_FROM || 'Healthcare Referral Tracker <bkitib@gmail.com>';
+const SMTP_FROM = process.env.SMTP_FROM || 'Patient Referral Tracker <no-reply@example.com>';
 
 console.log(`[Email Config] Host: ${SMTP_HOST}, Port: ${SMTP_PORT}, Secure: ${SMTP_SECURE} (forced for port ${SMTP_PORT}), User: ${SMTP_USER}, Pass length: ${SMTP_PASS.length}`);
 
@@ -374,15 +374,16 @@ export async function getQueueStatus(): Promise<{
 function baseTemplate(title: string, content: string): string {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title>
-<style>body{margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;}.container{max-width:600px;margin:0 auto;background:#ffffff;}.header{background:linear-gradient(135deg,#0c4a6e 0%,#0d9488 100%);padding:32px;text-align:center;}.header h1{color:#ffffff;margin:0;font-size:22px;font-weight:600;}.body{padding:32px;}.body h2{color:#0f172a;margin:0 0 16px;font-size:18px;}.body p{color:#475569;line-height:1.6;margin:0 0 12px;}.box{background:#f1f5f9;border-radius:8px;padding:20px;margin:20px 0;}.box p{color:#334155;margin:6px 0;font-size:14px;}.password-box{background:#0c4a6e;border-radius:8px;padding:16px 20px;margin:16px 0;text-align:center;}.password-box code{color:#ffffff;font-family:'Courier New',monospace;font-size:20px;font-weight:600;letter-spacing:1px;}.btn{display:inline-block;background:#0c4a6e;color:#ffffff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:500;margin:16px 0;}.footer{padding:20px;text-align:center;background:#f1f5f9;}.footer p{color:#94a3b8;font-size:12px;margin:0;}</style>
-</head><body><div class="container"><div class="header"><h1>Healthcare Referral Tracker</h1></div><div class="body">${content}</div><div class="footer"><p>This is an automated message from Healthcare Referral Tracker &copy; ${new Date().getFullYear()}</p><p style="margin-top:8px;">NCMTC | National Centre for Medical Training & Consultancy</p></div></div></body></html>`;
+<style>body{margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;}.container{max-width:600px;margin:0 auto;background:#ffffff;}.header{background:linear-gradient(135deg,#1e3a8a 0%,#0284c7 100%);color:#fff;padding:30px 20px;text-align:center;}.header h1{margin:0;font-size:24px;}.body{padding:30px 20px;}.footer{background:#f8fafc;padding:15px 20px;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0;}.box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:15px;margin:15px 0;}.btn{display:inline-block;background:#0284c7;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;margin:15px 0;}.password-box{background:#f0f9ff;border:1px solid #0284c7;border-radius:6px;padding:10px;font-family:monospace;text-align:center;margin:10px 0;}code{font-family:monospace;background:#f8fafc;padding:2px 6px;border-radius:4px;}</style>
+</head><body><div class="container"><div class="header"><h1>Patient Referral Tracker</h1></div><div class="body">${content}</div><div class="footer"><p>This is an automated message from Patient Referral Tracker. Please do not reply directly to this email.</p></div></div></body></html>
+`;
 }
 
 export function buildWelcomeEmail(data: WelcomeEmailData): SendMailOptions {
-  const subject = 'Welcome to Healthcare Referral Tracker - Your Account is Ready';
+  const subject = 'Welcome to Patient Referral Tracker - Your Account is Ready';
   const content = `
     <h2>Hello ${data.firstName},</h2>
-    <p>Your account has been created on the <strong>Healthcare Referral Tracker</strong> system.</p>
+    <p>Your account has been created on the <strong>Patient Referral Tracker</strong> system.</p>
     <p>You have been assigned the role of <strong>${data.role === 'admin' ? 'Administrator' : 'Collector'}</strong>.</p>
     ${data.tempPassword ? `
     <p>Here is your temporary password to sign in:</p>
@@ -404,7 +405,7 @@ export function buildWelcomeEmail(data: WelcomeEmailData): SendMailOptions {
     to: data.email,
     subject,
     html: baseTemplate(subject, content),
-    text: `Welcome to Healthcare Referral Tracker, ${data.firstName}! Role: ${data.role} Email: ${data.email} ${data.tempPassword ? `Temp Password: ${data.tempPassword} (must change on first login)` : ''} Sign in: ${data.loginUrl}`,
+    text: `Welcome to Patient Referral Tracker, ${data.firstName}! Role: ${data.role} Email: ${data.email} ${data.tempPassword ? `Temp Password: ${data.tempPassword} (must change on first login)` : ''} Sign in at ${data.loginUrl}`,
   };
 }
 
@@ -453,7 +454,7 @@ export function buildReferralStatusEmail(data: ReferralStatusEmailData): SendMai
 }
 
 export function buildPasswordResetEmail(data: PasswordResetEmailData): SendMailOptions {
-  const subject = 'Password Reset Request - Healthcare Referral Tracker';
+  const subject = 'Password Reset Request - Patient Referral Tracker';
   const content = `
     <h2>Password Reset</h2>
     <p>Hello ${data.firstName},</p>
@@ -499,18 +500,18 @@ export function resendWelcomeEmail(data: WelcomeEmailData): Promise<EmailResult>
   return sendWelcomeEmail(data);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 // CHP EMAILS
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 
 export function buildChpRegistrationEmail(data: ChpRegistrationEmailData): SendMailOptions {
-  const subject = 'Welcome to HealthTrack — CHP Registration Confirmed';
+  const subject = 'Welcome to PatientTrack — CHP Registration Confirmed';
   const content = `
     <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:20px;margin:20px 0;">
       <h3 style="color:#065f46;margin-top:0;">Dear ${data.chpName},</h3>
       <p style="font-size:15px;">
         You have been successfully registered as a <strong>Community Health Promoter (CHP)</strong>
-        in the HealthTrack system by <strong>${data.registeredBy}</strong>.
+        in the PatientTrack system by <strong>${data.registeredBy}</strong>.
       </p>
       <div style="background:#fff;border-radius:6px;padding:15px;margin-top:15px;">
         <h4 style="color:#374151;margin-top:0;">Your Registration Details</h4>
@@ -536,7 +537,7 @@ export function buildChpRegistrationEmail(data: ChpRegistrationEmailData): SendM
     to: data.to,
     subject,
     html: baseTemplate(subject, content),
-    text: `Dear ${data.chpName}, you have been registered as a CHP in HealthTrack. CHP ID: ${data.chpId}. Facility: ${data.facilityName || 'Not assigned'}. Phone: ${data.phone}.`,
+    text: `Dear ${data.chpName}, you have been registered as a CHP in PatientTrack. CHP ID: ${data.chpId}. Facility: ${data.facilityName || 'Not assigned'}. Phone: ${data.phone}.`,
   };
 }
 
@@ -561,7 +562,7 @@ export function buildChpPatientAssignedEmail(data: ChpPatientAssignedEmailData):
       </div>
       <p style="margin-top:20px;font-size:14px;color:#4b5563;">
         Please follow up with this patient and ensure they receive the care they need
-        throughout their referral journey. Update their referral stages in the HealthTrack
+        throughout their referral journey. Update their referral stages in the PatientTrack
         system as they progress.
       </p>
     </div>
@@ -586,7 +587,7 @@ export function sendChpPatientAssignedEmail(data: ChpPatientAssignedEmailData): 
   return sendEmail(options, 'chp_patient_assigned', data.to, data.patientId, data.facilityName);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 
 export function buildNotificationEmail(
   to: string,

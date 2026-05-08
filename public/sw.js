@@ -1,88 +1,84 @@
-/**
- * Service Worker — Offline-First Caching Strategy
- *
- * This service worker implements a Cache-First strategy for static assets,
- * ensuring the app works offline after the first visit.
- *
- * Strategies:
- *   - Static assets (JS, CSS, HTML): Cache-first, stale-while-revalidate
- *   - API calls: Network-first with offline fallback
- *   - Images: Cache-first
- */
+// Service Worker for Patient Referral Tracker
+// Offline-first caching strategy with background sync and push notifications
 
-// Cache version BUMPED whenever index.html (and its hashed asset references) changes.
-// Vite builds produce new hashed filenames (e.g., index-ABC123.js) on every deploy,
-// so the old cached index.html becomes invalid. Bumping this forces a clean cache.
-const CACHE_NAME = 'healthtrack-v2';
-const STATIC_ASSETS = [
+const CACHE_NAME = 'patient-referral-v1';
+const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json',
   '/brand-logo.png',
+  '/manifest.json',
 ];
 
-// ─── INSTALL ───
-
+// ─── INSTALL ─—
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker...');
-
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }).then(() => {
-      // Skip waiting to activate immediately
-      return self.skipWaiting();
+      return cache.addAll(ASSETS_TO_CACHE).catch(() => {
+        console.warn('[SW] Some assets could not be cached');
+      });
     })
   );
+  self.skipWaiting();
 });
 
-// ─── ACTIVATE ───
-
+// ─── ACTIVATE ─—
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker...');
-
   event.waitUntil(
-    // Clean up old caches
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       );
-    }).then(() => {
-      // Take control of all clients immediately
-      return self.clients.claim();
     })
   );
+  self.clients.claim();
 });
 
-// ─── FETCH ─——
-
+// ─── FETCH ─—
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  const url = new URL(request.url);
 
-  // Skip non-GET requests
-  if (request.method !== 'GET') {
+  // Skip non-GET and cross-origin requests
+  if (request.method !== 'GET' || request.mode === 'navigate') {
     return;
   }
 
-  // Skip API requests (let them go to network for live data)
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/sync/')) {
+  // API requests: network-first
+  if (request.url.includes('/api/') || request.url.includes('/sync/')) {
+    event.respondWith(networkFirst(request));
     return;
   }
 
-  // Strategy 1: Cache-first for static assets
+  // Static assets: cache-first
   if (isStaticAsset(request)) {
     event.respondWith(cacheFirst(request));
     return;
   }
 
-  // Strategy 2: Stale-while-revalidate for everything else
+  // HTML & other: stale-while-revalidate
   event.respondWith(staleWhileRevalidate(request));
 });
 
 // ─── STRATEGIES ─——
+
+/**
+ * Network-First: Try network first, fall back to cache on failure
+ * Best for API calls that should be fresh but tolerate offline fallback
+ */
+async function networkFirst(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+    }
+    return response;
+  } catch (error) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    return new Response('Offline — request failed', { status: 503 });
+  }
+}
 
 /**
  * Cache-First: Serve from cache immediately, fetch from network in background
@@ -142,7 +138,7 @@ function isStaticAsset(request) {
 // ─── OFFLINE SYNC (Background Sync) ─——
 
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-healthtrack') {
+  if (event.tag === 'sync-patienttrack') {
     event.waitUntil(syncData());
   }
 });
@@ -159,7 +155,7 @@ async function syncData() {
 
 self.addEventListener('push', (event) => {
   const data = event.data?.json() || {};
-  const title = data.title || 'Healthcare Referral Tracker';
+  const title = data.title || 'Patient Referral Tracker';
   const options = {
     body: data.body || 'You have a new notification',
     icon: '/brand-logo.png',

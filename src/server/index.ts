@@ -1,5 +1,5 @@
 /**
- * Healthcare Referral Tracker — Express Server Entry Point
+ * Patient Referral Tracker — Express Server Entry Point
  *
  * This server provides:
  *   - REST API for sync operations (/sync/*)
@@ -51,7 +51,7 @@ const app = express();
 
 // ─── MIDDLEWARE ───
 
-// CORS — origin-locked to https://oizwnscb3c4jm.kimi.show
+// CORS — origin-locked to frontend domain
 // See src/server/middleware/cors.ts for the whitelist
 app.use(cors(corsConfig));
 
@@ -173,11 +173,11 @@ async function startServer(): Promise<void> {
     app.listen(PORT, () => {
       console.log(`
 ╔══════════════════════════════════════════════════════════════════╗
-║     Healthcare Referral Tracker — Production Server              ║
+║     Patient Referral Tracker — Production Server                 ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  Environment:  ${NODE_ENV.padEnd(51)}║
 ║  Port:         ${PORT.toString().padEnd(51)}║
-║  MongoDB:      ${(process.env.MONGODB_URI || 'mongodb://localhost:27017/healthtrack').padEnd(51)}║
+║  MongoDB:      ${(process.env.MONGODB_URI || 'mongodb://localhost:27017/patienttrack').padEnd(51)}║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  Auth Endpoints:                                                 ║
 ║    POST /api/v1/auth/login     Login (email + password)          ║
