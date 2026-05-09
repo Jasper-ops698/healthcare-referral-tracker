@@ -12,7 +12,7 @@
  */
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { Translations, type LangCode, typeof Translations } from './translations';
+import { Translations, type LangCode, Translations } from './translations';
 
 interface I18nContextType {
   lang: LangCode;
@@ -50,7 +50,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore */ }
   }, []);
 
-  const t = useCallback((key: typeof Translations, vars?: Record<string, string>): string => {
+  const t = useCallback((key: Translations, vars?: Record<string, string>): string => {
     const dict = translations[lang] as Record<string, string>;
     let text = dict[key] ?? translations.en[key] ?? key;
     if (vars) {
