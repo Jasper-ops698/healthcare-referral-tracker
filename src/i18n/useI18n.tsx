@@ -12,7 +12,9 @@
  */
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { Translations, type LangCode, typeof Translations } from './translations';
+import { Translations, type LangCode } from './translations';
+
+type TranslationsType = typeof Translations;
 
 interface I18nContextType {
   lang: LangCode;
