@@ -17,7 +17,7 @@ import { translations, type LangCode, type Translations } from './translations';
 interface I18nContextType {
   lang: LangCode;
   setLang: (lang: LangCode) => void;
-  t: (key: TranslationKey, vars?: Record<string, string>) => string;
+  t: (key: Translations, vars?: Record<string, string>) => string;
   isReady: boolean;
 }
 
@@ -50,7 +50,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore */ }
   }, []);
 
-  const t = useCallback((key: TranslationKey, vars?: Record<string, string>): string => {
+  const t = useCallback((key: Translations, vars?: Record<string, string>): string => {
     const dict = translations[lang] as Record<string, string>;
     let text = dict[key] ?? translations.en[key] ?? key;
     if (vars) {
