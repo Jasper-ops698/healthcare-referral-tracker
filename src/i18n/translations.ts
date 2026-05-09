@@ -11,7 +11,7 @@
 
 export type LangCode = 'en' | 'sw';
 
-export const translations = {
+export const Translations = {
   en: {
     // ... keep your existing English keys ...
   },
