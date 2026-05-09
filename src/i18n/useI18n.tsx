@@ -14,7 +14,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { Translations, type LangCode } from './translations';
 
-type TranslationsType = typeof Translations;
+type TranslationsType = keyof typeof Translations;
 
 interface I18nContextType {
   lang: LangCode;
