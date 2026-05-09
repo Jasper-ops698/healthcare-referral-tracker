@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { DashboardKPIs, Patient, User } from '@/types';
 import { useI18n } from '@/i18n/useI18n';
 import { useFormatDate } from '@/i18n/dateFormat';
-import type { Translations } from '@/i18n/translations';
+import type { translations } from '@/i18n/translations';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area,
