@@ -20,4 +20,4 @@ export const Translations = {
   }
 };
 
-export type TranslationKey = keyof typeof Translations['en'];
+export type TranslationKey = keyof Translations['en'];
