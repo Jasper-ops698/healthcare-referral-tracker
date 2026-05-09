@@ -35,7 +35,7 @@ function getAgeGroup(ageYears: number): string {
 
 /* ═══════════════════════════ Dashboard Overview ═══════════════════════════ */
 
-function translateActivityDescription(description: string, t: (key: TranslationKey, vars?: Record<string, string>) => string): string {
+function translateActivityDescription(description: string, t: (key: translations, vars?: Record<string, string>) => string): string {
   const [key, ...rest] = description.split('|');
   const value = rest.join('|');
   if (key === 'patient_registered') return `${t('activity.registeredPatient')} ${value}`;
