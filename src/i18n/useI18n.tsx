@@ -12,12 +12,14 @@
  */
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { Translations, type LangCode, keyof typeof Translations } from './translations';
+import { Translations, type LangCode } from './translations';
+
+type TranslationKey = keyof typeof Translations;
 
 interface I18nContextType {
   lang: LangCode;
   setLang: (lang: LangCode) => void;
-  t: (key: typeof Translations, vars?: Record<string, string>) => string;
+  t: (key: TranslationKey, vars?: Record<string, string>) => string;
   isReady: boolean;
 }
 
@@ -50,7 +52,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore */ }
   }, []);
 
-  const t = useCallback((key: Translations, vars?: Record<string, string>): string => {
+  const t = useCallback((key: TranslationKey, vars?: Record<string, string>): string => {
     const dict = translations[lang] as Record<string, string>;
     let text = dict[key] ?? translations.en[key] ?? key;
     if (vars) {
