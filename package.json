@@ -11,8 +11,7 @@
     "server:dev": "tsx watch src/server/index.ts",
     "server:build": "tsc -p tsconfig.server.build.json",
     "server:start": "tsx src/server/index.ts",
-    "start": "tsx src/server/index.ts",
-    "gen:i18n": "i18next-resources-for-ts toc -i src/i18n/translations.ts -o src/types/i18next.d.ts"
+    "start": "tsx src/server/index.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
