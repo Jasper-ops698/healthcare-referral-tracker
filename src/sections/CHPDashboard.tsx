@@ -8,9 +8,8 @@ import ResponsiveSidebar from '@/components/ResponsiveSidebar';
 import NotificationBell from '@/components/NotificationBell';
 import ProfileModal from '@/components/ProfileModal';
 import CollectorOverview from '@/components/CollectorOverview';
-import PatientRegistration from '@/components/PatientRegistration';
+import DailyVisitLog from '@/components/DailyVisitLog';
 import MedicalRecordsEntry from '@/components/MedicalRecordsEntry';
-import MyPatients from '@/components/MyPatients';
 import CHPProfile from '@/components/CHPProfile';
 import Settings from '@/components/Settings';
 import ReferralForm from '@/components/ReferralForm';
@@ -19,7 +18,6 @@ import { createReferralV2 } from '@/lib/apiClient';
 import { toast } from 'sonner';
 import {
   LayoutDashboard,
-  UserPlus,
   FileText,
   Users,
   UserCircle,
@@ -32,7 +30,7 @@ import {
   Inbox,
 } from 'lucide-react';
 
-type CollectorTab = 'dashboard' | 'register' | 'records' | 'patients' | 'referrals' | 'incoming' | 'profile' | 'settings';
+type CollectorTab = 'dashboard' | 'visits' | 'records' | 'referrals' | 'incoming' | 'profile' | 'settings';
 
 /* ═══════════ Sync Status Chip ═══════════ */
 function SyncStatusChip({ status, pendingCount, isOnline, onSync }: {
@@ -99,9 +97,8 @@ export default function CollectorDashboard() {
 
   const menuItems = useMemo(() => [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: LayoutDashboard },
-    { id: 'register', label: t('sidebar.register'), icon: UserPlus },
+    { id: 'visits', label: 'Daily Visits', icon: Users },
     { id: 'records', label: t('sidebar.records'), icon: FileText },
-    { id: 'patients', label: t('sidebar.myPatients'), icon: Users },
     { id: 'referrals', label: 'Send Referral', icon: Send },
     ...(stationType === 'referral-center' ? [{ id: 'incoming' as CollectorTab, label: 'Incoming', icon: Inbox }] : []),
     { id: 'profile', label: t('sidebar.profile'), icon: UserCircle },
@@ -126,21 +123,14 @@ export default function CollectorDashboard() {
         return collectorStats ? (
           <CollectorOverview
             stats={collectorStats}
-            onRegisterPatient={() => setActiveTab('register')}
+            onRegisterPatient={() => setActiveTab('visits')}
             onAddRecord={() => setActiveTab('records')}
           />
         ) : null;
-      case 'register':
-        return <PatientRegistration onSuccess={() => setActiveTab('patients')} />;
+      case 'visits':
+        return <DailyVisitLog />;
       case 'records':
         return <MedicalRecordsEntry patients={patients.patients} />;
-      case 'patients':
-        return (
-          <MyPatients
-            patients={patients.getPatientsByCollector(user?.id || '')}
-            onAddRecord={() => setActiveTab('records')}
-          />
-        );
       case 'referrals':
         return (
           <div className="max-w-3xl">
@@ -185,7 +175,7 @@ export default function CollectorDashboard() {
         return collectorStats ? (
           <CollectorOverview
             stats={collectorStats}
-            onRegisterPatient={() => setActiveTab('register')}
+            onRegisterPatient={() => setActiveTab('visits')}
             onAddRecord={() => setActiveTab('records')}
           />
         ) : null;
