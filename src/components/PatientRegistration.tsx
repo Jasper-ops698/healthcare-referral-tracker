@@ -74,7 +74,7 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
     if (!user) return;
     
     // ── DUPLICATE CHECK ──
-    const existing = await searchPatientByPhone(formData.phone.trim());
+    const existing = formData.phone ? await searchPatientByPhone(formData.phone.trim()) : null;
     if (existing) {
       setDuplicatePatient(existing);
       return;

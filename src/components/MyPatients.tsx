@@ -506,7 +506,7 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
     setAcceptingId(referral.id);
     try {
       await acceptReferral(referral.id, user.id, `${user.firstName} ${user.lastName}`);
-      toast.success(`Accepted ${referral.patientName} at ${user.assignedFacilityName || 'your facility'}`);
+      toast.success(`Accepted ${referral.patientName} at ${user.assignedFacility || 'your facility'}`);
       await loadIncomingReferrals(user.assignedFacility!, 'pending');
     } catch (e) {
       toast.error('Failed to accept referral');

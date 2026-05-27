@@ -50,6 +50,7 @@ export interface Chp {
   languages?: string[];
   status: ChpStatus;
   createdAt: Date;
+  lastSyncedAt?: Date;
 }
 
 /** Must stay in sync with backend UserStatus */
@@ -196,7 +197,8 @@ export type ReferralStatus =
   | 'accepted'
   | 'in-treatment'
   | 'completed'
-  | 'rejected';
+  | 'rejected'
+  | 'pending';
 
 /** A single stage in a patient's referral journey between facilities */
 export interface ReferralStage {
@@ -466,6 +468,7 @@ export interface Referral {
   toCollectorName?: string;
   chpId?: string;
   chpName?: string;
+  medicalRecordId?: string;
 }
 
 export interface Attachment {

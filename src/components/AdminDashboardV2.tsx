@@ -11,8 +11,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  BarChart3, Activity, ArrowRight, ArrowLeft,
-  RefreshCw, Sparkles, Stethoscope, HeartPulse
+  BarChart3, Activity, ArrowRight, ArrowLeft, Mail,
+  Building2, RefreshCw, Sparkles, Stethoscope, HeartPulse,
+  TrendingUp, Users, Zap,
 } from 'lucide-react';
 
 interface StationActivity {

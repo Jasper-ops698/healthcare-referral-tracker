@@ -1157,9 +1157,9 @@ export function useReferrals() {
     setIsLoading(true);
     try {
       // Try local first
-      const local = await localDB.table('referrals').toArray();
+      const local = await db.table('referrals').toArray();
       if (local.length > 0) {
-        setReferrals(local.map(r => ({ ...r })) as Referral[]);
+        setReferrals(local.map((r: any) => ({ ...r })) as Referral[]);
       }
 
       // Try backend
@@ -1178,8 +1178,8 @@ export function useReferrals() {
             const mapped = refsArray.map(mapReferralFromBackend);
             setReferrals(mapped);
             // Cache locally
-            await localDB.table('referrals').bulkPut(
-              mapped.map(r => ({ ...r, _sync: { version: 1, modifiedAt: new Date().toISOString(), modifiedBy: localDB.getDeviceId(), checksum: '', isDeleted: false, createdAt: r.createdAt, createdBy: localDB.getDeviceId() } }))
+            await db.table('referrals').bulkPut(
+              mapped.map((r: any) => ({ ...r, _sync: { version: 1, modifiedAt: new Date().toISOString(), modifiedBy: localDB.getDeviceId(), checksum: '', isDeleted: false, createdAt: r.createdAt, createdBy: localDB.getDeviceId() } }))
             );
           }
         } catch (err) {
@@ -1218,7 +1218,7 @@ export function useReferrals() {
         }
       }
       // Fallback: filter local
-      const allLocal = await localDB.table('referrals').toArray();
+      const allLocal = await db.table('referrals').toArray();
       const filtered = allLocal.filter((r: any) => r.toFacilityId === facilityId && (!status || r.status === status));
       setReferrals(filtered);
       return filtered as Referral[];
@@ -1308,5 +1308,3 @@ function mapReferralFromBackend(r: any): Referral {
     completedAt: r.completedAt ? new Date(r.completedAt) : undefined,
     rejectedAt: r.rejectedAt ? new Date(r.rejectedAt) : undefined,
     rejectedReason: r.rejectedReason,
-  };
-}

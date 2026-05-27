@@ -52,7 +52,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback((key: TranslationKey | string, vars?: Record<string, string>): string => {
     const dict = Translations[lang] as Record<string, string>;
-    let text = dict[key] ?? Translations.en[key] ?? key;
+    let text = (dict as any)[key] ?? (Translations.en as any)[key] ?? key;
     if (vars) {
       Object.entries(vars).forEach(([k, v]) => {
         text = text.replace(new RegExp(`{{${k}}}`, 'g'), v);

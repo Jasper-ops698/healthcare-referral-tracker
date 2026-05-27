@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { DashboardKPIs, Patient, User } from '@/types';
 import { useI18n } from '@/i18n/useI18n';
 import { useFormatDate } from '@/i18n/dateFormat';
-import type { Translations } from '@/i18n/translations';
+
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area,
@@ -35,7 +35,7 @@ function getAgeGroup(ageYears: number): string {
 
 /* ═══════════════════════════ Dashboard Overview ═══════════════════════════ */
 
-function translateActivityDescription(description: string, t: (key: Translations, vars?: Record<string, string>) => string): string {
+function translateActivityDescription(description: string, t: (key: string, vars?: Record<string, string>) => string): string {
   const [key, ...rest] = description.split('|');
   const value = rest.join('|');
   if (key === 'patient_registered') return `${t('activity.registeredPatient')} ${value}`;
