@@ -12,7 +12,9 @@ import {
   ChevronRight,
   ChevronLeft,
   Save,
-  Users
+  Users,
+  FileSearch,
+  ArrowRight
 } from 'lucide-react';
 
 interface PatientRegistrationProps {
@@ -21,8 +23,9 @@ interface PatientRegistrationProps {
 
 export default function PatientRegistration({ onSuccess }: PatientRegistrationProps) {
   const { user } = useAuth();
-  const { addPatient } = usePatients();
+  const { addPatient, searchPatientByPhone } = usePatients();
   const { chps } = useChps();
+  const [duplicatePatient, setDuplicatePatient] = useState<Patient | null>(null);
   const { t } = useI18n();
   const [step, setStep] = useState(1);
 
@@ -68,6 +71,13 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
 
   const handleSubmit = async () => {
     if (!user) return;
+    
+    // ── DUPLICATE CHECK ──
+    const existing = await searchPatientByPhone(formData.phone.trim());
+    if (existing) {
+      setDuplicatePatient(existing);
+      return;
+    }
     
     setIsSubmitting(true);
     
@@ -622,6 +632,53 @@ export default function PatientRegistration({ onSuccess }: PatientRegistrationPr
             <p className="text-muted-foreground">
               {t('reg.success')}
             </p>
+          </div>
+        </div>
+      )}
+      {/* Duplicate Patient Dialog */}
+      {duplicatePatient && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl border">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                <FileSearch className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Patient Already Exists</h3>
+                <p className="text-sm text-muted-foreground">A patient with this phone number is already registered</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-4 mb-4 border border-slate-100">
+              <p className="font-semibold text-foreground">{duplicatePatient.firstName} {duplicatePatient.lastName}</p>
+              <p className="text-sm text-muted-foreground">{duplicatePatient.phone}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Registered: {format(new Date(duplicatePatient.registrationDate), 'MMM d, yyyy')}
+                {duplicatePatient.currentFacilityName && ` • Currently at: ${duplicatePatient.currentFacilityName}`}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Status: <span className="capitalize font-medium">{duplicatePatient.referralStatus}</span>
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDuplicatePatient(null)}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setDuplicatePatient(null);
+                  onSuccess?.();
+                }}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+              >
+                <ArrowRight className="w-4 h-4" />
+                View Patient
+              </button>
+            </div>
           </div>
         </div>
       )}

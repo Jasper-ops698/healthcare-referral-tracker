@@ -16,6 +16,7 @@ import {
   Calendar,
   HeartPulse,
   AlertCircle,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { differenceInYears } from 'date-fns';
 import {
@@ -431,6 +432,40 @@ function PatientDetailView({ patient, collectorName, records }: PatientDetailVie
         <Field label={t('patients.lastUpdated')} value={formatDate(patient.lastUpdated, 'long')} />
         <Field label={t('patients.medicalRecords')} value={`${records.length} ${records.length === 1 ? t('patients.record_one') : t('patients.record_other')}`} />
       </Section>
+
+      {/* Referral Handoff Tracking */}
+      {(patient.currentFacilityId || patient.currentFacilityName || patient.currentCollectorName) && (
+        <Section title="Current Location & Handoff" icon={<ArrowRightLeft className="w-4 h-4" />}>
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">Current Facility</span>
+                <p className="text-sm font-semibold text-blue-900 mt-1">
+                  {patient.currentFacilityName || patient.currentFacilityId || 'Not assigned'}
+                </p>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">Current Collector</span>
+                <p className="text-sm font-semibold text-blue-900 mt-1">
+                  {patient.currentCollectorName || patient.currentCollectorId || 'Not assigned'}
+                </p>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">Referral Status</span>
+                <p className="text-sm font-semibold text-blue-900 mt-1 capitalize">
+                  {patient.referralStatus || 'registered'}
+                </p>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">Original Facility</span>
+                <p className="text-sm text-blue-700 mt-1">
+                  {patient.registeredBy ? `Registered by collector at ${patient.registeredBy}` : 'Unknown'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Section>
+      )}
 
       {/* Medical Records History */}
       <div className="mt-4">

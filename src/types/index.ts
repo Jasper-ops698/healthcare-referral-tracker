@@ -145,6 +145,14 @@ export interface Patient {
   assignedChpId?: string;
   assignedChpName?: string;
 
+  // ── Cross-facility tracking ──
+  /** Where the patient currently is (facility) — updated on referral acceptance */
+  currentFacilityId?: string;
+  currentFacilityName?: string;
+  /** Which collector currently has the patient — updated on referral acceptance */
+  currentCollectorId?: string;
+  currentCollectorName?: string;
+
   /** Stages of the patient's referral journey */
   referralStages: ReferralStage[];
 
@@ -192,6 +200,49 @@ export interface ReferralStage {
   date: Date;
   notes?: string;
   chpName?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TOP-LEVEL REFERRAL (cross-facility handoff)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A top-level referral tracking a patient's movement between facilities.
+ *  Created when a collector refers a patient to another facility.
+ *  Updated when the receiving collector accepts the patient.
+ */
+export interface Referral {
+  id: string;
+  patientId: string;
+  patientName: string;
+  patientPhone: string;
+  patientIdNumber?: string;
+
+  fromFacilityId: string;
+  fromFacilityName: string;
+  fromCollectorId: string;
+  fromCollectorName: string;
+
+  toFacilityId: string;
+  toFacilityName: string;
+  toCollectorId?: string;
+  toCollectorName?: string;
+
+  chpId?: string;
+  chpName?: string;
+
+  reason: string;
+  urgency: 'routine' | 'urgent' | 'emergency';
+  notes?: string;
+
+  status: 'pending' | 'accepted' | 'in-treatment' | 'completed' | 'rejected';
+
+  medicalRecordId?: string;
+
+  createdAt: Date;
+  acceptedAt?: Date;
+  completedAt?: Date;
+  rejectedAt?: Date;
+  rejectedReason?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -7,7 +7,7 @@
  */
 
 import Dexie, { type EntityTable } from 'dexie';
-import type { Patient, MedicalRecord, User, Chp, Facility } from '@/types';
+import type { Patient, MedicalRecord, User, Chp, Facility, Referral } from '@/types';
 
 // ─── Outbox Status Lifecycle ───
 
@@ -41,7 +41,7 @@ export interface DBMedicalRecord extends MedicalRecord {
 
 export interface OutboxEntry {
   changeId: string;
-  entityType: 'user' | 'patient' | 'medicalRecord' | 'chp';
+  entityType: 'user' | 'patient' | 'medicalRecord' | 'chp' | 'referral';
   entityId: string;
   changeType: 'create' | 'update' | 'delete';
   status: OutboxStatus;
@@ -75,18 +75,20 @@ class HealthTrackDB extends Dexie {
   users!: EntityTable<DBUser, 'id'>;
   medicalRecords!: EntityTable<DBMedicalRecord, 'id'>;
   facilities!: EntityTable<Facility, 'id'>;
+  referrals!: EntityTable<DBReferral, 'id'>;
   outbox!: EntityTable<OutboxEntry, 'changeId'>;
   syncMeta!: EntityTable<DBSyncCheckpoint, 'key'>;
 
   constructor() {
     super('HealthTrackDB');
 
-    this.version(1).stores({
-      patients: 'id, patientId, referralStatus, registeredBy, assignedChpId, assignedCollector, [registeredBy+_sync.version], [assignedChpId+status], [assignedCollector+status], _sync.version',
+    this.version(2).stores({
+      patients: 'id, patientId, referralStatus, registeredBy, assignedChpId, assignedCollector, currentFacilityId, currentCollectorId, [registeredBy+_sync.version], [assignedChpId+status], [assignedCollector+status], [currentFacilityId+status], _sync.version',
       chps: 'id, chpId, nationalId, facilityId, county, status, [facilityId+status], [county+status]',
       users: 'id, email, role, isActive',
       medicalRecords: 'id, patientId, recordedBy, [patientId+recordedAt]',
       facilities: 'id, name, type, county, isActive',
+      referrals: 'id, patientId, fromFacilityId, toFacilityId, toCollectorId, chpId, status, urgency, [toFacilityId+status], [patientId+createdAt], createdAt',
       outbox: 'changeId, status, [status+timestamp], [entityType+entityId], timestamp, nextRetryAt',
       syncMeta: 'key',
     });

@@ -139,6 +139,13 @@ export async function handleCreatePatient(req: Request, res: Response): Promise<
       registeredBy: new mongoose.Types.ObjectId(authReq.user._id.toString()),
       assignedChpId: body.assignedChpId ? new mongoose.Types.ObjectId(body.assignedChpId) : undefined,
       assignedChpName: body.assignedChpName || undefined,
+      
+      // ── Cross-facility tracking: patient starts at creator's facility ──
+      currentFacilityId: body.currentFacilityId || authReq.user.assignedFacility || undefined,
+      currentFacilityName: body.currentFacilityName || undefined,
+      currentCollectorId: authReq.user._id.toString(),
+      currentCollectorName: `${authReq.user.firstName || ''} ${authReq.user.lastName || ''}`.trim(),
+      
       referralStatus: body.referralStatus || 'registered',
       referralStages: body.referralStages || [],
       status: body.status || 'active',
@@ -252,6 +259,62 @@ export async function handleDeletePatient(req: Request, res: Response): Promise<
     res.status(500).json({
       success: false,
       error: { code: 'INTERNAL_ERROR', message: 'Failed to delete patient' },
+    });
+  }
+}
+
+
+// ─── CROSS-FACILITY PATIENT SEARCH ───
+
+export async function handleSearchPatients(req: Request, res: Response): Promise<void> {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    if (!authReq.user) {
+      res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+      return;
+    }
+
+    const { q } = req.query;
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
+      res.status(400).json({ success: false, error: { code: 'MISSING_QUERY', message: 'Search query required' } });
+      return;
+    }
+
+    const query = q.trim();
+    const regex = new RegExp(query, 'i');
+
+    const patients = await Patient.find({
+      $or: [
+        { phone: { $regex: query } },
+        { firstName: { $regex: regex } },
+        { lastName: { $regex: regex } },
+        { patientId: { $regex: query } },
+        { nationalId: { $regex: query } },
+      ],
+    })
+      .limit(20)
+      .sort({ lastUpdated: -1 })
+      .lean()
+      .exec();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        patients: patients.map(p => ({
+          ...p,
+          _id: p._id?.toString(),
+          id: p._id?.toString(),
+          registeredBy: p.registeredBy?.toString(),
+          assignedChpId: p.assignedChpId?.toString(),
+        })),
+        count: patients.length,
+      },
+    });
+  } catch (error) {
+    console.error('[PatientController] Search error:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to search patients' },
     });
   }
 }

@@ -5,6 +5,7 @@ import type {
   User,
   Chp,
   Facility,
+  Referral,
 } from '@/types';
 import { getLocalDatabase } from '@/lib/dexieDatabase';
 import type { DBPatient, DBUser, DBMedicalRecord } from '@/lib/dexieDatabase';
@@ -631,6 +632,77 @@ export function usePatients() {
     setIsLoading(false);
   }, []);
 
+  const searchPatientByPhone = useCallback(async (phone: string): Promise<Patient | null> => {
+    // 1. Search local IndexedDB
+    const localAll = await localDB.getAllPatients();
+    const localMatch = localAll.find(p => p.phone === phone);
+    if (localMatch) return localMatch as Patient;
+
+    // 2. Try backend search
+    const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+    if (jwtToken && !jwtToken.startsWith('local_')) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/patients/search?q=${encodeURIComponent(phone)}`, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (res.ok) {
+          const result = await res.json();
+          const patientsArray = result.data?.patients || result.data || [];
+          if (patientsArray.length > 0) {
+            // Cache the found patient locally
+            const p = patientsArray[0];
+            const dbPatient: DBPatient = {
+              id: p._id || p.id,
+              patientId: p.patientId,
+              firstName: p.firstName,
+              lastName: p.lastName,
+              dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : new Date(),
+              gender: p.gender,
+              phone: p.phone,
+              email: p.email,
+              address: p.address,
+              emergencyContact: p.emergencyContact,
+              bloodType: p.bloodType,
+              allergies: p.allergies || [],
+              chronicConditions: p.chronicConditions || [],
+              insuranceInfo: p.insuranceInfo,
+              registeredBy: p.registeredBy?.toString() || '',
+              assignedChpId: p.assignedChpId?.toString(),
+              assignedChpName: p.assignedChpName,
+              currentFacilityId: p.currentFacilityId,
+              currentFacilityName: p.currentFacilityName,
+              currentCollectorId: p.currentCollectorId,
+              currentCollectorName: p.currentCollectorName,
+              referralStages: p.referralStages || [],
+              referralStatus: p.referralStatus || 'registered',
+              registrationDate: p.createdAt ? new Date(p.createdAt) : new Date(),
+              lastUpdated: p.updatedAt ? new Date(p.updatedAt) : new Date(),
+              status: p.status || 'active',
+              _sync: {
+                version: p._sync?.version || 1,
+                modifiedAt: p.updatedAt || new Date().toISOString(),
+                modifiedBy: localDB.getDeviceId(),
+                checksum: '',
+                isDeleted: false,
+                createdAt: p.createdAt || new Date().toISOString(),
+                createdBy: localDB.getDeviceId(),
+              },
+            } as DBPatient;
+            await localDB.putPatient(dbPatient);
+            await loadPatients();
+            return dbPatient as Patient;
+          }
+        }
+      } catch (err) {
+        console.warn('[searchPatientByPhone] Backend search failed:', err);
+      }
+    }
+    return null;
+  }, [loadPatients]);
+
   const addPatient = useCallback(async (
     patientData: Omit<Patient, 'id' | 'patientId' | 'registrationDate' | 'lastUpdated'>
   ): Promise<Patient> => {
@@ -775,6 +847,7 @@ export function usePatients() {
     addPatient,
     updatePatient,
     getPatientsByCollector,
+    searchPatientByPhone,
   };
 }
 
@@ -1071,4 +1144,169 @@ export function useHealthcareData() {
   const facilities = useFacilities();
   const dashboard = useDashboard();
   return { patients, medicalRecords, users, chps, facilities, dashboard };
+}
+
+
+// ─── Referrals Hook ───
+
+export function useReferrals() {
+  const [referrals, setReferrals] = useState<Referral[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadReferrals = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // Try local first
+      const local = await localDB.table('referrals').toArray();
+      if (local.length > 0) {
+        setReferrals(local.map(r => ({ ...r })) as Referral[]);
+      }
+
+      // Try backend
+      const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+      if (jwtToken && !jwtToken.startsWith('local_')) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/v1/referrals/patient/all`, {
+            headers: {
+              'Authorization': `Bearer ${jwtToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (res.ok) {
+            const result = await res.json();
+            const refsArray = result.data?.referrals || result.data || [];
+            const mapped = refsArray.map(mapReferralFromBackend);
+            setReferrals(mapped);
+            // Cache locally
+            await localDB.table('referrals').bulkPut(
+              mapped.map(r => ({ ...r, _sync: { version: 1, modifiedAt: new Date().toISOString(), modifiedBy: localDB.getDeviceId(), checksum: '', isDeleted: false, createdAt: r.createdAt, createdBy: localDB.getDeviceId() } }))
+            );
+          }
+        } catch (err) {
+          console.warn('[loadReferrals] Backend failed:', err);
+        }
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const loadIncomingReferrals = useCallback(async (facilityId: string, status?: string) => {
+    setIsLoading(true);
+    try {
+      const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+      if (jwtToken && !jwtToken.startsWith('local_')) {
+        try {
+          const url = status
+            ? `${API_BASE_URL}/api/v1/referrals/incoming/${facilityId}?status=${status}`
+            : `${API_BASE_URL}/api/v1/referrals/incoming/${facilityId}`;
+          const res = await fetch(url, {
+            headers: {
+              'Authorization': `Bearer ${jwtToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (res.ok) {
+            const result = await res.json();
+            const refsArray = result.data?.referrals || result.data || [];
+            const mapped = refsArray.map(mapReferralFromBackend);
+            setReferrals(mapped);
+            return mapped;
+          }
+        } catch (err) {
+          console.warn('[loadIncomingReferrals] Backend failed:', err);
+        }
+      }
+      // Fallback: filter local
+      const allLocal = await localDB.table('referrals').toArray();
+      const filtered = allLocal.filter((r: any) => r.toFacilityId === facilityId && (!status || r.status === status));
+      setReferrals(filtered);
+      return filtered as Referral[];
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const acceptReferral = useCallback(async (referralId: string, collectorId: string, collectorName: string) => {
+    try {
+      const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+      if (jwtToken && !jwtToken.startsWith('local_')) {
+        const res = await fetch(`${API_BASE_URL}/api/v1/referrals/${referralId}/accept`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ collectorId, collectorName }),
+        });
+        if (!res.ok) throw new Error('Accept failed');
+        const result = await res.json();
+        return result.data?.referral;
+      }
+    } catch (err) {
+      console.error('[acceptReferral] Failed:', err);
+      throw err;
+    }
+  }, []);
+
+  const createReferral = useCallback(async (referralData: Partial<Referral>) => {
+    try {
+      const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+      if (jwtToken && !jwtToken.startsWith('local_')) {
+        const res = await fetch(`${API_BASE_URL}/api/v1/referrals`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(referralData),
+        });
+        if (!res.ok) throw new Error('Create failed');
+        const result = await res.json();
+        return result.data?.referral;
+      }
+    } catch (err) {
+      console.error('[createReferral] Failed:', err);
+      throw err;
+    }
+  }, []);
+
+  return {
+    referrals,
+    isLoading,
+    loadReferrals,
+    loadIncomingReferrals,
+    acceptReferral,
+    createReferral,
+  };
+}
+
+function mapReferralFromBackend(r: any): Referral {
+  return {
+    id: r._id?.toString() || r.id,
+    patientId: r.patientId?.toString() || r.patientId,
+    patientName: r.patientName,
+    patientPhone: r.patientPhone,
+    patientIdNumber: r.patientIdNumber,
+    fromFacilityId: r.fromFacilityId,
+    fromFacilityName: r.fromFacilityName,
+    fromCollectorId: r.fromCollectorId?.toString() || r.fromCollectorId,
+    fromCollectorName: r.fromCollectorName,
+    toFacilityId: r.toFacilityId,
+    toFacilityName: r.toFacilityName,
+    toCollectorId: r.toCollectorId?.toString() || r.toCollectorId,
+    toCollectorName: r.toCollectorName,
+    chpId: r.chpId,
+    chpName: r.chpName,
+    reason: r.reason,
+    urgency: r.urgency,
+    notes: r.notes,
+    status: r.status,
+    medicalRecordId: r.medicalRecordId?.toString() || r.medicalRecordId,
+    createdAt: r.createdAt ? new Date(r.createdAt) : new Date(),
+    acceptedAt: r.acceptedAt ? new Date(r.acceptedAt) : undefined,
+    completedAt: r.completedAt ? new Date(r.completedAt) : undefined,
+    rejectedAt: r.rejectedAt ? new Date(r.rejectedAt) : undefined,
+    rejectedReason: r.rejectedReason,
+  };
 }

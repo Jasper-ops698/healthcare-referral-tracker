@@ -270,6 +270,30 @@ const PatientSchema = new Schema<IPatient, IPatientModel>(
       required: false,
     },
 
+    // ── Cross-facility tracking: where the patient CURRENTLY is ──
+    currentFacilityId: {
+      type: String,
+      required: false,
+      index: true,
+      default: null,
+    },
+    currentFacilityName: {
+      type: String,
+      required: false,
+      default: null,
+    },
+    currentCollectorId: {
+      type: String,
+      required: false,
+      index: true,
+      default: null,
+    },
+    currentCollectorName: {
+      type: String,
+      required: false,
+      default: null,
+    },
+
     referralStages: {
       type: [ReferralStageSchema],
       default: [],

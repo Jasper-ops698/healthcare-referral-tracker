@@ -30,6 +30,7 @@ import userRoutes from './routes/users.js';
 import patientRoutes from './routes/patients.js';
 import medicalRecordRoutes from './routes/medicalRecords.js';
 import facilityRoutes from './routes/facilities.js';
+import referralRoutes from './routes/referrals.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,6 +100,9 @@ app.use(`${API_PREFIX}/medical-records`, medicalRecordRoutes);
 
 // Facility routes (list for all, mutations admin only)
 app.use(`${API_PREFIX}/facilities`, facilityRoutes);
+
+// Referral routes (cross-facility handoff tracking)
+app.use(`${API_PREFIX}/referrals`, referralRoutes);
 
 // Email routes
 app.use(`${API_PREFIX}/email`, emailRoutes);

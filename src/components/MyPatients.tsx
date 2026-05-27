@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useI18n } from '@/i18n/useI18n';
-import { useMedicalRecords, useUsers } from '@/hooks/useData';
-import type { Patient, MedicalRecord } from '@/types';
+import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+import { useMedicalRecords, useUsers, useReferrals } from '@/hooks/useData';
+import type { Patient, MedicalRecord, Referral } from '@/types';
 import {
   Search,
   User,
@@ -32,6 +34,9 @@ import {
   Ambulance,
   UserCheck,
   Gauge,
+  Inbox,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -484,6 +489,32 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
     awaiting: patients.filter((p) => ['registered', 'screened'].includes(p.referralStatus)).length,
   };
 
+  const { user } = useAuth();
+  const { referrals: incomingReferrals, loadIncomingReferrals, acceptReferral, isLoading: referralsLoading } = useReferrals();
+  const [activeTab, setActiveTab] = useState<'patients' | 'referrals'>('patients');
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
+  // Load incoming referrals for this collector's facility
+  useEffect(() => {
+    if (user?.assignedFacility) {
+      loadIncomingReferrals(user.assignedFacility, 'pending');
+    }
+  }, [user?.assignedFacility, loadIncomingReferrals]);
+
+  const handleAccept = async (referral: Referral) => {
+    if (!user) return;
+    setAcceptingId(referral.id);
+    try {
+      await acceptReferral(referral.id, user.id, `${user.firstName} ${user.lastName}`);
+      toast.success(`Accepted ${referral.patientName} at ${user.assignedFacilityName || 'your facility'}`);
+      await loadIncomingReferrals(user.assignedFacility!, 'pending');
+    } catch (e) {
+      toast.error('Failed to accept referral');
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in">
       {/* Header */}
@@ -512,7 +543,144 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
         </div>
       </div>
 
-      {/* Search */}
+      {/* Tab Toggle: My Patients | Incoming Referrals */}
+      {user?.role === 'collector' && (
+        <div className="flex gap-2 border-b border-border">
+          <button
+            onClick={() => setActiveTab('patients')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'patients'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            My Patients ({patients.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('referrals')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === 'referrals'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Inbox className="w-4 h-4" />
+            Incoming Referrals
+            {incomingReferrals.filter(r => r.status === 'pending').length > 0 && (
+              <span className="px-1.5 py-0.5 bg-primary text-primary-foreground rounded-full text-xs font-bold">
+                {incomingReferrals.filter(r => r.status === 'pending').length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'referrals' ? (
+        /* Incoming Referrals Section */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Ambulance className="w-5 h-5 text-primary" />
+              Patients Referred to Your Facility
+            </h2>
+            <button
+              onClick={() => user?.assignedFacility && loadIncomingReferrals(user.assignedFacility, 'pending')}
+              className="text-sm text-primary hover:underline flex items-center gap-1"
+            >
+              <Loader2 className={`w-3 h-3 ${referralsLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+
+          {referralsLoading && incomingReferrals.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              Loading referrals...
+            </div>
+          ) : incomingReferrals.length === 0 ? (
+            <div className="bg-muted/30 rounded-lg p-8 text-center">
+              <Inbox className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground font-medium">No incoming referrals</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                When patients are referred to your facility from another dispensary, they will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {incomingReferrals.map((referral) => (
+                <div
+                  key={referral.id}
+                  className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-foreground">{referral.patientName}</h3>
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                          referral.urgency === 'emergency' ? 'bg-red-100 text-red-700' :
+                          referral.urgency === 'urgent' ? 'bg-amber-100 text-amber-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {referral.urgency}
+                        </span>
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-medium capitalize">
+                          {referral.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        From <span className="font-medium text-foreground">{referral.fromFacilityName}</span> • Referred by {referral.fromCollectorName}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Phone: {referral.patientPhone}
+                      </p>
+                      {referral.chpName && (
+                        <p className="text-sm text-muted-foreground">
+                          Accompanying CHP: <span className="font-medium">{referral.chpName}</span>
+                        </p>
+                      )}
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Reason: <span className="font-medium text-foreground">{referral.reason}</span>
+                      </p>
+                      {referral.notes && (
+                        <p className="text-sm text-muted-foreground mt-1 italic">
+                          Notes: {referral.notes}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 ml-4 shrink-0">
+                      {referral.status === 'pending' && (
+                        <button
+                          onClick={() => handleAccept(referral)}
+                          disabled={acceptingId === referral.id}
+                          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {acceptingId === referral.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          )}
+                          Accept
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          const p = patients.find(pt => pt.id === referral.patientId);
+                          if (p) setSelectedPatient(p);
+                        }}
+                        className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+                      >
+                        View Record
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
@@ -640,6 +808,8 @@ export default function MyPatients({ patients, onAddRecord }: MyPatientsProps) {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Patient Detail Modal */}
       <Dialog open={!!selectedPatient} onOpenChange={() => setSelectedPatient(null)}>
