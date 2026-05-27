@@ -78,10 +78,10 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
           patientId: body.patientId,
           finalDiagnosis: body.finalDiagnosis,
           followUpInstructions: body.followUpInstructions,
-          nextVisitDate: body.nextVisitDate,
+          nextVisitDate: body.nextVisitDate ? new Date(body.nextVisitDate).toLocaleDateString() : undefined,
           warningSigns: body.warningSigns,
           recoveryStatus: body.recoveryStatus || 'still-unwell',
-          formUrl: `${baseUrl}/api/v1/chp-feedback/${responseToken}`,
+          formUrl: `${baseUrl}/chp-feedback/${responseToken}`,
         });
         counter.chpEmailSent = true;
         counter.chpEmailSentAt = new Date();
@@ -193,13 +193,27 @@ export async function handleUpdate(req: Request, res: Response): Promise<void> {
 }
 
 // ─── CHP FORM SUBMISSION (no auth — public token-based) ───
+const VALID_RECOVERY_STATUSES = ['fully-recovered', 'partially-recovered', 'still-unwell', 'deceased', 'lost-to-follow-up'];
+
 export async function handleChpFormSubmit(req: Request, res: Response): Promise<void> {
   try {
     const { token } = req.params;
     const { recoveryStatus, recoveryNotes } = req.body;
 
+    // Validate recoveryStatus
+    if (!recoveryStatus || !VALID_RECOVERY_STATUSES.includes(recoveryStatus)) {
+      res.status(400).json({ success: false, error: `recoveryStatus must be one of: ${VALID_RECOVERY_STATUSES.join(', ')}` });
+      return;
+    }
+
     const counter = await CounterReferral.findOne({ chpResponseToken: token });
     if (!counter) { res.status(404).json({ success: false, error: 'Invalid or expired link' }); return; }
+
+    // Prevent duplicate submissions
+    if (counter.chpResponseReceived) {
+      res.status(409).json({ success: false, error: 'A response has already been submitted for this patient' });
+      return;
+    }
 
     counter.chpResponseReceived = true;
     counter.chpResponseDate = new Date();

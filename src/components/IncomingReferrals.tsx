@@ -59,9 +59,9 @@ export default function IncomingReferrals({ stationId, stationName, collectorId,
     try {
       const jwtToken = localStorage.getItem('healthtrack_jwt_token');
       const statusParam = statusFilter !== 'all' ? `?status=${statusFilter}` : '';
-      const res = await fetch(`/api/v1/referrals-v2/incoming/${stationId}${statusParam}`, {
-        headers: jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {},
-      });
+      const headers: Record<string, string> = {};
+      if (jwtToken) headers.Authorization = `Bearer ${jwtToken}`;
+      const res = await fetch(`/api/v1/referrals-v2/incoming/${stationId}${statusParam}`, { headers });
       const result = await res.json();
       if (result.success) {
         setReferrals(result.data?.referrals || []);
@@ -85,7 +85,7 @@ export default function IncomingReferrals({ stationId, stationName, collectorId,
       const jwtToken = localStorage.getItem('healthtrack_jwt_token');
       const res = await fetch(`/api/v1/referrals-v2/${referralId}/accept`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${jwtToken}` || '', 'Content-Type': 'application/json' },
+        headers: { ...(jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {}), 'Content-Type': 'application/json' },
       });
       const result = await res.json();
       if (result.success) {

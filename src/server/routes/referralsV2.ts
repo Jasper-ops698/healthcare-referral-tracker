@@ -14,19 +14,20 @@ import {
   handleStatsByStation,
   handleListAll,
 } from '../controllers/referralV2Controller.js';
-import { authenticate } from '../middleware/regionalAuth.js';
+import { authenticateJWT } from '../middleware/regionalAuth.js';
 
 const router = Router();
 
-router.post('/', authenticate, handleCreate);
-router.get('/all', authenticate, handleListAll);
-router.get('/incoming/:stationId', authenticate, handleListIncoming);
-router.get('/outgoing/:stationId', authenticate, handleListOutgoing);
-router.get('/collector/:collectorId', authenticate, handleListByCollector);
-router.get('/patient/:patientId', authenticate, handleListByPatient);
-router.get('/stats/:stationId', authenticate, handleStatsByStation);
-router.get('/:id', authenticate, handleGet);
-router.post('/:id/accept', authenticate, handleAccept);
-router.put('/:id/status', authenticate, handleUpdateStatus);
+router.post('/', authenticateJWT, handleCreate);
+router.get('/all', authenticateJWT, handleListAll);
+router.get('/incoming/:stationId', authenticateJWT, handleListIncoming);
+router.get('/outgoing/:stationId', authenticateJWT, handleListOutgoing);
+router.get('/collector/:collectorId', authenticateJWT, handleListByCollector);
+router.get('/patient/:patientId', authenticateJWT, handleListByPatient);
+router.get('/stats/:stationId', authenticateJWT, handleStatsByStation);
+router.get('/ai-report', authenticateJWT, handleListAll); // Admin AI report data endpoint
+router.get('/:id', authenticateJWT, handleGet);
+router.post('/:id/accept', authenticateJWT, handleAccept);
+router.put('/:id/status', authenticateJWT, handleUpdateStatus);
 
 export default router;

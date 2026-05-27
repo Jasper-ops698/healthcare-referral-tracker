@@ -476,7 +476,7 @@ export async function submitChpFeedback(token: string, data: { recoveryStatus: s
 }
 
 export async function getChpFormData(token: string): Promise<ApiResponse> {
-  const res = await fetch(`${BASE_URL}/api/v1/counter-referrals/chp-form/${token}`);
+  const res = await fetch(`${BASE_URL}/api/v1/chp-feedback/${token}`);
   return res.json();
 }
 

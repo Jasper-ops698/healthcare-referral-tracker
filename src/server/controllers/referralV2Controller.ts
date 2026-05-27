@@ -5,7 +5,6 @@
 import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import ReferralV2 from '../schemas/ReferralV2.js';
-import CounterReferral from '../schemas/CounterReferral.js';
 import type { AuthenticatedRequest } from '../middleware/regionalAuth.js';
 
 function requireAuth(req: Request, res: Response): AuthenticatedRequest | null {

@@ -66,7 +66,7 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/v1/counter-referrals/chp-form/${token}`, {
+      const res = await fetch(`/api/v1/chp-feedback/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recoveryStatus, recoveryNotes }),

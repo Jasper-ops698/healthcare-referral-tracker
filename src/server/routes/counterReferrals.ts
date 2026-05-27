@@ -12,20 +12,20 @@ import {
   handleChpFormData,
   handleStats,
 } from '../controllers/counterReferralController.js';
-import { authenticate } from '../middleware/regionalAuth.js';
+import { authenticateJWT } from '../middleware/regionalAuth.js';
 
 const router = Router();
 
-// Authenticated routes
-router.post('/', authenticate, handleCreate);
-router.get('/station/:stationId', authenticate, handleListByStation);
-router.get('/patient/:patientId', authenticate, handleListByPatient);
-router.get('/stats/all', authenticate, handleStats);
-router.get('/:id', authenticate, handleGet);
-router.put('/:id', authenticate, handleUpdate);
-
-// Public CHP form routes (token-based, no auth)
+// Public CHP form routes (token-based, no auth) — MUST be before /:id to avoid capture
 router.get('/chp-form/:token', handleChpFormData);
 router.post('/chp-form/:token', handleChpFormSubmit);
+
+// Authenticated routes
+router.post('/', authenticateJWT, handleCreate);
+router.get('/station/:stationId', authenticateJWT, handleListByStation);
+router.get('/patient/:patientId', authenticateJWT, handleListByPatient);
+router.get('/stats/all', authenticateJWT, handleStats);
+router.get('/:id', authenticateJWT, handleGet);
+router.put('/:id', authenticateJWT, handleUpdate);
 
 export default router;

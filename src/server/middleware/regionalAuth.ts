@@ -310,5 +310,5 @@ export function requireRole(allowedRoles: string[]) {
 /** Shorthand for admin-only routes */
 export const requireAdmin = requireRole(['admin']);
 
-/** Shorthand for admin + Collector routes */
-export const requireStaff = requireRole(['admin', 'collector', 'doctor', 'nurse']);
+/** Shorthand for admin + collector routes */
+export const requireStaff = requireRole(['admin', 'collector']);
