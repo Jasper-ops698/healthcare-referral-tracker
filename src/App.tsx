@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import { Toaster, toast } from 'sonner';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
@@ -8,6 +8,7 @@ import { useI18n } from '@/i18n/useI18n';
 import { verify2FALogin } from '@/lib/apiClient';
 import AdminDashboard from '@/sections/AdminDashboard';
 import CollectorDashboard from '@/sections/CHPDashboard';
+import ChpFeedbackForm from '@/components/ChpFeedbackForm';
 import { Eye, EyeOff, Shield } from 'lucide-react';
 import SetPasswordScreen from '@/components/SetPasswordScreen';
 
@@ -40,9 +41,31 @@ function IdleAutoLogout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Detect if the current URL is a CHP public feedback form link.
+ * Pattern: /chp-feedback/<token>
+ */
+function getChpFeedbackToken(): string | null {
+  const match = window.location.pathname.match(/^\/chp-feedback\/([a-f0-9]+)$/i);
+  return match ? match[1] : null;
+}
+
 function AppContent() {
   const { isAuthenticated, isAdmin, isCollector } = useAuth();
+  const [chpToken, setChpToken] = useState<string | null>(getChpFeedbackToken);
   useI18n();
+
+  // Listen for URL changes (e.g., back/forward navigation)
+  useEffect(() => {
+    const handlePopState = () => setChpToken(getChpFeedbackToken());
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // If this is a CHP feedback link, render the public form (no auth required)
+  if (chpToken) {
+    return <ChpFeedbackForm token={chpToken} />;
+  }
 
   if (!isAuthenticated) {
     return <LoginPage />;

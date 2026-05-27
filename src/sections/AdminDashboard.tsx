@@ -12,6 +12,7 @@ import PatientManagement from '@/components/PatientManagement';
 import UserManagement from '@/components/UserManagement';
 import ReferralTracking from '@/components/ReferralTracking';
 import ReportsAnalytics from '@/components/ReportsAnalytics';
+import AdminDashboardV2 from '@/components/AdminDashboardV2';
 import Settings from '@/components/Settings';
 import { toast } from 'sonner';
 import {
@@ -20,6 +21,7 @@ import {
   UserCog,
   ArrowLeftRight,
   BarChart3,
+  Activity,
   Settings as SettingsIcon,
   CloudOff,
   RefreshCw,
@@ -28,7 +30,7 @@ import {
   Loader2,
 } from 'lucide-react';
 
-type AdminTab = 'dashboard' | 'patients' | 'users' | 'referrals' | 'reports' | 'settings';
+type AdminTab = 'dashboard' | 'patients' | 'users' | 'referrals' | 'reports' | 'analytics' | 'settings';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
@@ -58,6 +60,7 @@ export default function AdminDashboard() {
     { id: 'patients', label: t('sidebar.patients'), icon: Users },
     { id: 'referrals', label: t('sidebar.referrals'), icon: ArrowLeftRight },
     { id: 'reports', label: t('sidebar.reports'), icon: BarChart3 },
+    { id: 'analytics', label: 'Referral Analytics', icon: Activity },
     { id: 'users', label: t('sidebar.users'), icon: UserCog },
     { id: 'settings', label: t('sidebar.settings'), icon: SettingsIcon },
   ], [t]);
@@ -88,6 +91,8 @@ export default function AdminDashboard() {
         );
       case 'reports':
         return <ReportsAnalytics />;
+      case 'analytics':
+        return <AdminDashboardV2 />;
       case 'settings':
         return <Settings />;
       default:

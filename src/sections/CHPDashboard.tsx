@@ -13,6 +13,9 @@ import MedicalRecordsEntry from '@/components/MedicalRecordsEntry';
 import MyPatients from '@/components/MyPatients';
 import CHPProfile from '@/components/CHPProfile';
 import Settings from '@/components/Settings';
+import ReferralForm from '@/components/ReferralForm';
+import IncomingReferrals from '@/components/IncomingReferrals';
+import { createReferralV2 } from '@/lib/apiClient';
 import { toast } from 'sonner';
 import {
   LayoutDashboard,
@@ -25,9 +28,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   Loader2,
+  Send,
+  Inbox,
 } from 'lucide-react';
 
-type CollectorTab = 'dashboard' | 'register' | 'records' | 'patients' | 'profile' | 'settings';
+type CollectorTab = 'dashboard' | 'register' | 'records' | 'patients' | 'referrals' | 'incoming' | 'profile' | 'settings';
 
 /* ═══════════ Sync Status Chip ═══════════ */
 function SyncStatusChip({ status, pendingCount, isOnline, onSync }: {
@@ -85,16 +90,36 @@ export default function CollectorDashboard() {
     if (user) setProfileUser(user);
   };
 
+  // Get station info from user
+  const stationId = user?.stationId || '';
+  const stationName = user?.stationName || 'Unknown Station';
+  const stationType = user?.stationType || 'household';
+  const collectorId = user?.id || '';
+  const collectorName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim();
+
   const menuItems = useMemo(() => [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: LayoutDashboard },
     { id: 'register', label: t('sidebar.register'), icon: UserPlus },
     { id: 'records', label: t('sidebar.records'), icon: FileText },
     { id: 'patients', label: t('sidebar.myPatients'), icon: Users },
+    { id: 'referrals', label: 'Send Referral', icon: Send },
+    ...(stationType === 'referral-center' ? [{ id: 'incoming' as CollectorTab, label: 'Incoming', icon: Inbox }] : []),
     { id: 'profile', label: t('sidebar.profile'), icon: UserCircle },
     { id: 'settings', label: t('sidebar.settings'), icon: SettingsIcon },
-  ], [t]);
+  ], [t, stationType]);
 
   const collectorStats = user ? dashboard.getCollectorStats(user.id) : null;
+
+  const handleCreateReferral = async (referral: Record<string, unknown>) => {
+    const result = await createReferralV2(referral);
+    if (result.success) {
+      toast.success(`Referral created for ${referral.patientName}`);
+      setActiveTab('dashboard');
+    } else {
+      toast.error(result.error?.toString() || 'Failed to create referral');
+    }
+    return result;
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -117,6 +142,42 @@ export default function CollectorDashboard() {
             onAddRecord={() => setActiveTab('records')}
           />
         );
+      case 'referrals':
+        return (
+          <div className="max-w-3xl">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold">Create Patient Referral</h2>
+              <p className="text-sm text-muted-foreground">
+                From {stationName} to a referral center
+              </p>
+            </div>
+            <ReferralForm
+              onSubmit={handleCreateReferral}
+              collectorId={collectorId}
+              collectorName={collectorName}
+              sourceStationId={stationId}
+              sourceStationName={stationName}
+              sourceStationType={stationType as 'household' | 'hip' | 'referral-center'}
+            />
+          </div>
+        );
+      case 'incoming':
+        return stationType === 'referral-center' ? (
+          <div>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold">Incoming Referrals</h2>
+              <p className="text-sm text-muted-foreground">
+                Patients referred to {stationName}
+              </p>
+            </div>
+            <IncomingReferrals
+              stationId={stationId}
+              stationName={stationName}
+              collectorId={collectorId}
+              collectorName={collectorName}
+            />
+          </div>
+        ) : null;
       case 'profile':
         return <CHPProfile />;
       case 'settings':

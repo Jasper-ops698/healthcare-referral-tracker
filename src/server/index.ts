@@ -104,6 +104,28 @@ app.use(`${API_PREFIX}/facilities`, facilityRoutes);
 // Referral routes (cross-facility handoff tracking)
 app.use(`${API_PREFIX}/referrals`, referralRoutes);
 
+// V2 Referral routes (pure referral-focused architecture)
+import referralV2Routes from './routes/referralsV2.js';
+app.use(`${API_PREFIX}/referrals-v2`, referralV2Routes);
+
+// Counter-referral routes
+import counterReferralRoutes from './routes/counterReferrals.js';
+app.use(`${API_PREFIX}/counter-referrals`, counterReferralRoutes);
+
+// Public CHP feedback form routes (shorter URL for email links)
+// These are aliases that forward to the counter-referral controller
+import { handleChpFormData, handleChpFormSubmit } from './controllers/counterReferralController.js';
+app.get(`${API_PREFIX}/chp-feedback/:token`, handleChpFormData);
+app.post(`${API_PREFIX}/chp-feedback/:token`, handleChpFormSubmit);
+
+// Station routes
+import stationRoutes from './routes/stations.js';
+import { seedStations } from './controllers/stationController.js';
+app.use(`${API_PREFIX}/stations`, stationRoutes);
+
+// Seed default stations on startup
+seedStations().catch(console.error);
+
 // Email routes
 app.use(`${API_PREFIX}/email`, emailRoutes);
 

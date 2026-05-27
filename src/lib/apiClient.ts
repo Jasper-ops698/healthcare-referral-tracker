@@ -391,6 +391,117 @@ export async function healthCheck(): Promise<{ ok: boolean; status?: string }> {
   }
 }
 
+// ─── REFERRAL V2 API ─——
+
+export async function createReferralV2(data: Record<string, unknown>): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/referrals-v2', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function getIncomingReferrals(stationId: string, status?: string): Promise<ApiResponse> {
+  const query = status ? `?status=${status}` : '';
+  const res = await apiFetch(`/api/v1/referrals-v2/incoming/${stationId}${query}`);
+  return res.json();
+}
+
+export async function getOutgoingReferrals(stationId: string, status?: string): Promise<ApiResponse> {
+  const query = status ? `?status=${status}` : '';
+  const res = await apiFetch(`/api/v1/referrals-v2/outgoing/${stationId}${query}`);
+  return res.json();
+}
+
+export async function acceptReferralV2(id: string): Promise<ApiResponse> {
+  const res = await apiFetch(`/api/v1/referrals-v2/${id}/accept`, { method: 'POST' });
+  return res.json();
+}
+
+export async function updateReferralV2Status(id: string, status: string, rejectedReason?: string): Promise<ApiResponse> {
+  const body: Record<string, unknown> = { status };
+  if (rejectedReason) body.rejectedReason = rejectedReason;
+  const res = await apiFetch(`/api/v1/referrals-v2/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+export async function getReferralV2Stats(stationId: string, period?: string): Promise<ApiResponse> {
+  const query = period ? `?period=${period}` : '';
+  const res = await apiFetch(`/api/v1/referrals-v2/stats/${stationId}${query}`);
+  return res.json();
+}
+
+export async function getAllReferralsV2(filters?: { status?: string; stationId?: string; period?: string }): Promise<ApiResponse> {
+  const params = new URLSearchParams();
+  if (filters?.status) params.append('status', filters.status);
+  if (filters?.stationId) params.append('stationId', filters.stationId);
+  if (filters?.period) params.append('period', filters.period);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiFetch(`/api/v1/referrals-v2/all${query}`);
+  return res.json();
+}
+
+// ─── COUNTER-REFERRAL API ─——
+
+export async function createCounterReferral(data: Record<string, unknown>): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/counter-referrals', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function getCounterReferralsByStation(stationId: string, status?: string): Promise<ApiResponse> {
+  const query = status ? `?status=${status}` : '';
+  const res = await apiFetch(`/api/v1/counter-referrals/station/${stationId}${query}`);
+  return res.json();
+}
+
+export async function getCounterReferralStats(period?: string): Promise<ApiResponse> {
+  const query = period ? `?period=${period}` : '';
+  const res = await apiFetch(`/api/v1/counter-referrals/stats${query}`);
+  return res.json();
+}
+
+export async function submitChpFeedback(token: string, data: { recoveryStatus: string; recoveryNotes?: string }): Promise<ApiResponse> {
+  const res = await fetch(`${BASE_URL}/api/v1/counter-referrals/chp-form/${token}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function getChpFormData(token: string): Promise<ApiResponse> {
+  const res = await fetch(`${BASE_URL}/api/v1/counter-referrals/chp-form/${token}`);
+  return res.json();
+}
+
+// ─── STATION API ─——
+
+export async function getStations(): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/stations');
+  return res.json();
+}
+
+export async function seedStations(): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/stations/seed', { method: 'POST' });
+  return res.json();
+}
+
+// ─── AI REPORT API ─——
+
+export async function generateAIReport(type: string, period?: string): Promise<ApiResponse> {
+  const query = new URLSearchParams();
+  query.append('type', type);
+  if (period) query.append('period', period);
+  const res = await apiFetch(`/api/v1/referrals-v2/ai-report?${query.toString()}`);
+  return res.json();
+}
+
 // ─── EXPORT ─——
 
 export { getToken, setToken, clearToken };

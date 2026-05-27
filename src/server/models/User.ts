@@ -28,7 +28,8 @@ export const PRIMARY_ADMIN_EMAIL = 'bkitib@gmail.com';
 
 // ─── TYPES ───
 
-export type UserRole = 'admin' | 'collector' | 'doctor' | 'nurse' | 'lab_tech';
+/** Simplified to two roles: admin manages the system, collectors work in the field */
+export type UserRole = 'admin' | 'collector';
 export type UserStatus = 'active' | 'inactive' | 'suspended';
 
 export interface IUser extends Document {
@@ -152,7 +153,7 @@ const UserSchema = new Schema<IUser, IUserModel>(
     role: {
       type: String,
       required: true,
-      enum: ['admin', 'collector', 'doctor', 'nurse', 'lab_tech'],
+      enum: ['admin', 'collector'],
       default: 'collector',
       index: true,
     },
@@ -162,6 +163,22 @@ const UserSchema = new Schema<IUser, IUserModel>(
       required: true,
       enum: ['active', 'inactive', 'suspended'],
       default: 'active',
+      index: true,
+    },
+
+    /** Station assignment — where this collector works (Household, HIP, or Referral Center) */
+    stationId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    stationName: {
+      type: String,
+      trim: true,
+    },
+    stationType: {
+      type: String,
+      enum: ['household', 'hip', 'referral-center'],
       index: true,
     },
 

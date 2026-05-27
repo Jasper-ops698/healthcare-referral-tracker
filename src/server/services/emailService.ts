@@ -610,3 +610,90 @@ export function buildNotificationEmail(
     text: `${notification.title}\nPriority: ${notification.priority}\n\n${notification.body}`,
   };
 }
+
+
+// ════════════════════════════════════════════════════════════════
+// CHP FOLLOW-UP EMAIL (for counter-referral discharge)
+// ════════════════════════════════════════════════════════════════
+
+export interface ChpFollowUpEmailData {
+  to: string;
+  chpName: string;
+  patientName: string;
+  patientId: string;
+  finalDiagnosis: string;
+  followUpInstructions: string;
+  nextVisitDate?: string;
+  warningSigns?: string;
+  recoveryStatus: string;
+  formUrl: string;
+}
+
+export function buildChpFollowUpEmail(data: ChpFollowUpEmailData): SendMailOptions {
+  const subject = `Follow-up Required — ${data.patientName} (${data.patientId})`;
+
+  const statusColor = data.recoveryStatus === 'fully-recovered' ? '#059669' :
+    data.recoveryStatus === 'partially-recovered' ? '#d97706' : '#dc2626';
+
+  const statusLabel = data.recoveryStatus === 'fully-recovered' ? 'Fully Recovered' :
+    data.recoveryStatus === 'partially-recovered' ? 'Partially Recovered' :
+    data.recoveryStatus === 'still-unwell' ? 'Still Unwell — Needs Monitoring' : data.recoveryStatus;
+
+  const content = `
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:20px;margin:20px 0;">
+      <h3 style="color:#9a3412;margin-top:0;">Dear ${data.chpName},</h3>
+      <p style="font-size:15px;">
+        <strong>${data.patientName}</strong> has been discharged from the referral center
+        and requires community follow-up. Please monitor their recovery and report any changes.
+      </p>
+
+      <div style="background:#fff;border-radius:6px;padding:15px;margin-top:15px;">
+        <h4 style="color:#374151;margin-top:0;">Patient Summary</h4>
+        <table style="width:100%;font-size:14px;">
+          <tr><td style="padding:6px 0;color:#6b7280;width:40%;"><strong>Patient ID:</strong></td><td style="padding:6px 0;">${data.patientId}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Name:</strong></td><td style="padding:6px 0;">${data.patientName}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Final Diagnosis:</strong></td><td style="padding:6px 0;">${data.finalDiagnosis}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Current Status:</strong></td>
+            <td style="padding:6px 0;color:${statusColor};font-weight:600;">${statusLabel}</td></tr>
+          ${data.nextVisitDate ? `<tr><td style="padding:6px 0;color:#6b7280;"><strong>Next Visit:</strong></td><td style="padding:6px 0;">${data.nextVisitDate}</td></tr>` : ''}
+        </table>
+      </div>
+
+      <div style="background:#fff;border-radius:6px;padding:15px;margin-top:15px;">
+        <h4 style="color:#374151;margin-top:0;">Follow-up Instructions</h4>
+        <p style="white-space:pre-wrap;font-size:14px;">${data.followUpInstructions}</p>
+        ${data.warningSigns ? `<p style="color:#dc2626;font-size:14px;margin-top:10px;"><strong>Warning Signs to Watch:</strong></p><p style="font-size:14px;">${data.warningSigns}</p>` : ''}
+      </div>
+
+      <div style="text-align:center;margin-top:25px;padding:20px;background:#f0f9ff;border-radius:8px;">
+        <p style="font-size:15px;margin-bottom:15px;"><strong>Report Recovery Update</strong></p>
+        <p style="font-size:14px;color:#4b5563;margin-bottom:15px;">
+          Click the button below to submit a recovery update for this patient.
+          You do not need to log in.
+        </p>
+        <a href="${data.formUrl}" style="display:inline-block;background:#0284c7;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
+          Submit Recovery Update
+        </a>
+        <p style="font-size:12px;color:#6b7280;margin-top:10px;">
+          Or copy this link: <code style="background:#e0f2fe;padding:4px 8px;border-radius:4px;">${data.formUrl}</code>
+        </p>
+      </div>
+
+      <p style="margin-top:20px;font-size:13px;color:#6b7280;">
+        If you have any questions or the patient's condition worsens, contact the referral center immediately.
+      </p>
+    </div>
+  `;
+
+  return {
+    to: data.to,
+    subject,
+    html: baseTemplate(subject, content),
+    text: `Dear ${data.chpName}, patient ${data.patientName} (${data.patientId}) discharged. Status: ${statusLabel}. Final Diagnosis: ${data.finalDiagnosis}. Follow-up: ${data.followUpInstructions}. Submit update: ${data.formUrl}`,
+  };
+}
+
+export function sendChpFollowUpEmail(data: ChpFollowUpEmailData): Promise<EmailResult> {
+  const options = buildChpFollowUpEmail(data);
+  return sendEmail(options, 'chp_follow_up', data.to, data.patientId, 'counter-referral');
+}

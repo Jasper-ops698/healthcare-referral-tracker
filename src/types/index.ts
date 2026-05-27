@@ -14,40 +14,24 @@
 // USER
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Must stay in sync with backend UserRole in src/server/models/User.ts */
-export type UserRole = 'admin' | 'collector' | 'doctor' | 'nurse' | 'lab_tech';
+/** Simplified: admin manages the system, collectors work in the field */
+export type UserRole = 'admin' | 'collector';
 export type ChpStatus = 'active' | 'inactive' | 'suspended';
 
 /**
- * Community Health Promoter — NOT a system user.
- * Managed by admin, assigned to patients by collectors.
+ * Community Health Promoter — NOT a system user. No login account.
+ * Collectors assign CHP name + contact to patient referrals.
+ * CHPs receive follow-up emails via the counter-referral workflow.
  */
 export interface Chp {
   id: string;
-  chpId: string;
   fullName: string;
+  phone?: string;
   email?: string;
-  nationalId: string;
-  phone: string;
-  alternatePhone?: string;
-  gender: 'male' | 'female' | 'other';
-  dateOfBirth?: string;
-  village: string;
-  subLocation: string;
-  ward: string;
-  county: string;
-  languages: string[];
-  yearsOfExperience: number;
-  chpRegNumber?: string;
-  supervisorName?: string;
-  supervisorPhone?: string;
+  village?: string;
   facilityId?: string;
-  facilityName?: string;
   status: ChpStatus;
-  avatar?: string;
   createdAt: Date;
-  /** Set when confirmed synced from backend */
-  lastSyncedAt?: Date;
 }
 
 /** Must stay in sync with backend UserStatus */
@@ -87,6 +71,11 @@ export interface User {
 
   /** Facility assignment — stored as facilityId (ObjectId) on backend */
   assignedFacility?: string;
+
+  /** Station assignment — where this collector works (Household, HIP, or Referral Center) */
+  stationId?: string;
+  stationName?: string;
+  stationType?: 'household' | 'hip' | 'referral-center';
 
   /** Whether the user must change password on next login */
   forcePasswordChange?: boolean;
@@ -203,46 +192,127 @@ export interface ReferralStage {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TOP-LEVEL REFERRAL (cross-facility handoff)
+// STATION — Where collectors work
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** A top-level referral tracking a patient's movement between facilities.
- *  Created when a collector refers a patient to another facility.
- *  Updated when the receiving collector accepts the patient.
+export interface Station {
+  id: string;
+  name: string;
+  type: 'household' | 'hip' | 'referral-center';
+  code: string;
+  county: string;
+  subCounty?: string;
+  ward?: string;
+  description?: string;
+  isActive: boolean;
+  parentStationId?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  operatingHours?: string;
+  services: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REFERRAL V2 — Pure referral tracking (core of the system)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Pure referral — the core of the system.
+ *  Created when a collector refers a patient from one station to another.
+ *  Updated through the entire journey: pending → accepted → in-treatment → counter-referral-created → completed
  */
-export interface Referral {
+export interface ReferralV2 {
   id: string;
   patientId: string;
   patientName: string;
+  patientAge: number;
+  patientGender: 'male' | 'female' | 'other';
   patientPhone: string;
-  patientIdNumber?: string;
 
-  fromFacilityId: string;
-  fromFacilityName: string;
-  fromCollectorId: string;
-  fromCollectorName: string;
+  sourceStationId: string;
+  sourceStationName: string;
+  sourceStationType: 'household' | 'hip' | 'referral-center';
+  sourceCollectorId: string;
+  sourceCollectorName: string;
 
-  toFacilityId: string;
-  toFacilityName: string;
-  toCollectorId?: string;
-  toCollectorName?: string;
+  destinationStationId: string;
+  destinationStationName: string;
+  destinationStationType: 'household' | 'hip' | 'referral-center';
 
-  chpId?: string;
   chpName?: string;
+  chpPhone?: string;
+  chpEmail?: string;
 
-  reason: string;
+  initialDiagnosis: string;
+  aiSuggestedCategory?: string;
+  aiConfidence?: number;
+  reasonForReferral: string;
+
+  modeOfTransport: 'ambulance' | 'matatu' | 'private-vehicle' | 'walking' | 'wheelchair' | 'stretcher' | 'other';
+  transportNotes?: string;
+
+  status: 'pending' | 'in-transit' | 'accepted' | 'in-treatment' | 'counter-referral-created' | 'completed' | 'rejected';
+  counterReferralId?: string;
+
   urgency: 'routine' | 'urgent' | 'emergency';
-  notes?: string;
-
-  status: 'pending' | 'accepted' | 'in-treatment' | 'completed' | 'rejected';
-
-  medicalRecordId?: string;
 
   createdAt: Date;
+  updatedAt: Date;
   acceptedAt?: Date;
   completedAt?: Date;
   rejectedAt?: Date;
   rejectedReason?: string;
+  notes?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COUNTER-REFERRAL — Created when patient arrives at destination
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type RecoveryStatus = 'fully-recovered' | 'partially-recovered' | 'still-unwell' | 'deceased' | 'lost-to-follow-up';
+
+export interface CounterReferral {
+  id: string;
+  referralId: string;
+  patientId: string;
+  patientName: string;
+
+  stationId: string;
+  stationName: string;
+  collectorId: string;
+  collectorName: string;
+
+  finalDiagnosis: string;
+  treatmentProvided: string;
+  medicationsGiven?: string;
+  proceduresDone?: string;
+
+  recoveryStatus: RecoveryStatus;
+  recoveryNotes?: string;
+
+  nextVisitDate?: Date;
+  followUpInstructions: string;
+  warningSigns?: string;
+
+  chpName: string;
+  chpPhone?: string;
+  chpEmail?: string;
+
+  chpEmailSent: boolean;
+  chpEmailSentAt?: Date;
+  chpEmailStatus?: 'pending' | 'sent' | 'failed' | 'bounced';
+  chpResponseToken?: string;
+  chpResponseReceived: boolean;
+  chpResponseDate?: Date;
+  chpResponseNotes?: string;
+  chpResponseRecoveryStatus?: RecoveryStatus;
+
+  status: 'active' | 'closed' | 'escalated';
+
+  createdAt: Date;
+  updatedAt: Date;
+  closedAt?: Date;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
