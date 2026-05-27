@@ -7,7 +7,7 @@ import type {
   Facility,
   Referral,
 } from '@/types';
-import { getLocalDatabase } from '@/lib/dexieDatabase';
+import db, { getLocalDatabase } from '@/lib/dexieDatabase';
 import type { DBPatient, DBUser, DBMedicalRecord } from '@/lib/dexieDatabase';
 import { API_BASE_URL } from '@/lib/config';
 import { v4 as uuidv4 } from 'uuid';

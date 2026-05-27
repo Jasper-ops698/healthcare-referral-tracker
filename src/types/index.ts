@@ -441,15 +441,16 @@ export interface Medication {
 
 export interface Referral {
   id: string;
-  /** @deprecated Use patientName instead. Kept for backward compat. */
-  fromFacility: string;
-  /** @deprecated Use patientName instead. Kept for backward compat. */
-  toFacility: string;
+  /** @deprecated Use fromFacilityId/fromFacilityName instead. */
+  fromFacility?: string;
+  /** @deprecated Use toFacilityId/toFacilityName instead. */
+  toFacility?: string;
   toDepartment?: string;
   reason: string;
   urgency: 'routine' | 'urgent' | 'emergency';
   status: ReferralStatus;
-  referredAt: Date;
+  /** @deprecated Use createdAt instead. */
+  referredAt?: Date;
   acceptedAt?: Date;
   completedAt?: Date;
   notes?: string;
@@ -469,6 +470,9 @@ export interface Referral {
   chpId?: string;
   chpName?: string;
   medicalRecordId?: string;
+  createdAt?: Date;
+  rejectedAt?: Date;
+  rejectedReason?: string;
 }
 
 export interface Attachment {
