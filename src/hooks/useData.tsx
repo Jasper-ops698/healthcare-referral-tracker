@@ -1308,3 +1308,5 @@ function mapReferralFromBackend(r: any): Referral {
     completedAt: r.completedAt ? new Date(r.completedAt) : undefined,
     rejectedAt: r.rejectedAt ? new Date(r.rejectedAt) : undefined,
     rejectedReason: r.rejectedReason,
+  };
+}
