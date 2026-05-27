@@ -12,12 +12,12 @@
 import { useState } from 'react';
 import {
   Ambulance, Bus, Car, Footprints, Armchair, StretchHorizontal,
-  AlertTriangle, Sparkles, Send, User, MapPin,
+  AlertTriangle, Sparkles, Send, User, MapPin, Home, Building2,
   ChevronRight, ChevronLeft, Check, Stethoscope, HeartPulse,
   Shield, UserCheck,
 } from 'lucide-react';
 import { useEdgeAI } from '@/hooks/useEdgeAI';
-import StationSelector from './StationSelector';
+
 import type { ReferralV2 } from '@/types';
 
 interface ReferralFormProps {
@@ -156,11 +156,49 @@ export default function ReferralForm({
           </SectionCard>
 
           <SectionCard icon={MapPin} title="Destination" accent="bg-sky-500">
-            <StationSelector
-              value={form.destinationStationId}
-              onChange={(id, name, type) => setForm(p => ({ ...p, destinationStationId: id, destinationStationName: name, destinationStationType: type }))}
-              label="Refer to *"
-            />
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">
+                  Destination Facility * <span className="normal-case font-normal text-sky-600">(type the facility name)</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.destinationStationName}
+                  onChange={e => setForm(p => ({ ...p, destinationStationName: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  placeholder="e.g., Kilifi General Hospital, Oasis Hospital, Mombasa County Hospital..."
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter the name of the facility the patient is being referred to
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">Station Type *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { value: 'household', label: 'Household', icon: Home },
+                    { value: 'hip', label: 'HIP', icon: MapPin },
+                    { value: 'referral-center', label: 'Referral Center', icon: Building2 },
+                  ] as const).map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setForm(p => ({ ...p, destinationStationType: value, destinationStationId: `${value}-${p.destinationStationName?.toLowerCase().replace(/\s+/g, '-') || 'unknown'}` }))}
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-xs font-semibold transition-all ${
+                        form.destinationStationType === value
+                          ? 'border-primary bg-primary/5 text-primary shadow-sm'
+                          : 'border-border hover:bg-muted'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </SectionCard>
         </div>
       )}

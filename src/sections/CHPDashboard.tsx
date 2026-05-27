@@ -98,7 +98,7 @@ export default function CollectorDashboard() {
     { id: 'visits', label: 'Daily Visits', icon: Users },
     { id: 'counter', label: 'Counter-Referral', icon: ClipboardList },
     { id: 'referrals', label: 'Send Referral', icon: Send },
-    { id: 'profile', label: t('sidebar.profile'), icon: UserCircle },
+    { id: 'profile', label: 'My Profile', icon: UserCircle },
     { id: 'settings', label: t('sidebar.settings'), icon: SettingsIcon },
   ], [t, stationType]);
 
