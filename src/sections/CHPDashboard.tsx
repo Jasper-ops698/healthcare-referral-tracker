@@ -110,15 +110,14 @@ export default function CollectorDashboard() {
 
   const collectorStats = user ? dashboard.getCollectorStats(user.id) : null;
 
-  const handleCreateReferral = async (referral: Record<string, unknown>) => {
-    const result = await createReferralV2(referral);
+  const handleCreateReferral = async (referral: Partial<import('@/types').ReferralV2>) => {
+    const result = await createReferralV2(referral as Record<string, unknown>);
     if (result.success) {
       toast.success(`Referral created for ${referral.patientName}`);
       setActiveTab('dashboard');
     } else {
       toast.error(result.error?.toString() || 'Failed to create referral');
     }
-    return result;
   };
 
   const renderContent = () => {

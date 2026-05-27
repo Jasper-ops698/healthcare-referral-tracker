@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 export default function RandomJoke() {
   const [joke, setJoke] = useState<{ setup: string; punchline: string } | null>(null);

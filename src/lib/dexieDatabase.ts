@@ -7,7 +7,7 @@
  */
 
 import Dexie, { type EntityTable } from 'dexie';
-import type { Patient, MedicalRecord, User, Chp, Facility, Referral } from '@/types';
+import type { Patient, MedicalRecord, User, Chp, Facility, ReferralV2 } from '@/types';
 
 // ─── Outbox Status Lifecycle ───
 
@@ -75,9 +75,14 @@ class HealthTrackDB extends Dexie {
   users!: EntityTable<DBUser, 'id'>;
   medicalRecords!: EntityTable<DBMedicalRecord, 'id'>;
   facilities!: EntityTable<Facility, 'id'>;
-  referrals!: EntityTable<DBReferral, 'id'>;
+  referrals!: EntityTable<ReferralV2, 'id'>;
   outbox!: EntityTable<OutboxEntry, 'changeId'>;
   syncMeta!: EntityTable<DBSyncCheckpoint, 'key'>;
+
+  /** Generic table accessor for dynamic lookups */
+  table(name: 'patients' | 'chps' | 'users' | 'medicalRecords' | 'facilities' | 'referrals' | 'outbox' | 'syncMeta'): any {
+    return super.table(name);
+  }
 
   constructor() {
     super('HealthTrackDB');

@@ -25,11 +25,29 @@ export type ChpStatus = 'active' | 'inactive' | 'suspended';
  */
 export interface Chp {
   id: string;
+  /** Auto-generated: CHP-0001, CHP-0002, etc. */
+  chpId?: string;
   fullName: string;
   phone?: string;
   email?: string;
+  /** @deprecated Use Station model instead. Kept for backward compat. */
+  nationalId?: string;
+  /** @deprecated Use Station model instead. Kept for backward compat. */
+  county?: string;
+  /** @deprecated Use Station model instead. Kept for backward compat. */
+  subLocation?: string;
+  /** @deprecated Use Station model instead. Kept for backward compat. */
+  ward?: string;
   village?: string;
   facilityId?: string;
+  /** @deprecated Use Station model instead. Kept for backward compat. */
+  facilityName?: string;
+  /** @deprecated Kept for backward compat. */
+  supervisorName?: string;
+  /** @deprecated Kept for backward compat. */
+  supervisorPhone?: string;
+  /** @deprecated Kept for backward compat. */
+  languages?: string[];
   status: ChpStatus;
   createdAt: Date;
 }
@@ -421,7 +439,9 @@ export interface Medication {
 
 export interface Referral {
   id: string;
+  /** @deprecated Use patientName instead. Kept for backward compat. */
   fromFacility: string;
+  /** @deprecated Use patientName instead. Kept for backward compat. */
   toFacility: string;
   toDepartment?: string;
   reason: string;
@@ -431,6 +451,21 @@ export interface Referral {
   acceptedAt?: Date;
   completedAt?: Date;
   notes?: string;
+  // Fields used by mapReferralFromBackend — kept for backward compat
+  patientId?: string;
+  patientName?: string;
+  patientPhone?: string;
+  patientIdNumber?: string;
+  fromFacilityId?: string;
+  fromFacilityName?: string;
+  fromCollectorId?: string;
+  fromCollectorName?: string;
+  toFacilityId?: string;
+  toFacilityName?: string;
+  toCollectorId?: string;
+  toCollectorName?: string;
+  chpId?: string;
+  chpName?: string;
 }
 
 export interface Attachment {
