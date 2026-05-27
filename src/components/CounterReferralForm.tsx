@@ -317,12 +317,12 @@ export default function CounterReferralForm({
               value={form.chpName}
               onChange={e => setForm(p => ({ ...p, chpName: e.target.value }))}
               className="w-full px-3 py-2 rounded-lg border border-border text-sm"
-              placeholder="CHP full name"
+              placeholder="Full name of CHP who will monitor this patient"
             />
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-              <Phone className="w-3 h-3" /> Phone
+              <Phone className="w-3 h-3" /> CHP Phone
             </label>
             <input
               type="tel"
@@ -334,14 +334,15 @@ export default function CounterReferralForm({
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-              <Mail className="w-3 h-3" /> Email (for follow-up form)
+              <Mail className="w-3 h-3" />
+              CHP Email <span className="text-amber-600">*required to send follow-up form</span>
             </label>
             <input
               type="email"
               value={form.chpEmail}
               onChange={e => setForm(p => ({ ...p, chpEmail: e.target.value }))}
               className="w-full px-3 py-2 rounded-lg border border-border text-sm"
-              placeholder="chp@example.com"
+              placeholder="chp@example.com — recovery update form link will be emailed here"
             />
           </div>
         </div>

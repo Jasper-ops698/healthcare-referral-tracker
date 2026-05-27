@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { Ambulance, Bus, Car, Footprints, Armchair, StretchHorizontal, AlertTriangle, Sparkles, Send, User, Phone, MapPin } from 'lucide-react';
+import { Ambulance, Bus, Car, Footprints, Armchair, StretchHorizontal, AlertTriangle, Sparkles, Send, User, Phone, Mail, MapPin } from 'lucide-react';
 import { useEdgeAI } from '@/hooks/useEdgeAI';
 import StationSelector from './StationSelector';
 import type { ReferralV2 } from '@/types';
@@ -302,9 +302,21 @@ export default function ReferralForm({
           Assign a CHP to accompany the patient. CHPs do not have system accounts — they receive follow-up emails only.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <input type="text" value={form.chpName} onChange={e => setForm(p => ({ ...p, chpName: e.target.value }))} className="px-3 py-2 rounded-lg border border-border text-sm" placeholder="CHP Name" />
-          <input type="tel" value={form.chpPhone} onChange={e => setForm(p => ({ ...p, chpPhone: e.target.value }))} className="px-3 py-2 rounded-lg border border-border text-sm" placeholder="CHP Phone" />
-          <input type="email" value={form.chpEmail} onChange={e => setForm(p => ({ ...p, chpEmail: e.target.value }))} className="px-3 py-2 rounded-lg border border-border text-sm" placeholder="CHP Email (for follow-up)" />
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">CHP Name</label>
+            <input type="text" value={form.chpName} onChange={e => setForm(p => ({ ...p, chpName: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-border text-sm" placeholder="e.g., Janet Mwagandi" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">CHP Phone</label>
+            <input type="tel" value={form.chpPhone} onChange={e => setForm(p => ({ ...p, chpPhone: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-border text-sm" placeholder="2547XXXXXXXX" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">
+              <Mail className="w-3 h-3 inline mr-1" />
+              CHP Email <span className="text-amber-600 font-medium">*required for follow-up</span>
+            </label>
+            <input type="email" value={form.chpEmail} onChange={e => setForm(p => ({ ...p, chpEmail: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-border text-sm" placeholder="chp@example.com — follow-up form will be sent here" />
+          </div>
         </div>
       </div>
 
