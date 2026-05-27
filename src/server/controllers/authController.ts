@@ -160,6 +160,21 @@ export async function handleLogin(req: Request, res: Response): Promise<void> {
         region: user.region,
         isPrimaryAdmin: user.isPrimaryAdmin,
         assignedFacility: user.facilityId?.toString(),
+        // Station assignment
+        stationId: user.stationId?.toString(),
+        stationName: user.stationName,
+        stationType: user.stationType,
+        // Profile fields
+        dateOfBirth: user.dateOfBirth,
+        gender: user.gender,
+        nationalId: user.nationalId,
+        emergencyContact: user.emergencyContact,
+        languages: user.languages,
+        homeCounty: user.homeCounty,
+        bloodGroup: user.bloodGroup,
+        physicalAddress: user.physicalAddress,
+        nextOfKin: user.nextOfKin,
+        bio: user.bio,
         preferences: user.preferences,
       },
     });
