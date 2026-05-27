@@ -9,16 +9,15 @@ import NotificationBell from '@/components/NotificationBell';
 import ProfileModal from '@/components/ProfileModal';
 import CollectorOverview from '@/components/CollectorOverview';
 import DailyVisitLog from '@/components/DailyVisitLog';
-import MedicalRecordsEntry from '@/components/MedicalRecordsEntry';
+import CounterReferralView from '@/components/CounterReferralView';
 import CHPProfile from '@/components/CHPProfile';
 import Settings from '@/components/Settings';
 import ReferralForm from '@/components/ReferralForm';
-import IncomingReferrals from '@/components/IncomingReferrals';
 import { createReferralV2 } from '@/lib/apiClient';
 import { toast } from 'sonner';
 import {
   LayoutDashboard,
-  FileText,
+  ClipboardList,
   Users,
   UserCircle,
   Settings as SettingsIcon,
@@ -27,10 +26,9 @@ import {
   CheckCircle2,
   Loader2,
   Send,
-  Inbox,
 } from 'lucide-react';
 
-type CollectorTab = 'dashboard' | 'visits' | 'records' | 'referrals' | 'incoming' | 'profile' | 'settings';
+type CollectorTab = 'dashboard' | 'visits' | 'counter' | 'referrals' | 'profile' | 'settings';
 
 /* ═══════════ Sync Status Chip ═══════════ */
 function SyncStatusChip({ status, pendingCount, isOnline, onSync }: {
@@ -80,7 +78,7 @@ export default function CollectorDashboard() {
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const { user, logout } = useAuth();
   const { status, pendingCount, isOnline, triggerSync, needsReLogin } = useSync();
-  const { dashboard, patients } = useHealthcareData();
+  const { dashboard } = useHealthcareData();
   const { updateUser } = useUsers();
   const { t } = useI18n();
 
@@ -98,9 +96,8 @@ export default function CollectorDashboard() {
   const menuItems = useMemo(() => [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: LayoutDashboard },
     { id: 'visits', label: 'Daily Visits', icon: Users },
-    { id: 'records', label: t('sidebar.records'), icon: FileText },
+    { id: 'counter', label: 'Counter-Referral', icon: ClipboardList },
     { id: 'referrals', label: 'Send Referral', icon: Send },
-    ...(stationType === 'referral-center' ? [{ id: 'incoming' as CollectorTab, label: 'Incoming', icon: Inbox }] : []),
     { id: 'profile', label: t('sidebar.profile'), icon: UserCircle },
     { id: 'settings', label: t('sidebar.settings'), icon: SettingsIcon },
   ], [t, stationType]);
@@ -124,13 +121,20 @@ export default function CollectorDashboard() {
           <CollectorOverview
             stats={collectorStats}
             onRegisterPatient={() => setActiveTab('visits')}
-            onAddRecord={() => setActiveTab('records')}
+            onAddRecord={() => setActiveTab('counter')}
           />
         ) : null;
       case 'visits':
         return <DailyVisitLog />;
-      case 'records':
-        return <MedicalRecordsEntry patients={patients.patients} />;
+      case 'counter':
+        return (
+          <CounterReferralView
+            stationId={stationId}
+            stationName={stationName}
+            collectorId={collectorId}
+            collectorName={collectorName}
+          />
+        );
       case 'referrals':
         return (
           <div className="max-w-3xl">
@@ -150,23 +154,6 @@ export default function CollectorDashboard() {
             />
           </div>
         );
-      case 'incoming':
-        return stationType === 'referral-center' ? (
-          <div>
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold">Incoming Referrals</h2>
-              <p className="text-sm text-muted-foreground">
-                Patients referred to {stationName}
-              </p>
-            </div>
-            <IncomingReferrals
-              stationId={stationId}
-              stationName={stationName}
-              collectorId={collectorId}
-              collectorName={collectorName}
-            />
-          </div>
-        ) : null;
       case 'profile':
         return <CHPProfile />;
       case 'settings':
@@ -176,7 +163,7 @@ export default function CollectorDashboard() {
           <CollectorOverview
             stats={collectorStats}
             onRegisterPatient={() => setActiveTab('visits')}
-            onAddRecord={() => setActiveTab('records')}
+            onAddRecord={() => setActiveTab('counter')}
           />
         ) : null;
     }
