@@ -1,19 +1,14 @@
 /**
- * CollectorProfile v2 — Editable personal info, read-only work info
- *
- * The collector can edit their own personal details.
- * Work information (station, role, status) is set by admin and displayed read-only.
+ * CollectorProfile v3 — Editable personal info, read-only work info
  */
 
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  Mail, Phone, Building2, Calendar, Shield, User, MapPin,
-  FileText, Globe, HeartPulse, Contact, Save, Pencil,
-  X, Check, Loader2, Info,
+  Shield, User, MapPin, FileText, Globe, HeartPulse,
+  Contact, Save, Pencil, X, Loader2, Info,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { toast } from 'sonner';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const GENDERS = ['male', 'female', 'other', 'prefer-not-to-say'] as const;
@@ -24,36 +19,39 @@ export default function CollectorProfile() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Editable form state
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     email: user?.email || '',
     phone: user?.phone || '',
     dateOfBirth: user?.dateOfBirth ? format(new Date(user.dateOfBirth), 'yyyy-MM-dd') : '',
-    gender: user?.gender || 'prefer-not-to-say',
+    gender: (user?.gender || 'prefer-not-to-say') as 'male' | 'female' | 'other' | 'prefer-not-to-say',
     nationalId: user?.nationalId || '',
     homeCounty: user?.homeCounty || '',
     bloodGroup: user?.bloodGroup || '',
     physicalAddress: user?.physicalAddress || '',
     bio: user?.bio || '',
-    languages: user?.languages || [],
+    languages: user?.languages || [] as string[],
     emergencyName: user?.emergencyContact?.name || '',
     emergencyRelationship: user?.emergencyContact?.relationship || '',
     emergencyPhone: user?.emergencyContact?.phone || '',
     nokName: user?.nextOfKin?.name || '',
     nokRelationship: user?.nextOfKin?.relationship || '',
     nokPhone: user?.nextOfKin?.phone || '',
-  });
+  }));
 
   const fullName = `${form.firstName} ${form.lastName}`.trim() || 'Unknown';
 
+  const updateField = (field: string, value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
+
   const toggleLang = (lang: string) => {
-    setForm(p => ({
-      ...p,
-      languages: p.languages.includes(lang)
-        ? p.languages.filter(l => l !== lang)
-        : [...p.languages, lang],
+    setForm(prev => ({
+      ...prev,
+      languages: prev.languages.includes(lang)
+        ? prev.languages.filter(l => l !== lang)
+        : [...prev.languages, lang],
     }));
   };
 
@@ -61,6 +59,9 @@ export default function CollectorProfile() {
     setSaving(true);
     try {
       const jwtToken = localStorage.getItem('healthtrack_jwt_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (jwtToken) headers.Authorization = `Bearer ${jwtToken}`;
+
       const payload = {
         firstName: form.firstName,
         lastName: form.lastName,
@@ -88,43 +89,41 @@ export default function CollectorProfile() {
 
       const res = await fetch('/api/v1/users/me', {
         method: 'PATCH',
-        headers: {
-          ...(jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {}),
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        toast.success('Profile updated successfully');
+        // eslint-disable-next-line no-console
+        console.log('Profile updated successfully');
         setEditing(false);
       } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to update profile');
+        const err = await res.json().catch(() => ({ error: 'Failed to update' }));
+        // eslint-disable-next-line no-console
+        console.error('Update failed:', err.error);
       }
-    } catch {
-      toast.error('Network error. Changes saved locally.');
-      setEditing(false);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Network error saving profile:', e);
     } finally {
       setSaving(false);
     }
   };
 
   const handleCancel = () => {
-    // Reset to original user data
     setForm({
       firstName: user?.firstName || '',
       lastName: user?.lastName || '',
       email: user?.email || '',
       phone: user?.phone || '',
       dateOfBirth: user?.dateOfBirth ? format(new Date(user.dateOfBirth), 'yyyy-MM-dd') : '',
-      gender: user?.gender || 'prefer-not-to-say',
+      gender: (user?.gender || 'prefer-not-to-say') as 'male' | 'female' | 'other' | 'prefer-not-to-say',
       nationalId: user?.nationalId || '',
       homeCounty: user?.homeCounty || '',
       bloodGroup: user?.bloodGroup || '',
       physicalAddress: user?.physicalAddress || '',
       bio: user?.bio || '',
-      languages: user?.languages || [],
+      languages: user?.languages || [] as string[],
       emergencyName: user?.emergencyContact?.name || '',
       emergencyRelationship: user?.emergencyContact?.relationship || '',
       emergencyPhone: user?.emergencyContact?.phone || '',
@@ -135,10 +134,19 @@ export default function CollectorProfile() {
     setEditing(false);
   };
 
+  if (!user) {
+    return (
+      <div className="max-w-3xl mx-auto py-12 text-center text-muted-foreground">
+        <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
+        <p className="text-sm">Please log in to view your profile</p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">My Profile</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -176,29 +184,25 @@ export default function CollectorProfile() {
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="relative h-28 bg-teal-600">
           <div className="absolute -bottom-10 left-6">
-            <div className="relative">
+            <div className="w-20 h-20 rounded-full border-4 border-background bg-background overflow-hidden">
               <img
-                src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.firstName}`}
+                src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.firstName}`}
                 alt={fullName}
-                className="w-20 h-20 rounded-full border-4 border-background bg-background"
+                className="w-full h-full"
+                onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><rect width=%2240%22 height=%2240%22 fill=%22%23ccc%22/><text x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%2218%22>' + (user.firstName?.[0] || '?') + '</text></svg>'; }}
               />
-              {editing && (
-                <button className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              )}
             </div>
           </div>
         </div>
         <div className="pt-12 pb-4 px-6">
           <h2 className="text-lg font-bold">{fullName}</h2>
-          <p className="text-sm text-muted-foreground">{user?.role === 'admin' ? 'Administrator' : 'Collector'}</p>
-          <div className="flex items-center gap-2 mt-2">
+          <p className="text-sm text-muted-foreground">{user.role === 'admin' ? 'Administrator' : 'Collector'}</p>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-              <Shield className="w-3 h-3" /> {user?.status === 'active' ? 'Active' : 'Inactive'}
+              <Shield className="w-3 h-3" /> {user.status === 'active' ? 'Active' : 'Inactive'}
             </span>
             <span className="text-xs text-muted-foreground">
-              Member since {user?.createdAt ? format(new Date(user.createdAt), 'MMMM yyyy') : 'N/A'}
+              Member since {user.createdAt ? format(new Date(user.createdAt), 'MMMM yyyy') : 'N/A'}
             </span>
           </div>
         </div>
@@ -216,16 +220,16 @@ export default function CollectorProfile() {
           </span>
         </div>
         <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          <ReadOnlyField label="Role" value={user?.role === 'admin' ? 'Administrator' : 'Collector'} icon={<Shield className="w-4 h-4 text-muted-foreground" />} />
-          <ReadOnlyField label="Assigned Facility" value={user?.assignedFacility || 'Not assigned'} icon={<Building2 className="w-4 h-4 text-muted-foreground" />} />
-          <ReadOnlyField label="Station" value={user?.stationName || 'Not assigned'} icon={<MapPin className="w-4 h-4 text-muted-foreground" />} />
-          <ReadOnlyField label="Station Type" value={user?.stationType || '—'} icon={<Building2 className="w-4 h-4 text-muted-foreground" />} />
-          <ReadOnlyField label="Region" value={user?.region || '—'} icon={<Globe className="w-4 h-4 text-muted-foreground" />} />
-          <ReadOnlyField label="Last Login" value={user?.lastLogin ? format(new Date(user.lastLogin), 'MMM d, yyyy h:mm a') : 'Never'} icon={<Calendar className="w-4 h-4 text-muted-foreground" />} />
+          <ReadOnly label="Role" value={user.role === 'admin' ? 'Administrator' : 'Collector'} />
+          <ReadOnly label="Assigned Facility" value={user.assignedFacility || 'Not assigned'} />
+          <ReadOnly label="Station" value={user.stationName || 'Not assigned'} />
+          <ReadOnly label="Station Type" value={user.stationType || '—'} />
+          <ReadOnly label="Region" value={user.region || '—'} />
+          <ReadOnly label="Last Login" value={user.lastLogin ? format(new Date(user.lastLogin), 'MMM d, yyyy h:mm a') : 'Never'} />
         </div>
       </div>
 
-      {/* ── PERSONAL INFORMATION (Editable) ── */}
+      {/* ── PERSONAL INFORMATION ── */}
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -235,17 +239,19 @@ export default function CollectorProfile() {
           {editing && <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">Editable</span>}
         </div>
         <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <EditableField label="First Name" value={form.firstName} editing={editing} onChange={v => setForm(p => ({ ...p, firstName: v }))} required />
-          <EditableField label="Last Name" value={form.lastName} editing={editing} onChange={v => setForm(p => ({ ...p, lastName: v }))} required />
-          <EditableField label="Email" type="email" value={form.email} editing={editing} onChange={v => setForm(p => ({ ...p, email: v }))} required icon={<Mail className="w-4 h-4 text-muted-foreground" />} />
-          <EditableField label="Phone" type="tel" value={form.phone} editing={editing} onChange={v => setForm(p => ({ ...p, phone: v }))} required icon={<Phone className="w-4 h-4 text-muted-foreground" />} />
-          <EditableField label="Date of Birth" type="date" value={form.dateOfBirth} editing={editing} onChange={v => setForm(p => ({ ...p, dateOfBirth: v }))} icon={<Calendar className="w-4 h-4 text-muted-foreground" />} />
+          <Field label="First Name" value={form.firstName} editing={editing} onChange={v => updateField('firstName', v)} required />
+          <Field label="Last Name" value={form.lastName} editing={editing} onChange={v => updateField('lastName', v)} required />
+          <Field label="Email" type="email" value={form.email} editing={editing} onChange={v => updateField('email', v)} required />
+          <Field label="Phone" type="tel" value={form.phone} editing={editing} onChange={v => updateField('phone', v)} required />
+          <Field label="Date of Birth" type="date" value={form.dateOfBirth} editing={editing} onChange={v => updateField('dateOfBirth', v)} />
+
+          {/* Gender */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">Gender</label>
             {editing ? (
               <div className="flex gap-2 flex-wrap">
                 {GENDERS.map(g => (
-                  <button key={g} onClick={() => setForm(p => ({ ...p, gender: g }))}
+                  <button key={g} type="button" onClick={() => updateField('gender', g)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize border transition-all ${
                       form.gender === g ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'
                     }`}>
@@ -257,21 +263,24 @@ export default function CollectorProfile() {
               <p className="text-sm">{form.gender ? form.gender.replace(/-/g, ' ') : 'Not set'}</p>
             )}
           </div>
-          <EditableField label="National ID" value={form.nationalId} editing={editing} onChange={v => setForm(p => ({ ...p, nationalId: v }))} icon={<FileText className="w-4 h-4 text-muted-foreground" />} />
-          <EditableField label="Home County" value={form.homeCounty} editing={editing} onChange={v => setForm(p => ({ ...p, homeCounty: v }))} icon={<MapPin className="w-4 h-4 text-muted-foreground" />} />
-          <div>
+
+          <Field label="National ID" value={form.nationalId} editing={editing} onChange={v => updateField('nationalId', v)} />
+          <Field label="Home County" value={form.homeCounty} editing={editing} onChange={v => updateField('homeCounty', v)} />
+
+          {/* Blood Group */}
+          <div className="sm:col-span-2">
             <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">Blood Group</label>
             {editing ? (
               <div className="flex gap-2 flex-wrap">
                 {BLOOD_GROUPS.map(bg => (
-                  <button key={bg} onClick={() => setForm(p => ({ ...p, bloodGroup: bg }))}
+                  <button key={bg} type="button" onClick={() => updateField('bloodGroup', bg)}
                     className={`w-10 h-10 rounded-lg text-xs font-bold border transition-all ${
                       form.bloodGroup === bg ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'
                     }`}>
                     {bg}
                   </button>
                 ))}
-                <button onClick={() => setForm(p => ({ ...p, bloodGroup: '' }))}
+                <button type="button" onClick={() => updateField('bloodGroup', '')}
                   className={`h-10 px-3 rounded-lg text-xs font-medium border transition-all ${
                     !form.bloodGroup ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'
                   }`}>Unknown</button>
@@ -293,14 +302,13 @@ export default function CollectorProfile() {
           {editing ? (
             <div className="flex flex-wrap gap-2">
               {LANGUAGES_LIST.map(lang => (
-                <button key={lang} onClick={() => toggleLang(lang)}
+                <button key={lang} type="button" onClick={() => toggleLang(lang)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                     form.languages.includes(lang)
                       ? 'border-sky-300 bg-sky-50 text-sky-700'
                       : 'border-border hover:bg-muted'
                   }`}>
-                  {form.languages.includes(lang) && <Check className="w-3 h-3 inline mr-1" />}
-                  {lang}
+                  {form.languages.includes(lang) ? '✓ ' : ''}{lang}
                 </button>
               ))}
             </div>
@@ -325,7 +333,7 @@ export default function CollectorProfile() {
             <textarea
               rows={3}
               value={form.physicalAddress}
-              onChange={e => setForm(p => ({ ...p, physicalAddress: e.target.value }))}
+              onChange={e => updateField('physicalAddress', e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
               placeholder="Enter your physical address..."
             />
@@ -346,7 +354,7 @@ export default function CollectorProfile() {
             <textarea
               rows={4}
               value={form.bio}
-              onChange={e => setForm(p => ({ ...p, bio: e.target.value }))}
+              onChange={e => updateField('bio', e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
               placeholder="Tell us about yourself..."
             />
@@ -363,9 +371,9 @@ export default function CollectorProfile() {
           <h3 className="text-sm font-bold uppercase tracking-wide">Emergency Contact</h3>
         </div>
         <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <EditableField label="Full Name" value={form.emergencyName} editing={editing} onChange={v => setForm(p => ({ ...p, emergencyName: v }))} icon={<User className="w-4 h-4 text-muted-foreground" />} />
-          <EditableField label="Relationship" value={form.emergencyRelationship} editing={editing} onChange={v => setForm(p => ({ ...p, emergencyRelationship: v }))} />
-          <EditableField label="Phone" type="tel" value={form.emergencyPhone} editing={editing} onChange={v => setForm(p => ({ ...p, emergencyPhone: v }))} icon={<Phone className="w-4 h-4 text-muted-foreground" />} />
+          <Field label="Full Name" value={form.emergencyName} editing={editing} onChange={v => updateField('emergencyName', v)} />
+          <Field label="Relationship" value={form.emergencyRelationship} editing={editing} onChange={v => updateField('emergencyRelationship', v)} />
+          <Field label="Phone" type="tel" value={form.emergencyPhone} editing={editing} onChange={v => updateField('emergencyPhone', v)} />
         </div>
       </div>
 
@@ -376,13 +384,13 @@ export default function CollectorProfile() {
           <h3 className="text-sm font-bold uppercase tracking-wide">Next of Kin</h3>
         </div>
         <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <EditableField label="Full Name" value={form.nokName} editing={editing} onChange={v => setForm(p => ({ ...p, nokName: v }))} icon={<User className="w-4 h-4 text-muted-foreground" />} />
-          <EditableField label="Relationship" value={form.nokRelationship} editing={editing} onChange={v => setForm(p => ({ ...p, nokRelationship: v }))} />
-          <EditableField label="Phone" type="tel" value={form.nokPhone} editing={editing} onChange={v => setForm(p => ({ ...p, nokPhone: v }))} icon={<Phone className="w-4 h-4 text-muted-foreground" />} />
+          <Field label="Full Name" value={form.nokName} editing={editing} onChange={v => updateField('nokName', v)} />
+          <Field label="Relationship" value={form.nokRelationship} editing={editing} onChange={v => updateField('nokRelationship', v)} />
+          <Field label="Phone" type="tel" value={form.nokPhone} editing={editing} onChange={v => updateField('nokPhone', v)} />
         </div>
       </div>
 
-      {/* Save/Cancel at bottom when editing */}
+      {/* Sticky save/cancel when editing */}
       {editing && (
         <div className="flex items-center justify-end gap-3 sticky bottom-4 bg-background/80 backdrop-blur-sm p-4 rounded-xl border border-border">
           <button onClick={handleCancel}
@@ -393,7 +401,7 @@ export default function CollectorProfile() {
             className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50">
             {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
               : <><Save className="w-4 h-4" /> Save Changes</>}
-          </button>
+            </button>
         </div>
       )}
     </div>
@@ -402,21 +410,18 @@ export default function CollectorProfile() {
 
 /* ─── Sub-components ─── */
 
-function ReadOnlyField({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function ReadOnly({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <label className="text-xs font-semibold text-muted-foreground mb-1 block uppercase tracking-wide">{label}</label>
-      <div className="flex items-center gap-2 text-sm">
-        {icon}
-        <span>{value}</span>
-      </div>
+      <p className="text-sm">{value}</p>
     </div>
   );
 }
 
-function EditableField({ label, value, editing, onChange, type = 'text', required, icon }: {
+function Field({ label, value, editing, onChange, type = 'text', required }: {
   label: string; value: string; editing: boolean; onChange: (v: string) => void;
-  type?: string; required?: boolean; icon?: React.ReactNode;
+  type?: string; required?: boolean;
 }) {
   return (
     <div>
@@ -424,21 +429,15 @@ function EditableField({ label, value, editing, onChange, type = 'text', require
         {label} {required && <span className="text-destructive">*</span>}
       </label>
       {editing ? (
-        <div className="relative">
-          {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2">{icon}</div>}
-          <input
-            type={type}
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            required={required}
-            className={`w-full ${icon ? 'pl-9' : 'px-3'} py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all`}
-          />
-        </div>
+        <input
+          type={type}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          required={required}
+          className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+        />
       ) : (
-        <div className="flex items-center gap-2 text-sm min-h-[28px]">
-          {icon}
-          <span>{value || <span className="text-muted-foreground">Not provided</span>}</span>
-        </div>
+        <p className="text-sm min-h-[28px]">{value || <span className="text-muted-foreground">Not provided</span>}</p>
       )}
     </div>
   );
