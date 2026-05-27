@@ -492,6 +492,34 @@ export async function seedStations(): Promise<ApiResponse> {
   return res.json();
 }
 
+// ─── DAILY VISIT API ─——
+
+export async function upsertDailyVisit(data: Record<string, unknown>): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/daily-visits', { method: 'POST', body: JSON.stringify(data) });
+  return res.json();
+}
+
+export async function getDailyVisits(stationId?: string): Promise<ApiResponse> {
+  const query = stationId ? `?stationId=${stationId}` : '';
+  const res = await apiFetch(`/api/v1/daily-visits${query}`);
+  return res.json();
+}
+
+export async function getDailyVisitStats(stationId: string): Promise<ApiResponse> {
+  const res = await apiFetch(`/api/v1/daily-visits/stats/${stationId}`);
+  return res.json();
+}
+
+export async function deleteDailyVisit(id: string): Promise<ApiResponse> {
+  const res = await apiFetch(`/api/v1/daily-visits/${id}`, { method: 'DELETE' });
+  return res.json();
+}
+
+export async function updateProfile(data: Record<string, unknown>): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/users/me', { method: 'PATCH', body: JSON.stringify(data) });
+  return res.json();
+}
+
 // ─── AI REPORT API ─——
 
 export async function generateAIReport(type: string, period?: string): Promise<ApiResponse> {

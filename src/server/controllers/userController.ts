@@ -246,6 +246,76 @@ export async function handleResendWelcome(req: Request, res: Response): Promise<
 
 // ─── LIST USERS (ADMIN ONLY) ───
 
+// ─── UPDATE OWN PROFILE (COLLECTOR + ADMIN) ───
+
+export async function handleUpdateProfile(req: Request, res: Response): Promise<void> {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    if (!authReq.user) {
+      res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+      return;
+    }
+
+    const userId = authReq.user._id.toString();
+    const body = req.body;
+
+    // Define editable fields — work fields are excluded
+    const allowedUpdates: Record<string, unknown> = {};
+
+    if (body.firstName !== undefined) allowedUpdates.firstName = body.firstName.trim();
+    if (body.lastName !== undefined) allowedUpdates.lastName = body.lastName.trim();
+    if (body.email !== undefined) allowedUpdates.email = body.email.toLowerCase().trim();
+    if (body.phone !== undefined) allowedUpdates.phone = body.phone.trim();
+    if (body.dateOfBirth !== undefined) allowedUpdates.dateOfBirth = body.dateOfBirth || undefined;
+    if (body.gender !== undefined) allowedUpdates.gender = body.gender;
+    if (body.nationalId !== undefined) allowedUpdates.nationalId = body.nationalId.trim() || undefined;
+    if (body.homeCounty !== undefined) allowedUpdates.homeCounty = body.homeCounty.trim() || undefined;
+    if (body.bloodGroup !== undefined) allowedUpdates.bloodGroup = body.bloodGroup || undefined;
+    if (body.physicalAddress !== undefined) allowedUpdates.physicalAddress = body.physicalAddress.trim() || undefined;
+    if (body.bio !== undefined) allowedUpdates.bio = body.bio.trim() || undefined;
+    if (body.languages !== undefined) allowedUpdates.languages = body.languages;
+    if (body.emergencyContact !== undefined) allowedUpdates.emergencyContact = body.emergencyContact;
+    if (body.nextOfKin !== undefined) allowedUpdates.nextOfKin = body.nextOfKin;
+
+    // Check email uniqueness if changing
+    if (allowedUpdates.email) {
+      const existing = await User.findOne({
+        email: allowedUpdates.email,
+        _id: { $ne: authReq.user._id },
+      }).exec();
+      if (existing) {
+        res.status(409).json({ success: false, error: { code: 'EMAIL_EXISTS', message: 'Email already in use' } });
+        return;
+      }
+    }
+
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      { $set: allowedUpdates },
+      { new: true, runValidators: true }
+    ).select('-password -twoFactorSecret -twoFactorBackupCodes').lean().exec();
+
+    if (!updated) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { user: updated },
+    });
+
+  } catch (error) {
+    console.error('[UserController] Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to update profile' },
+    });
+  }
+}
+
+// ─── LIST USERS (ADMIN ONLY) ───
+
 export async function handleListUsers(req: Request, res: Response): Promise<void> {
   try {
     const authReq = req as AuthenticatedRequest;

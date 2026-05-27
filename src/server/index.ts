@@ -126,6 +126,10 @@ app.use(`${API_PREFIX}/stations`, stationRoutes);
 // Seed default stations on startup
 seedStations().catch(console.error);
 
+// Daily Visit routes
+import dailyVisitRoutes from './routes/dailyVisits.js';
+app.use(`${API_PREFIX}/daily-visits`, dailyVisitRoutes);
+
 // Email routes
 app.use(`${API_PREFIX}/email`, emailRoutes);
 
