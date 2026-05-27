@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSync } from '@/hooks/useSync';
-import { useHealthcareData, useUsers } from '@/hooks/useData';
+import { useUsers } from '@/hooks/useData';
 import { useI18n } from '@/i18n/useI18n';
 import type { User } from '@/types';
 import ResponsiveSidebar from '@/components/ResponsiveSidebar';
@@ -78,7 +78,7 @@ export default function CollectorDashboard() {
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const { user, logout } = useAuth();
   const { status, pendingCount, isOnline, triggerSync, needsReLogin } = useSync();
-  const { dashboard } = useHealthcareData();
+
   const { updateUser } = useUsers();
   const { t } = useI18n();
 
@@ -102,7 +102,7 @@ export default function CollectorDashboard() {
     { id: 'settings', label: t('sidebar.settings'), icon: SettingsIcon },
   ], [t, stationType]);
 
-  const collectorStats = user ? dashboard.getCollectorStats(user.id) : null;
+
 
   const handleCreateReferral = async (referral: Partial<import('@/types').ReferralV2>) => {
     const result = await createReferralV2(referral as Record<string, unknown>);
@@ -114,16 +114,21 @@ export default function CollectorDashboard() {
     }
   };
 
+
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return collectorStats ? (
+        return (
           <CollectorOverview
-            stats={collectorStats}
-            onRegisterPatient={() => setActiveTab('visits')}
-            onAddRecord={() => setActiveTab('counter')}
+            stationId={stationId}
+            stationName={stationName}
+            collectorId={collectorId}
+            onLogVisits={() => setActiveTab('visits')}
+            onSendReferral={() => setActiveTab('referrals')}
+            onCounterReferral={() => setActiveTab('counter')}
           />
-        ) : null;
+        );
       case 'visits':
         return <DailyVisitLog />;
       case 'counter':
@@ -159,13 +164,16 @@ export default function CollectorDashboard() {
       case 'settings':
         return <Settings />;
       default:
-        return collectorStats ? (
+        return (
           <CollectorOverview
-            stats={collectorStats}
-            onRegisterPatient={() => setActiveTab('visits')}
-            onAddRecord={() => setActiveTab('counter')}
+            stationId={stationId}
+            stationName={stationName}
+            collectorId={collectorId}
+            onLogVisits={() => setActiveTab('visits')}
+            onSendReferral={() => setActiveTab('referrals')}
+            onCounterReferral={() => setActiveTab('counter')}
           />
-        ) : null;
+        );
     }
   };
 
