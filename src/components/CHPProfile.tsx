@@ -15,7 +15,7 @@ const GENDERS = ['male', 'female', 'other', 'prefer-not-to-say'] as const;
 const LANGUAGES_LIST = ['English', 'Swahili', 'Kikuyu', 'Luo', 'Kalenjin', 'Kamba', 'Meru', 'Somali', 'Turkana', 'Arabic'];
 
 export default function CollectorProfile() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -96,6 +96,7 @@ export default function CollectorProfile() {
       if (res.ok) {
         // eslint-disable-next-line no-console
         console.log('Profile updated successfully');
+        await refreshUser();
         setEditing(false);
       } else {
         const err = await res.json().catch(() => ({ error: 'Failed to update' }));

@@ -40,6 +40,7 @@ interface AuthContextType {
   completeLogin: (token: string, apiUser: any) => void;
   setPassword: (email: string, currentPassword: string, newPassword: string) => Promise<LoginResult>;
   logout: () => void;
+  refreshUser: () => Promise<boolean>;
   hasRole: (role: UserRole) => boolean;
   isAdmin: boolean;
   isCollector: boolean;
@@ -294,6 +295,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasRole = useCallback((role: UserRole): boolean => user?.role === role, [user]);
 
+  const refreshUser = useCallback(async (): Promise<boolean> => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || API_BASE_URL;
+      const token = localStorage.getItem('healthtrack_jwt_token');
+      if (!token) return false;
+
+      const res = await fetch(`${apiUrl}/api/v1/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      if (!data.success || !data.data) return false;
+
+      const fresh = data.data;
+      const updated: User = {
+        id: fresh.id,
+        email: fresh.email,
+        firstName: fresh.firstName,
+        lastName: fresh.lastName,
+        role: fresh.role,
+        status: fresh.status || 'active',
+        region: fresh.region || 'default',
+        createdAt: fresh.createdAt ? new Date(fresh.createdAt) : new Date(),
+        phone: fresh.phone || '',
+        assignedFacility: fresh.assignedFacility,
+        stationId: fresh.stationId,
+        stationName: fresh.stationName,
+        stationType: fresh.stationType,
+        dateOfBirth: fresh.dateOfBirth,
+        gender: fresh.gender,
+        nationalId: fresh.nationalId,
+        emergencyContact: fresh.emergencyContact,
+        languages: fresh.languages,
+        homeCounty: fresh.homeCounty,
+        bloodGroup: fresh.bloodGroup,
+        physicalAddress: fresh.physicalAddress,
+        nextOfKin: fresh.nextOfKin,
+        bio: fresh.bio,
+        preferences: fresh.preferences,
+        avatar: fresh.avatar,
+        lastLogin: fresh.lastLogin,
+      };
+
+      setUser(updated);
+      localStorage.setItem('healthtrack_current_user', JSON.stringify(updated));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -302,6 +356,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     completeLogin,
     setPassword,
     logout,
+    refreshUser,
     hasRole,
     isAdmin: user?.role === 'admin',
     isCollector: user?.role === 'collector',

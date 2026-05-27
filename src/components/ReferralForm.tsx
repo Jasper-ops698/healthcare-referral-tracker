@@ -80,13 +80,18 @@ export default function ReferralForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+
+    // Auto-generate destinationStationId from name + type if user didn't click a type button
+    const destId = form.destinationStationId
+      || `${form.destinationStationType}-${form.destinationStationName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
     try {
       await onSubmit({
         patientId: form.patientId, patientName: form.patientName,
         patientAge: parseInt(form.patientAge) || 0, patientGender: form.patientGender, patientPhone: form.patientPhone,
         sourceStationId, sourceStationName, sourceStationType,
         sourceCollectorId: collectorId, sourceCollectorName: collectorName,
-        destinationStationId: form.destinationStationId, destinationStationName: form.destinationStationName, destinationStationType: form.destinationStationType,
+        destinationStationId: destId, destinationStationName: form.destinationStationName, destinationStationType: form.destinationStationType,
         chpName: form.chpName || undefined, chpPhone: form.chpPhone || undefined, chpEmail: form.chpEmail || undefined,
         initialDiagnosis: form.initialDiagnosis, aiSuggestedCategory: form.aiSuggestedCategory || undefined,
         aiConfidence: form.aiConfidence || undefined, reasonForReferral: form.reasonForReferral,
@@ -97,7 +102,7 @@ export default function ReferralForm({
   };
 
   const canNext = () => {
-    if (step === 1) return form.patientName && form.patientAge && form.patientPhone && form.destinationStationId;
+    if (step === 1) return form.patientName && form.patientAge && form.patientPhone && form.destinationStationName;
     if (step === 2) return form.initialDiagnosis && form.reasonForReferral;
     if (step === 3) return true;
     return true;
