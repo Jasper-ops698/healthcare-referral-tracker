@@ -1,27 +1,19 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSync } from '@/hooks/useSync';
-import { useHealthcareData, useUsers } from '@/hooks/useData';
+import { useUsers } from '@/hooks/useData';
 import { useI18n } from '@/i18n/useI18n';
 import type { User } from '@/types';
 import ResponsiveSidebar from '@/components/ResponsiveSidebar';
 import NotificationBell from '@/components/NotificationBell';
 import ProfileModal from '@/components/ProfileModal';
-import DashboardOverview from '@/components/DashboardOverview';
-import PatientManagement from '@/components/PatientManagement';
+import UnifiedAdminDashboard from '@/components/UnifiedAdminDashboard';
 import UserManagement from '@/components/UserManagement';
-import ReferralTracking from '@/components/ReferralTracking';
-import ReportsAnalytics from '@/components/ReportsAnalytics';
-import AdminDashboardV2 from '@/components/AdminDashboardV2';
 import Settings from '@/components/Settings';
 import { toast } from 'sonner';
 import {
   LayoutDashboard,
-  Users,
   UserCog,
-  ArrowLeftRight,
-  BarChart3,
-  Activity,
   Settings as SettingsIcon,
   CloudOff,
   RefreshCw,
@@ -30,7 +22,7 @@ import {
   Loader2,
 } from 'lucide-react';
 
-type AdminTab = 'dashboard' | 'patients' | 'users' | 'referrals' | 'reports' | 'analytics' | 'settings';
+type AdminTab = 'dashboard' | 'users' | 'settings';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
@@ -38,7 +30,6 @@ export default function AdminDashboard() {
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const { user, logout } = useAuth();
   const { status, pendingCount, lastSyncTime, isOnline, triggerSync, needsReLogin } = useSync();
-  const { dashboard, patients, medicalRecords, users } = useHealthcareData();
   const { updateUser } = useUsers();
   const { t } = useI18n();
 
@@ -46,21 +37,8 @@ export default function AdminDashboard() {
     if (user) setProfileUser(user);
   };
 
-  // Listen for quick action navigation from DashboardOverview
-  useEffect(() => {
-    const handler = (e: CustomEvent<string>) => {
-      setActiveTab(e.detail as AdminTab);
-    };
-    window.addEventListener('navigateToTab', handler as any);
-    return () => window.removeEventListener('navigateToTab', handler as any);
-  }, []);
-
   const menuItems = useMemo(() => [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: LayoutDashboard },
-    { id: 'patients', label: t('sidebar.patients'), icon: Users },
-    { id: 'referrals', label: t('sidebar.referrals'), icon: ArrowLeftRight },
-    { id: 'reports', label: t('sidebar.reports'), icon: BarChart3 },
-    { id: 'analytics', label: 'Referral Analytics', icon: Activity },
     { id: 'users', label: t('sidebar.users'), icon: UserCog },
     { id: 'settings', label: t('sidebar.settings'), icon: SettingsIcon },
   ], [t]);
@@ -68,41 +46,13 @@ export default function AdminDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return (
-          <DashboardOverview
-            kpis={dashboard.kpis}
-            patients={patients.patients}
-            users={users.users}
-          />
-        );
-      case 'patients':
-        return <PatientManagement />;
+        return <UnifiedAdminDashboard />;
       case 'users':
         return <UserManagement />;
-      case 'referrals':
-        return (
-          <ReferralTracking
-            kpis={dashboard.kpis}
-            patients={patients.patients}
-            users={users.users}
-            getRecordsByPatient={medicalRecords.getRecordsByPatient}
-            onUpdatePatient={patients.updatePatient}
-          />
-        );
-      case 'reports':
-        return <ReportsAnalytics />;
-      case 'analytics':
-        return <AdminDashboardV2 />;
       case 'settings':
         return <Settings />;
       default:
-        return (
-          <DashboardOverview
-            kpis={dashboard.kpis}
-            patients={patients.patients}
-            users={users.users}
-          />
-        );
+        return <UnifiedAdminDashboard />;
     }
   };
 
