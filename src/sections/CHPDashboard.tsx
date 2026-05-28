@@ -87,8 +87,8 @@ export default function CollectorDashboard() {
   };
 
   // Get station info from user
-  const stationId = user?.stationId || '';
-  const stationName = user?.stationName || 'Unknown Station';
+  const stationId = user?.stationId || user?.assignedFacility || 'personal';
+  const stationName = user?.stationName || user?.assignedFacility || 'My Station';
   const stationType = user?.stationType || 'household';
   const collectorId = user?.id || '';
   const collectorName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim();
