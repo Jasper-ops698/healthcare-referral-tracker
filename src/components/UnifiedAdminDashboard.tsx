@@ -26,6 +26,7 @@ import {
 import type { ChatMessage } from '@/lib/apiClient';
 import type { ReferralV2 } from '@/types';
 import { toast } from 'sonner';
+import { LOGO_BASE64 } from '@/lib/logoBase64';
 
 const COLORS = ['#0ea5e9', '#14b8a6', '#f59e0b', '#ec4899', '#8b5cf6', '#f43f5e', '#06b6d4', '#84cc16'];
 const GENDER_COLORS = { male: '#0ea5e9', female: '#ec4899', other: '#94a3b8' };
@@ -195,7 +196,7 @@ export default function UnifiedAdminDashboard() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, chatLoading]);
 
-  // ─── Export Report ───
+  // ─── Export Report as PDF ───
   const handleExport = async () => {
     if (!exportPrompt.trim()) return;
     setExportLoading(true);
@@ -204,45 +205,83 @@ export default function UnifiedAdminDashboard() {
       if (res.success && res.data) {
         const content = (res.data as any).content || '';
 
-        // Generate PDF
+        // Logo colours from brand: maroon #9B1B3A, sky blue #5AB4E6, golden #D4A017
+        const C_MAROON: [number, number, number] = [155, 27, 58];
+        const C_SKY: [number, number, number] = [90, 180, 230];
+        const C_GOLD: [number, number, number] = [212, 160, 23];
+        const C_GRAY: [number, number, number] = [100, 100, 100];
+        const C_DARK: [number, number, number] = [40, 40, 40];
+
         const doc = new jsPDF({ unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.getWidth();
         const margin = 15;
         const textWidth = pageWidth - margin * 2;
 
-        // Title
-        doc.setFontSize(18);
-        doc.setTextColor(33, 150, 243);
-        doc.text('HealthTrack Report', pageWidth / 2, 20, { align: 'center' });
+        // ─── Header with Logo ───
+        // Logo (left-aligned, ~15mm wide)
+        doc.addImage(LOGO_BASE64, 'PNG', margin, 8, 15, 15);
 
-        // Subtitle
-        doc.setFontSize(10);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, 27, { align: 'center' });
-        doc.text(`Query: "${exportPrompt}"`, pageWidth / 2, 32, { align: 'center' });
+        // Title next to logo
+        doc.setFont('times', 'bold');
+        doc.setFontSize(20);
+        doc.setTextColor(...C_MAROON);
+        doc.text('Patient Referral Track Report', margin + 18, 17);
 
-        // Divider
-        doc.setDrawColor(200, 200, 200);
-        doc.line(margin, 36, pageWidth - margin, 36);
+        // Subtitle under title
+        doc.setFont('times', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(...C_GRAY);
+        doc.text(`Generated: ${new Date().toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`, margin + 18, 22);
 
-        // Content — strip HTML tags for clean text
+        // Golden accent line under header
+        doc.setDrawColor(...C_GOLD);
+        doc.setLineWidth(0.8);
+        doc.line(margin, 26, pageWidth - margin, 26);
+
+        // Thin maroon line below gold
+        doc.setDrawColor(...C_MAROON);
+        doc.setLineWidth(0.3);
+        doc.line(margin, 27.5, pageWidth - margin, 27.5);
+
+        // ─── Query Box ───
+        doc.setFillColor(250, 248, 245);
+        doc.roundedRect(margin, 30, textWidth, 10, 2, 2, 'F');
+        doc.setFont('times', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(...C_SKY);
+        doc.text('Query:', margin + 3, 35.5);
+        doc.setFont('times', 'normal');
+        doc.setTextColor(...C_DARK);
+        const queryLines = doc.splitTextToSize(`"${exportPrompt}"`, textWidth - 20);
+        doc.text(queryLines, margin + 14, 35.5);
+
+        // ─── Content ───
+        const contentY = queryLines.length > 1 ? 44 : 42;
+
+        // Strip HTML for clean text
         const plainText = content
           .replace(/<style[^>]*>.*?<\/style>/gs, '')
           .replace(/<script[^>]*>.*?<\/script>/gs, '')
-          .replace(/<[^>]+>/g, '\n')
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<\/p>/gi, '\n\n')
+          .replace(/<li>/gi, '\n  \u2022 ')
+          .replace(/<\/li>/gi, '')
+          .replace(/<h[1-6][^>]*>/gi, '\n\n')
+          .replace(/<\/h[1-6]>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
           .replace(/&nbsp;/g, ' ')
           .replace(/&amp;/g, '&')
           .replace(/&lt;/g, '<')
           .replace(/&gt;/g, '>')
-          .replace(/\n{3,}/g, '\n\n')
+          .replace(/\n{4,}/g, '\n\n\n')
           .trim();
 
+        doc.setFont('times', 'normal');
         doc.setFontSize(10);
-        doc.setTextColor(40, 40, 40);
+        doc.setTextColor(...C_DARK);
 
-        // Split text to fit page width
         const lines = doc.splitTextToSize(plainText, textWidth);
-        let y = 42;
+        let y = contentY;
 
         for (const line of lines) {
           if (y > 280) {
@@ -250,19 +289,29 @@ export default function UnifiedAdminDashboard() {
             y = 20;
           }
           doc.text(line, margin, y);
-          y += 4.5;
+          y += 4.8;
         }
 
-        // Footer
+        // ─── Footer on every page ───
         const totalPages = doc.getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {
           doc.setPage(i);
+          // Maroon footer line
+          doc.setDrawColor(...C_MAROON);
+          doc.setLineWidth(0.3);
+          doc.line(margin, 287, pageWidth - margin, 287);
+          // Page number
+          doc.setFont('times', 'italic');
           doc.setFontSize(8);
-          doc.setTextColor(150, 150, 150);
-          doc.text(`Page ${i} of ${totalPages} — HealthTrack Referral System`, pageWidth / 2, 292, { align: 'center' });
+          doc.setTextColor(...C_GRAY);
+          doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, 292, { align: 'center' });
+          // System name
+          doc.setTextColor(...C_MAROON);
+          doc.setFont('times', 'bold');
+          doc.text('HealthTrack — Patient Referral Tracking System', pageWidth / 2, 296, { align: 'center' });
         }
 
-        doc.save(`healthtrack-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+        doc.save(`Patient-Referral-Track-Report-${new Date().toISOString().slice(0, 10)}.pdf`);
         toast.success('PDF report downloaded');
         setShowExport(false);
         setExportPrompt('');
