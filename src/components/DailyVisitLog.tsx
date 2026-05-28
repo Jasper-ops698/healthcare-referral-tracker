@@ -108,7 +108,7 @@ export default function DailyVisitLog() {
   const totalGendered = totalMale + totalFemale;
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 w-full">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Kpi label="Today" value={todayTotal} icon={Users} color="text-primary" bg="bg-primary/10" trend={dayChange !== 0 ? { value: dayChange, up: dayChange > 0 } : undefined} />
         <Kpi label="This Week" value={totalThisWeek} icon={TrendingUp} color="text-emerald-600" bg="bg-emerald-50" />

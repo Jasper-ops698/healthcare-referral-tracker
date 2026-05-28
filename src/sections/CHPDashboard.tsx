@@ -142,7 +142,7 @@ export default function CollectorDashboard() {
         );
       case 'referrals':
         return (
-          <div className="max-w-3xl">
+          <div className="w-full">
             <div className="mb-4">
               <h2 className="text-lg font-semibold">Create Patient Referral</h2>
               <p className="text-sm text-muted-foreground">
