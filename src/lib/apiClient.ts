@@ -532,5 +532,30 @@ export async function generateAIReport(type: string, period?: string): Promise<A
 
 // ─── EXPORT ─——
 
+// ─── AI CHAT API ───
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
+export async function sendAIChat(messages: ChatMessage[], context?: { period?: string; stationId?: string }): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/ai/chat', {
+    method: 'POST',
+    body: JSON.stringify({ messages, context }),
+  });
+  return res.json();
+}
+
+export async function generateAIExportReport(prompt: string, format: 'html' | 'markdown' = 'html'): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/ai/export', {
+    method: 'POST',
+    body: JSON.stringify({ prompt, format }),
+  });
+  return res.json();
+}
+
+// ─── EXPORT ───
+
 export { getToken, setToken, clearToken };
 export { BASE_URL };

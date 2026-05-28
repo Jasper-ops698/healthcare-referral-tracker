@@ -1,114 +1,234 @@
 /**
- * Unified Admin Dashboard — One view for monitoring collector activity
+ * Unified Admin Dashboard v2 — Analytics-focused monitoring view
  *
- * Shows only what an admin needs to know:
- *   1. KPIs: total referrals, collector count, today's visits, emergencies
- *   2. Recent referrals table (what collectors are doing)
- *   3. Station activity summary (where the flow is happening)
- *
- * No micro-management, no status pipeline control, no complex analytics.
- * The collector is independent — the admin just monitors.
+ * 4 sections:
+ *   1. Line Graph: Monthly/Yearly referral activities per facility (toggle)
+ *   2. Pie Chart: Gender/Age distribution of referral cases
+ *   3. Bar Graph: Disease prevalence & referral reasons per facility
+ *   4. AI Chat + Export: Gemini-powered discussion and report generation
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  ArrowDownLeft, ArrowUpRight, Users, HeartPulse,
-  ClipboardList, MapPin, AlertTriangle, Activity,
-  Loader2, Search, TrendingUp, Calendar,
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, Area, AreaChart,
+} from 'recharts';
+import {
+  Activity, TrendingUp, Send, Download, Sparkles,
+  FileText, Loader2, User, Stethoscope,
+  ClipboardList, HeartPulse, Baby, AlertTriangle,
 } from 'lucide-react';
 import {
-  getAllReferralsV2, getDailyVisits, getUsers,
+  getAllReferralsV2, sendAIChat, generateAIExportReport,
 } from '@/lib/apiClient';
+import type { ChatMessage } from '@/lib/apiClient';
 import type { ReferralV2 } from '@/types';
+import { toast } from 'sonner';
+
+const COLORS = ['#0ea5e9', '#14b8a6', '#f59e0b', '#ec4899', '#8b5cf6', '#f43f5e', '#06b6d4', '#84cc16'];
+const GENDER_COLORS = { male: '#0ea5e9', female: '#ec4899', other: '#94a3b8' };
+const AGE_COLORS = ['#14b8a6', '#0ea5e9', '#f59e0b', '#ec4899', '#f43f5e'];
 
 export default function UnifiedAdminDashboard() {
   const [referrals, setReferrals] = useState<ReferralV2[]>([]);
-  const [dailyVisits, setDailyVisits] = useState<any[]>([]);
-  const [collectors, setCollectors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
+
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    { role: 'model', text: 'Hello! I am HealthTrack AI. Ask me about referral trends, disease patterns, or station performance. I can analyze all your data and provide public health insights.' },
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Export state
+  const [exportPrompt, setExportPrompt] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [refRes, visitRes, userRes] = await Promise.all([
-        getAllReferralsV2(),
-        getDailyVisits(),
-        getUsers(),
-      ]);
-      if (refRes.success) setReferrals(((refRes.data as any)?.referrals || []) as ReferralV2[]);
-      if (visitRes.success) setDailyVisits((visitRes.data as any)?.visits || []);
-      if (userRes.success) {
-        const allUsers = (userRes.data as any)?.users || [];
-        setCollectors(allUsers.filter((u: any) => u.role === 'collector'));
-      }
+      const res = await getAllReferralsV2();
+      if (res.success) setReferrals(((res.data as any)?.referrals || []) as ReferralV2[]);
     } catch (e) { console.error('Load failed:', e); }
     finally { setLoading(false); }
   };
 
-  // ─── Computed KPIs ───
-  const today = new Date().toISOString().slice(0, 10);
+  // ─── 1. LINE CHART: Referral activities per facility over time ───
+  const lineChartData = useMemo(() => {
+    if (referrals.length === 0) return [];
 
-  const kpi = useMemo(() => {
-    const emergencies = referrals.filter(r => r.urgency === 'emergency');
-    const needsAttention = referrals.filter(r => r.status === 'pending' || r.status === 'in-transit');
-    const inCare = referrals.filter(r => r.status === 'accepted' || r.status === 'in-treatment');
-    const completed = referrals.filter(r => r.status === 'counter-referral-created' || r.status === 'completed');
-    const todayVisits = dailyVisits
-      .filter((v: any) => v.date === today)
-      .reduce((sum: number, v: any) => sum + (v.totalVisits || 0), 0);
-
-    return {
-      totalReferrals: referrals.length,
-      collectorCount: collectors.length,
-      todayVisits,
-      emergencyCount: emergencies.length,
-      needsAttention: needsAttention.length,
-      inCare: inCare.length,
-      completed: completed.length,
-    };
-  }, [referrals, collectors, dailyVisits, today]);
-
-  // ─── Station summary ───
-  const stationSummary = useMemo(() => {
-    const map = new Map<string, { name: string; type: string; incoming: number; outgoing: number; emergency: number }>();
+    // Group by time period and facility
+    const timeMap = new Map<string, Map<string, number>>();
 
     referrals.forEach(r => {
-      // Destination stations (incoming)
-      const dKey = r.destinationStationName || 'Unknown';
-      const existing = map.get(dKey) || { name: dKey, type: r.destinationStationType || 'hip', incoming: 0, outgoing: 0, emergency: 0 };
-      existing.incoming++;
-      if (r.urgency === 'emergency') existing.emergency++;
-      map.set(dKey, existing);
+      const date = new Date(r.createdAt);
+      let key: string;
+      if (period === 'monthly') {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      } else {
+        key = `${date.getFullYear()}`;
+      }
 
-      // Source stations (outgoing)
-      const sKey = r.sourceStationName || 'Unknown';
-      const sExisting = map.get(sKey) || { name: sKey, type: r.sourceStationType || 'household', incoming: 0, outgoing: 0, emergency: 0 };
-      sExisting.outgoing++;
-      map.set(sKey, sExisting);
+      const facility = r.destinationStationName || r.sourceStationName || 'Unknown';
+      if (!timeMap.has(key)) timeMap.set(key, new Map());
+      const fMap = timeMap.get(key)!;
+      fMap.set(facility, (fMap.get(facility) || 0) + 1);
     });
 
-    return Array.from(map.values())
-      .filter(s => s.incoming > 0 || s.outgoing > 0)
-      .sort((a, b) => (b.incoming + b.outgoing) - (a.incoming + a.outgoing))
-      .slice(0, 8);
+    // Get unique facilities (top 6)
+    const facilityCounts = new Map<string, number>();
+    referrals.forEach(r => {
+      const f = r.destinationStationName || r.sourceStationName || 'Unknown';
+      facilityCounts.set(f, (facilityCounts.get(f) || 0) + 1);
+    });
+    const topFacilities = Array.from(facilityCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([name]) => name);
+
+    // Build chart data rows
+    const sortedKeys = Array.from(timeMap.keys()).sort();
+    return sortedKeys.map(key => {
+      const row: Record<string, string | number> = { period: key };
+      topFacilities.forEach(f => {
+        row[f] = timeMap.get(key)?.get(f) || 0;
+      });
+      return row;
+    });
+  }, [referrals, period]);
+
+  const facilityNames = useMemo(() => {
+    if (lineChartData.length === 0) return [];
+    return Object.keys(lineChartData[0]).filter(k => k !== 'period');
+  }, [lineChartData]);
+
+  // ─── 2. PIE CHARTS: Gender & Age distribution ───
+  const genderData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    referrals.forEach(r => {
+      const g = r.patientGender || 'unknown';
+      counts[g] = (counts[g] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, value]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      value,
+      color: GENDER_COLORS[name as keyof typeof GENDER_COLORS] || '#94a3b8',
+    }));
   }, [referrals]);
 
-  // ─── Filtered recent referrals ───
-  const recentReferrals = useMemo(() => {
-    let list = [...referrals].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(r =>
-        r.patientName.toLowerCase().includes(q) ||
-        r.patientId.toLowerCase().includes(q) ||
-        r.sourceCollectorName?.toLowerCase().includes(q)
-      );
+  const ageData = useMemo(() => {
+    const groups: Record<string, number> = { '0-5': 0, '6-18': 0, '19-35': 0, '36-50': 0, '50+': 0 };
+    referrals.forEach(r => {
+      const age = r.patientAge;
+      if (age <= 5) groups['0-5']++;
+      else if (age <= 18) groups['6-18']++;
+      else if (age <= 35) groups['19-35']++;
+      else if (age <= 50) groups['36-50']++;
+      else groups['50+']++;
+    });
+    return Object.entries(groups)
+      .filter(([, v]) => v > 0)
+      .map(([name, value], i) => ({ name, value, color: AGE_COLORS[i] || '#94a3b8' }));
+  }, [referrals]);
+
+  // ─── 3. BAR CHART: Disease prevalence & referral reasons ───
+  const diseaseData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    referrals.forEach(r => {
+      const d = r.initialDiagnosis?.toLowerCase().trim() || 'Unspecified';
+      // Truncate long diagnosis names
+      const key = d.length > 30 ? d.slice(0, 30) + '...' : d;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, value]) => ({ name, value }));
+  }, [referrals]);
+
+  const referralReasonData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    referrals.forEach(r => {
+      const reason = r.reasonForReferral?.toLowerCase().trim() || 'Unspecified';
+      const key = reason.length > 30 ? reason.slice(0, 30) + '...' : reason;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, value]) => ({ name, value }));
+  }, [referrals]);
+
+  // ─── AI Chat ───
+  const handleChatSend = useCallback(async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const userMsg: ChatMessage = { role: 'user', text: chatInput.trim() };
+    const newMessages = [...chatMessages, userMsg];
+    setChatMessages(newMessages);
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const res = await sendAIChat(newMessages, { period });
+      if (res.success && res.data) {
+        const reply = (res.data as any).response || 'I could not process that request.';
+        setChatMessages(prev => [...prev, { role: 'model', text: reply }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'model', text: 'Sorry, I encountered an error. Please try again.' }]);
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'model', text: 'Connection failed. Please check your network and try again.' }]);
+    } finally {
+      setChatLoading(false);
     }
-    return list.slice(0, 20);
-  }, [referrals, searchQuery]);
+  }, [chatInput, chatMessages, chatLoading, period]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, chatLoading]);
+
+  // ─── Export Report ───
+  const handleExport = async () => {
+    if (!exportPrompt.trim()) return;
+    setExportLoading(true);
+    try {
+      const res = await generateAIExportReport(exportPrompt, 'html');
+      if (res.success && res.data) {
+        const content = (res.data as any).content || '';
+        const blob = new Blob([content], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `healthtrack-report-${new Date().toISOString().slice(0, 10)}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('Report downloaded');
+        setShowExport(false);
+        setExportPrompt('');
+      } else {
+        toast.error('Failed to generate report');
+      }
+    } catch {
+      toast.error('Network error generating report');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // ─── KPI Summary ───
+  const kpi = useMemo(() => ({
+    total: referrals.length,
+    emergency: referrals.filter(r => r.urgency === 'emergency').length,
+    urgent: referrals.filter(r => r.urgency === 'urgent').length,
+    completed: referrals.filter(r => r.status === 'counter-referral-created' || r.status === 'completed').length,
+  }), [referrals]);
 
   if (loading) {
     return (
@@ -121,170 +241,264 @@ export default function UnifiedAdminDashboard() {
   return (
     <div className="space-y-6 w-full">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Monitoring collector activity across all stations
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Activity className="w-6 h-6 text-primary" />
+            Referral Analytics
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Activity across all facilities</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowExport(!showExport)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm font-medium"
+          >
+            <FileText className="w-4 h-4" /> Export Report
+          </button>
+          <button
+            onClick={() => setChatOpen(!chatOpen)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
+          >
+            <Sparkles className="w-4 h-4" /> AI Advisor
+          </button>
+        </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Kpi icon={ClipboardList} color="text-primary" bg="bg-primary/10" label="Total Referrals" value={kpi.totalReferrals} />
-        <Kpi icon={Users} color="text-emerald-600" bg="bg-emerald-50" label="Collectors" value={kpi.collectorCount} />
-        <Kpi icon={Calendar} color="text-sky-600" bg="bg-sky-50" label="Visits Today" value={kpi.todayVisits} />
-        <Kpi icon={HeartPulse} color="text-red-600" bg="bg-red-50" label="Emergencies" value={kpi.emergencyCount} />
-        <Kpi icon={AlertTriangle} color="text-amber-600" bg="bg-amber-50" label="Need Attention" value={kpi.needsAttention} />
-        <Kpi icon={TrendingUp} color="text-purple-600" bg="bg-purple-50" label="Completed" value={kpi.completed} />
-      </div>
-
-      {/* Alert banner for emergencies */}
-      {kpi.emergencyCount > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-3">
-          <HeartPulse className="w-5 h-5 text-red-600 shrink-0" />
-          <p className="text-sm text-red-800">
-            <span className="font-semibold">{kpi.emergencyCount} emergency referral{kpi.emergencyCount > 1 ? 's' : ''}</span> in the system.
-            Collectors are handling these independently.
-          </p>
+      {/* Export Panel */}
+      {showExport && (
+        <div className="bg-card rounded-xl border border-border p-4 space-y-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Download className="w-4 h-4" /> Generate Custom Report
+          </h3>
+          <p className="text-xs text-muted-foreground">Describe what you want in the report. AI will analyze all data and generate it.</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={exportPrompt}
+              onChange={e => setExportPrompt(e.target.value)}
+              placeholder="e.g., Summary of malaria referral trends by station for the last 3 months"
+              className="flex-1 px-3 py-2 rounded-lg border border-border text-sm bg-background"
+              onKeyDown={e => e.key === 'Enter' && handleExport()}
+            />
+            <button
+              onClick={handleExport}
+              disabled={exportLoading || !exportPrompt.trim()}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {exportLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Download className="w-4 h-4" /> Export</>}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Main content: Recent Referrals + Station Activity */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        {/* Recent Referrals */}
-        <div className="xl:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold flex items-center gap-2">
-              <Activity className="w-4 h-4 text-primary" />
-              Recent Referrals
-            </h2>
-            <span className="text-xs text-muted-foreground">{referrals.length} total</span>
+      {/* AI Chat Panel */}
+      {chatOpen && (
+        <div className="bg-card rounded-xl border border-primary/30 overflow-hidden flex flex-col" style={{ height: '420px' }}>
+          <div className="px-4 py-3 border-b border-primary/20 bg-primary/5 flex items-center justify-between">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" /> HealthTrack AI Advisor
+            </h3>
+            <button onClick={() => setChatOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">Close</button>
           </div>
-
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {msg.role === 'model' && (
+                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                )}
+                <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground rounded-br-sm'
+                    : 'bg-muted rounded-bl-sm'
+                }`}>
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                </div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex gap-2">
+                <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
+                </div>
+                <div className="bg-muted rounded-xl rounded-bl-sm px-3 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="p-3 border-t border-border flex gap-2">
             <input
               type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search patient, ID, or collector..."
-              className="w-full pl-9 pr-4 py-2 rounded-lg border border-border text-sm bg-background"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              placeholder="Ask about disease trends, station performance, referrals..."
+              className="flex-1 px-3 py-2 rounded-lg border border-border text-sm bg-background"
+              onKeyDown={e => e.key === 'Enter' && handleChatSend()}
             />
+            <button
+              onClick={handleChatSend}
+              disabled={chatLoading || !chatInput.trim()}
+              className="px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              <Send className="w-4 h-4" />
+            </button>
           </div>
+        </div>
+      )}
 
-          {/* Referral list */}
-          {recentReferrals.length === 0 ? (
-            <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground">
-              <ClipboardList className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No referrals yet</p>
-              <p className="text-xs">Collectors will send referrals that appear here</p>
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Kpi icon={ClipboardList} color="text-primary" bg="bg-primary/10" label="Total Referrals" value={kpi.total} />
+        <Kpi icon={HeartPulse} color="text-red-600" bg="bg-red-50" label="Emergencies" value={kpi.emergency} />
+        <Kpi icon={AlertTriangle} color="text-amber-600" bg="bg-amber-50" label="Urgent" value={kpi.urgent} />
+        <Kpi icon={TrendingUp} color="text-emerald-600" bg="bg-emerald-50" label="Completed" value={kpi.completed} />
+      </div>
+
+      {/* ─── 1. LINE CHART: Referral Activities Per Facility ─── */}
+      <div className="bg-card rounded-xl border border-border p-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 className="text-base font-semibold flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" />
+            Referral Activities Per Facility
+          </h2>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden">
+              <button
+                onClick={() => setPeriod('monthly')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${period === 'monthly' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setPeriod('yearly')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${period === 'yearly' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                Yearly
+              </button>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {recentReferrals.map(r => (
-                <ReferralCard key={r.id} referral={r} />
+          </div>
+        </div>
+        {lineChartData.length === 0 ? (
+          <EmptyState message="No referral data yet. Activities will appear here as collectors submit referrals." />
+        ) : (
+          <ResponsiveContainer width="100%" height={320}>
+            <AreaChart data={lineChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              {facilityNames.map((name, i) => (
+                <Area
+                  key={name}
+                  type="monotone"
+                  dataKey={name}
+                  stroke={COLORS[i % COLORS.length]}
+                  fill={COLORS[i % COLORS.length]}
+                  fillOpacity={0.1}
+                  strokeWidth={2}
+                />
               ))}
-            </div>
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* ─── 2. PIE CHARTS: Gender + Age Distribution ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Gender */}
+        <div className="bg-card rounded-xl border border-border p-5">
+          <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
+            <User className="w-4 h-4 text-primary" />
+            Gender Distribution
+          </h2>
+          {genderData.length === 0 ? (
+            <EmptyState message="No gender data available" />
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie data={genderData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} dataKey="value">
+                  {genderData.map((entry, i) => (
+                    <Cell key={`cell-${i}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number, name: string) => [`${value} cases`, name]} />
+                <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
           )}
         </div>
 
-        {/* Right column: Station Activity + Collector Summary */}
-        <div className="space-y-5">
-          {/* Station Activity */}
-          <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-primary" />
-                Station Activity
-              </h3>
-              <span className="text-xs text-muted-foreground">{stationSummary.length} stations</span>
-            </div>
-            {stationSummary.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">No station data yet</div>
-            ) : (
-              <div className="divide-y divide-border">
-                {stationSummary.map(s => (
-                  <div key={s.name} className="px-4 py-3 flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{s.name}</p>
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{s.type}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs shrink-0">
-                      <span className="flex items-center gap-1 text-emerald-600">
-                        <ArrowDownLeft className="w-3 h-3" />{s.incoming}
-                      </span>
-                      <span className="flex items-center gap-1 text-sky-600">
-                        <ArrowUpRight className="w-3 h-3" />{s.outgoing}
-                      </span>
-                      {s.emergency > 0 && (
-                        <span className="flex items-center gap-1 text-red-600 font-bold">
-                          <HeartPulse className="w-3 h-3" />{s.emergency}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* Age */}
+        <div className="bg-card rounded-xl border border-border p-5">
+          <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
+            <Baby className="w-4 h-4 text-primary" />
+            Age Distribution
+          </h2>
+          {ageData.length === 0 ? (
+            <EmptyState message="No age data available" />
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie data={ageData} cx="50%" cy="50%" outerRadius={100} paddingAngle={3} dataKey="value">
+                  {ageData.map((entry, i) => (
+                    <Cell key={`cell-${i}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number, name: string) => [`${value} cases`, name]} />
+                <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
 
-          {/* Collector Snapshot */}
-          <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <div className="px-4 py-3 border-b border-border bg-muted/30">
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <Users className="w-4 h-4 text-emerald-500" />
-                Collectors
-              </h3>
-            </div>
-            {collectors.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">No collectors registered</div>
-            ) : (
-              <div className="divide-y divide-border">
-                {collectors.slice(0, 6).map((c: any) => {
-                  const cReferrals = referrals.filter(r => r.sourceCollectorId === c.id).length;
-                  return (
-                    <div key={c.id} className="px-4 py-3 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700">
-                        {(c.firstName?.[0] || '')}{(c.lastName?.[0] || '')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{c.firstName} {c.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{c.stationName || 'No station'}</p>
-                      </div>
-                      <span className="text-xs font-semibold bg-muted px-2 py-0.5 rounded-full">{cReferrals} refs</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+      {/* ─── 3. BAR CHARTS: Disease Prevalence + Referral Reasons ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Disease Prevalence */}
+        <div className="bg-card rounded-xl border border-border p-5">
+          <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
+            <Stethoscope className="w-4 h-4 text-primary" />
+            Disease Prevalence (Initial Diagnosis)
+          </h2>
+          {diseaseData.length === 0 ? (
+            <EmptyState message="No diagnosis data available" />
+          ) : (
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={diseaseData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={120} />
+                <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: 12 }} />
+                <Bar dataKey="value" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
 
-          {/* Daily Visits Summary */}
-          <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <div className="px-4 py-3 border-b border-border bg-muted/30">
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-sky-500" />
-                Recent Daily Visits
-              </h3>
-            </div>
-            {dailyVisits.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">No visit logs yet</div>
-            ) : (
-              <div className="divide-y divide-border">
-                {dailyVisits.slice(0, 7).map((v: any) => (
-                  <div key={v._id || v.date} className="px-4 py-3 flex items-center justify-between">
-                    <span className="text-sm">{new Date(v.date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="font-semibold">{v.totalVisits} visits</span>
-                      {v.maleVisits > 0 && <span className="text-blue-600">{v.maleVisits}M</span>}
-                      {v.femaleVisits > 0 && <span className="text-pink-500">{v.femaleVisits}F</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* Referral Reasons */}
+        <div className="bg-card rounded-xl border border-border p-5">
+          <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
+            <ClipboardList className="w-4 h-4 text-primary" />
+            Top Referral Reasons
+          </h2>
+          {referralReasonData.length === 0 ? (
+            <EmptyState message="No referral reason data available" />
+          ) : (
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={referralReasonData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={120} />
+                <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: 12 }} />
+                <Bar dataKey="value" fill="#14b8a6" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>
@@ -309,55 +523,11 @@ function Kpi({ icon: Icon, color, bg, label, value }: {
   );
 }
 
-function ReferralCard({ referral }: { referral: ReferralV2 }) {
-  const urgencyColor = referral.urgency === 'emergency' ? 'bg-red-500' : referral.urgency === 'urgent' ? 'bg-amber-500' : 'bg-blue-400';
-  const statusLabel = referral.status === 'counter-referral-created' || referral.status === 'completed' ? 'Completed'
-    : referral.status === 'accepted' || referral.status === 'in-treatment' ? 'In Care'
-    : referral.status === 'rejected' ? 'Rejected'
-    : 'Needs Attention';
-  const statusBg = statusLabel === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-    : statusLabel === 'In Care' ? 'bg-sky-50 text-sky-700 border-sky-200'
-    : statusLabel === 'Rejected' ? 'bg-red-50 text-red-600 border-red-200'
-    : 'bg-amber-50 text-amber-700 border-amber-200';
-
+function EmptyState({ message }: { message: string }) {
   return (
-    <div className="bg-card rounded-xl border border-border p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold text-white ${urgencyColor}`}>
-              {referral.urgency}
-            </span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${statusBg}`}>
-              {statusLabel}
-            </span>
-          </div>
-          <p className="text-sm font-semibold">{referral.patientName}
-            <span className="text-muted-foreground font-normal font-mono text-xs ml-1">({referral.patientId})</span>
-          </p>
-          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <ArrowDownLeft className="w-3 h-3" />{referral.sourceStationName}
-            </span>
-            <span className="text-border">→</span>
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" />{referral.destinationStationName}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-            <span>by {referral.sourceCollectorName || 'Unknown'}</span>
-            <span>·</span>
-            <span>{new Date(referral.createdAt).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
-          </div>
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-xs text-muted-foreground">{referral.patientAge}y · {referral.patientGender}</p>
-        </div>
-      </div>
-      {/* Diagnosis snippet */}
-      <p className="text-xs mt-2 text-amber-700 bg-amber-50 px-2 py-1 rounded line-clamp-1">
-        {referral.initialDiagnosis}
-      </p>
+    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+      <Activity className="w-8 h-8 mb-2 opacity-30" />
+      <p className="text-sm text-center max-w-xs">{message}</p>
     </div>
   );
 }

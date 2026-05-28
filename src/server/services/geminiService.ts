@@ -21,7 +21,7 @@ interface GeminiResponse {
   error?: { message: string };
 }
 
-async function callGemini(prompt: string): Promise<string> {
+export async function callGemini(prompt: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn('[GeminiService] No GEMINI_API_KEY configured');
