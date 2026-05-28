@@ -246,7 +246,7 @@ export default function ResponsiveSidebar({
               <button onClick={() => setShowLogoutConfirm(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors">
                 {t('logout.cancel')}
               </button>
-              <button onClick={() => { setShowLogoutConfirm(false); onLogout(); }} className="px-4 py-2 rounded-lg text-sm font-medium bg-sky-500 text-white hover:bg-sky-600 transition-colors">
+              <button onClick={() => { setShowLogoutConfirm(false); onLogout(); }} className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 hover:shadow-md transition-all">
                 {t('logout.confirm')}
               </button>
             </div>
