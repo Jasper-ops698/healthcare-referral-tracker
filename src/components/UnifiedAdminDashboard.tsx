@@ -14,6 +14,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Area, AreaChart,
 } from 'recharts';
+import { jsPDF } from 'jspdf';
 import {
   Activity, TrendingUp, Send, Download, Sparkles,
   FileText, Loader2, User, Stethoscope,
@@ -202,14 +203,67 @@ export default function UnifiedAdminDashboard() {
       const res = await generateAIExportReport(exportPrompt, 'html');
       if (res.success && res.data) {
         const content = (res.data as any).content || '';
-        const blob = new Blob([content], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `healthtrack-report-${new Date().toISOString().slice(0, 10)}.html`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success('Report downloaded');
+
+        // Generate PDF
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 15;
+        const textWidth = pageWidth - margin * 2;
+
+        // Title
+        doc.setFontSize(18);
+        doc.setTextColor(33, 150, 243);
+        doc.text('HealthTrack Report', pageWidth / 2, 20, { align: 'center' });
+
+        // Subtitle
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, 27, { align: 'center' });
+        doc.text(`Query: "${exportPrompt}"`, pageWidth / 2, 32, { align: 'center' });
+
+        // Divider
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, 36, pageWidth - margin, 36);
+
+        // Content — strip HTML tags for clean text
+        const plainText = content
+          .replace(/<style[^>]*>.*?<\/style>/gs, '')
+          .replace(/<script[^>]*>.*?<\/script>/gs, '')
+          .replace(/<[^>]+>/g, '\n')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+
+        doc.setFontSize(10);
+        doc.setTextColor(40, 40, 40);
+
+        // Split text to fit page width
+        const lines = doc.splitTextToSize(plainText, textWidth);
+        let y = 42;
+
+        for (const line of lines) {
+          if (y > 280) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(line, margin, y);
+          y += 4.5;
+        }
+
+        // Footer
+        const totalPages = doc.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          doc.setPage(i);
+          doc.setFontSize(8);
+          doc.setTextColor(150, 150, 150);
+          doc.text(`Page ${i} of ${totalPages} — HealthTrack Referral System`, pageWidth / 2, 292, { align: 'center' });
+        }
+
+        doc.save(`healthtrack-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+        toast.success('PDF report downloaded');
         setShowExport(false);
         setExportPrompt('');
       } else {
