@@ -278,3 +278,7 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Fatal] Unhandled rejection:', reason);
   disconnectDatabase().then(() => process.exit(1));
 });
+
+// ─── START ───
+
+startServer();
