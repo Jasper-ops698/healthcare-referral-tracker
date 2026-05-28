@@ -112,7 +112,7 @@ export default function ReferralForm({
   const transportLabel = TRANSPORT_MODES.find(t => t.value === form.modeOfTransport)?.label || form.modeOfTransport;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 max-w-3xl">
+    <form onSubmit={handleSubmit} className="space-y-5 w-full">
       {/* Step Progress */}
       <div className="flex items-center gap-2 mb-6">
         {STEPS.map((s, i) => (

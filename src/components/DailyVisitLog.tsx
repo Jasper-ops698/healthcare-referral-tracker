@@ -159,12 +159,14 @@ export default function DailyVisitLog() {
         <div><label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">Notes</label>
           <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-background resize-none" placeholder="Any notes..." /></div>
 
-        <button onClick={handleSave} disabled={saving || !displayTotal || parseInt(displayTotal) <= 0}
-          className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-          {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-            : todayEntry ? <><Pencil className="w-4 h-4" /> Update Visit Log</>
-            : <><Save className="w-4 h-4" /> Save Visit Log</>}
-        </button>
+        <div className="flex justify-center pt-2">
+          <button onClick={handleSave} disabled={saving || !displayTotal || parseInt(displayTotal) <= 0}
+            className="px-10 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm hover:shadow-md min-w-[200px]">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+              : todayEntry ? <><Pencil className="w-4 h-4" /> Update Visit Log</>
+              : <><Save className="w-4 h-4" /> Save Visit Log</>}
+          </button>
+        </div>
       </div>
 
       {stationVisits.length > 0 && (
