@@ -25,9 +25,14 @@ const subscriptions = new Map<string, PushSubscription[]>();
 let vapidConfigured = false;
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-  vapidConfigured = true;
-  console.log('[Push] VAPID keys configured');
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    vapidConfigured = true;
+    console.log('[Push] VAPID keys configured');
+  } catch (err: any) {
+    console.warn('[Push] Invalid VAPID keys, push notifications disabled:', err.message);
+    vapidConfigured = false;
+  }
 } else {
   console.warn('[Push] VAPID keys not configured. Push notifications disabled.');
 }
