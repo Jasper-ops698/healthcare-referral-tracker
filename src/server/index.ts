@@ -124,8 +124,7 @@ import stationRoutes from './routes/stations.js';
 import { seedStations } from './controllers/stationController.js';
 app.use(`${API_PREFIX}/stations`, stationRoutes);
 
-// Seed default stations on startup
-seedStations().catch(console.error);
+// seedStations() is called inside startServer() after DB connects
 
 // Daily Visit routes
 import dailyVisitRoutes from './routes/dailyVisits.js';
@@ -200,6 +199,9 @@ async function startServer(): Promise<void> {
 
     // Run database migrations
     await migrateRenameCHPToCollector();
+
+    // Seed default stations if needed
+    await seedStations();
 
     // Start HTTP server
     app.listen(PORT, () => {
