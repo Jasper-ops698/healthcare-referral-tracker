@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   ClipboardList, Search, CheckCircle, Clock, AlertTriangle,
   ArrowLeft, Stethoscope, User, MapPin, Ambulance, Send,
@@ -96,15 +97,35 @@ export default function CounterReferralView({ stationId, stationName, collectorI
         getIncomingReferrals(stationId, undefined, stationName),
         getOutgoingReferrals(stationId),
       ]);
-      if (iRes.success) setIncoming(((iRes.data as any)?.referrals || []) as ReferralV2[]);
-      if (oRes.success) setOutgoing(((oRes.data as any)?.referrals || []) as ReferralV2[]);
+      // Map MongoDB _id to frontend id field
+      const mapId = (r: any): ReferralV2 => ({ ...r, id: r.id || r._id?.toString() || r._id });
+      if (iRes.success) setIncoming((((iRes.data as any)?.referrals || []) as any[]).map(mapId));
+      if (oRes.success) setOutgoing((((oRes.data as any)?.referrals || []) as any[]).map(mapId));
     } catch (e) { console.error('Load referrals failed:', e); }
     finally { setLoading(false); }
   };
 
   /** Receive patient — marks as accepted, collector now owns the case */
+  const [receivingId, setReceivingId] = useState<string | null>(null);
   const handleReceive = async (id: string) => {
-    try { await acceptReferralV2(id); await loadData(); } catch (e) { console.error('Receive failed:', e); }
+    if (!id || id === 'undefined') {
+      toast.error('Invalid referral ID. Please refresh and try again.');
+      return;
+    }
+    setReceivingId(id);
+    try {
+      const res = await acceptReferralV2(id);
+      if (res.success) {
+        toast.success('Patient received — care started');
+        await loadData();
+      } else {
+        toast.error((res as any).error?.message || 'Failed to receive patient');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Network error. Please try again.');
+    } finally {
+      setReceivingId(null);
+    }
   };
 
   const openDetail = (r: ReferralV2, dir: 'incoming' | 'outgoing') => {
@@ -425,10 +446,15 @@ export default function CounterReferralView({ stationId, stationName, collectorI
       {/* ─── COLLECTOR ACTIONS ─── */}
       {isIncoming && bucket === 'needs-attention' && (
         <button
-          onClick={() => handleReceive(selected.id)}
-          className="w-full px-6 py-3.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
+          onClick={() => handleReceive(selected.id || (selected as any)._id)}
+          disabled={receivingId === (selected.id || (selected as any)._id)}
+          className="w-full px-6 py-3.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          <PackageCheck className="w-5 h-5" />Receive Patient — Start Care
+          {receivingId === (selected.id || (selected as any)._id) ? (
+            <><Loader2 className="w-5 h-5 animate-spin" />Receiving...</>
+          ) : (
+            <><PackageCheck className="w-5 h-5" />Receive Patient — Start Care</>
+          )}
         </button>
       )}
 
