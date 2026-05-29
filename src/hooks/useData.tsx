@@ -189,7 +189,7 @@ export function useUsers() {
    */
   const addUser = useCallback(async (
     userData: Omit<User, 'id' | 'createdAt'> & { id?: string; password?: string },
-    apiPayload?: { firstName: string; lastName: string; email: string; phone: string; role: string; assignedFacility?: string; region?: string }
+    apiPayload?: { firstName: string; lastName: string; email: string; phone: string; role: string; assignedFacility?: string; stationName?: string; stationType?: string; stationId?: string; region?: string }
   ): Promise<{ user: User; serverSynced: boolean; error?: string }> => {
     const email = userData.email?.toLowerCase().trim();
     if (email) {
@@ -240,6 +240,9 @@ export function useUsers() {
       phone: userData.phone,
       role: userData.role,
       assignedFacility: userData.assignedFacility,
+      stationName: userData.stationName,
+      stationType: userData.stationType,
+      stationId: userData.stationId || userData.stationName?.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       region: userData.region || 'default',
     };
     const outboxEntry = await localDB.enqueueChange('user', tempId, 'create', outboxPayload);

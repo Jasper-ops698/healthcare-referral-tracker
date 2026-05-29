@@ -8,7 +8,7 @@
  */
 
 import { Router } from 'express';
-import { handleCreateUser, handleListUsers, handleResendWelcome, handleUpdateProfile } from '../controllers/userController.js';
+import { handleCreateUser, handleListUsers, handleResendWelcome, handleUpdateProfile, handleAdminUpdateUser } from '../controllers/userController.js';
 import { authenticateJWT } from '../middleware/regionalAuth.js';
 
 const router = Router();
@@ -17,5 +17,6 @@ router.post('/', authenticateJWT, handleCreateUser);
 router.post('/resend', authenticateJWT, handleResendWelcome);
 router.get('/', authenticateJWT, handleListUsers);
 router.patch('/me', authenticateJWT, handleUpdateProfile);
+router.patch('/:id', authenticateJWT, handleAdminUpdateUser);
 
 export default router;

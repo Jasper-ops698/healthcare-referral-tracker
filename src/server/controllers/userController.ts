@@ -339,3 +339,67 @@ export async function handleListUsers(req: Request, res: Response): Promise<void
     });
   }
 }
+
+// ─── ADMIN UPDATE USER (STATION FIELDS) ───
+
+export async function handleAdminUpdateUser(req: Request, res: Response): Promise<void> {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    if (!requireAdmin(authReq, res)) return;
+
+    const { id } = req.params;
+    const body = req.body;
+
+    const allowedUpdates: Record<string, unknown> = {};
+
+    if (body.firstName !== undefined) allowedUpdates.firstName = body.firstName.trim();
+    if (body.lastName !== undefined) allowedUpdates.lastName = body.lastName.trim();
+    if (body.email !== undefined) allowedUpdates.email = body.email.toLowerCase().trim();
+    if (body.phone !== undefined) allowedUpdates.phone = body.phone.trim();
+    if (body.assignedFacility !== undefined) allowedUpdates.facilityId = body.assignedFacility.trim() || undefined;
+    if (body.stationName !== undefined) allowedUpdates.stationName = body.stationName.trim() || undefined;
+    if (body.stationType !== undefined) allowedUpdates.stationType = body.stationType || undefined;
+    if (body.stationId !== undefined) allowedUpdates.stationId = body.stationId?.trim() || undefined;
+
+    // If stationName is set but stationId isn't, auto-generate stationId
+    if (allowedUpdates.stationName && !allowedUpdates.stationId) {
+      const name = allowedUpdates.stationName as string;
+      allowedUpdates.stationId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    }
+
+    // Check email uniqueness if changing
+    if (allowedUpdates.email) {
+      const existing = await User.findOne({
+        email: allowedUpdates.email,
+        _id: { $ne: id },
+      }).exec();
+      if (existing) {
+        res.status(409).json({ success: false, error: { code: 'EMAIL_EXISTS', message: 'Email already in use' } });
+        return;
+      }
+    }
+
+    const updated = await User.findByIdAndUpdate(
+      id,
+      { $set: allowedUpdates },
+      { new: true, runValidators: true }
+    ).select('-password -twoFactorSecret -twoFactorBackupCodes').lean().exec();
+
+    if (!updated) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { user: updated },
+    });
+
+  } catch (error) {
+    console.error('[UserController] Admin update user error:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to update user' },
+    });
+  }
+}

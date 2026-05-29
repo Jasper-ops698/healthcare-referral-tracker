@@ -488,6 +488,9 @@ export default function UserManagement() {
             onSubmit={async (data) => {
               // OFFLINE-FIRST: save locally, try API, enqueue for sync if offline
               try {
+                const stationId = data.stationName
+                  ? data.stationName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+                  : undefined;
                 const { user, serverSynced, error } = await addUser(
                   {
                     firstName: data.firstName,
@@ -498,6 +501,9 @@ export default function UserManagement() {
                     status: 'active',
                     region: 'default',
                     assignedFacility: data.assignedFacility,
+                    stationName: data.stationName,
+                    stationType: data.stationType,
+                    stationId,
                   },
                   {
                     firstName: data.firstName,
@@ -506,6 +512,9 @@ export default function UserManagement() {
                     phone: data.phone,
                     role: data.role,
                     assignedFacility: data.assignedFacility,
+                    stationName: data.stationName,
+                    stationType: data.stationType,
+                    stationId: stationId || data.stationName?.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
                     region: 'default',
                   }
                 );
@@ -545,8 +554,20 @@ export default function UserManagement() {
           {editingUser && (
             <EditUserForm
               user={editingUser}
-              onSubmit={(data) => {
-                updateUser(editingUser.id, data);
+              onSubmit={async (data) => {
+                // Auto-generate stationId from stationName if not provided
+                const payload = {
+                  ...data,
+                  stationId: data.stationId || data.stationName?.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                };
+                // Update locally
+                updateUser(editingUser.id, payload);
+                // Sync to backend
+                try {
+                  await import('@/lib/apiClient').then(m => m.updateUser(editingUser.id, payload));
+                } catch {
+                  // Backend sync failed — local change is saved, sync engine will retry
+                }
                 setEditingUser(null);
                 toast.success(t('users.userUpdated') || 'User updated successfully');
               }}
@@ -681,6 +702,8 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
     phone: '',
     role: 'collector' as UserRole,
     assignedFacility: '',
+    stationName: '',
+    stationType: 'household' as 'household' | 'hip' | 'referral-center',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -751,16 +774,40 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
       </div>
 
       {formData.role === 'collector' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.assignedFacility')}</label>
-          <input
-            type="text"
-            value={formData.assignedFacility}
-            onChange={(e) => setFormData({ ...formData, assignedFacility: e.target.value })}
-            className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
-            placeholder={t('users.facilityPlaceholder')}
-          />
-        </div>
+        <>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.assignedFacility')}</label>
+            <input
+              type="text"
+              value={formData.assignedFacility}
+              onChange={(e) => setFormData({ ...formData, assignedFacility: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
+              placeholder={t('users.facilityPlaceholder')}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Station Name</label>
+            <input
+              type="text"
+              value={formData.stationName}
+              onChange={(e) => setFormData({ ...formData, stationName: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
+              placeholder="e.g., Mtwapa Health Center"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Station Type</label>
+            <select
+              value={formData.stationType}
+              onChange={(e) => setFormData({ ...formData, stationType: e.target.value as 'household' | 'hip' | 'referral-center' })}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm bg-white"
+            >
+              <option value="household">Household</option>
+              <option value="hip">HIP (Health Information Point)</option>
+              <option value="referral-center">Referral Center</option>
+            </select>
+          </div>
+        </>
       )}
 
       <div className="flex gap-3 pt-4">
@@ -798,6 +845,8 @@ function EditUserForm({ user, onSubmit, onCancel }: EditUserFormProps) {
     email: user.email,
     phone: user.phone || '',
     assignedFacility: user.assignedFacility || '',
+    stationName: user.stationName || '',
+    stationType: (user.stationType as 'household' | 'hip' | 'referral-center') || 'household',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -852,15 +901,39 @@ function EditUserForm({ user, onSubmit, onCancel }: EditUserFormProps) {
       </div>
 
       {user.role === 'collector' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.assignedFacility')}</label>
-          <input
-            type="text"
-            value={formData.assignedFacility}
-            onChange={(e) => setFormData({ ...formData, assignedFacility: e.target.value })}
-            className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
-          />
-        </div>
+        <>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.assignedFacility')}</label>
+            <input
+              type="text"
+              value={formData.assignedFacility}
+              onChange={(e) => setFormData({ ...formData, assignedFacility: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Station Name</label>
+            <input
+              type="text"
+              value={formData.stationName}
+              onChange={(e) => setFormData({ ...formData, stationName: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
+              placeholder="e.g., Mtwapa Health Center"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Station Type</label>
+            <select
+              value={formData.stationType}
+              onChange={(e) => setFormData({ ...formData, stationType: e.target.value as 'household' | 'hip' | 'referral-center' })}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm bg-white"
+            >
+              <option value="household">Household</option>
+              <option value="hip">HIP (Health Information Point)</option>
+              <option value="referral-center">Referral Center</option>
+            </select>
+          </div>
+        </>
       )}
 
       <div className="flex gap-3 pt-4">
