@@ -827,7 +827,7 @@ export default function UnifiedAdminDashboard() {
         <div className="bg-card rounded-xl border border-border p-5">
           <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
             <Stethoscope className="w-4 h-4 text-primary" />
-            Disease Prevalence (Initial Diagnosis)
+            Disease Prevalence
           </h2>
           {diseaseData.length === 0 ? (
             <EmptyState message="No diagnosis data available" />
