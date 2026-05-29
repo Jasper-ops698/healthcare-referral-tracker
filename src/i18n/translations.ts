@@ -199,7 +199,7 @@ export const Translations = {
 
     // Users
     'users.title': 'User Management',
-    'users.subtitle': 'Manage administrators, data collectors, and CHPs',
+    'users.subtitle': 'Manage administrators and data collectors',
     'users.addUser': 'Add User',
     'users.addCHP': 'Register CHP',
     'users.addCHPDesc': 'Register a new Community Health Provider',
@@ -710,7 +710,7 @@ export const Translations = {
 
     // Users (Swahili)
     'users.title': 'Udhibiti wa Watumiaji',
-    'users.subtitle': 'Badilisha waongozaji, wakusanya data, na CHPs',
+    'users.subtitle': 'Simamia wasimamizi na wakusanya data',
     'users.addUser': 'Ongeza Mtumiaji',
     'users.addCHP': 'Sajili CHP',
     'users.addCHPDesc': 'Sajili Mtoa Huduma wa Jamii Mpya',

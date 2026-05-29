@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import AddCHPModal from './AddCHPModal';
 import { useAuth } from '@/hooks/useAuth';
-import { useUsers, useChps } from '@/hooks/useData';
+import { useUsers } from '@/hooks/useData';
 import { useSync } from '@/hooks/useSync';
 import { useI18n } from '@/i18n/useI18n';
 import type { User, UserRole } from '@/types';
@@ -9,7 +8,6 @@ import { isPrimaryAdmin, API_BASE_URL } from '@/lib/config';
 import ProfileModal from '@/components/ProfileModal';
 import {
   Plus,
-  UserPlus,
   Search,
   MoreHorizontal,
   Edit2,
@@ -52,12 +50,10 @@ export default function UserManagement() {
   const { t } = useI18n();
   const { user: currentUser, isPrimaryAdmin: isViewerPrimaryAdmin } = useAuth();
   const { users, addUser, updateUser, toggleUserStatus, clearUsers } = useUsers();
-  const { addChp } = useChps();
   const { isOnline, pendingCount } = useSync();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showAddCHPModal, setShowAddCHPModal] = useState(false);
   const [createdUserResult, setCreatedUserResult] = useState<{
     tempPassword?: string;
     emailSent: boolean;
@@ -208,14 +204,6 @@ export default function UserManagement() {
           >
             <Plus className="w-4 h-4" />
             {t('users.addUser')}
-          </button>
-          <button
-            onClick={() => setShowAddCHPModal(true)}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-teal-500 text-white font-semibold text-sm shadow-lg shadow-teal-500/30 hover:bg-teal-600 hover:shadow-teal-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-            title={t('users.addCHPDesc')}
-          >
-            <UserPlus className="w-4 h-4" />
-            {t('users.addCHP')}
           </button>
         </div>
 
@@ -490,20 +478,6 @@ export default function UserManagement() {
         />
       )}
 
-      {/* ── Add CHP Modal ── */}
-      <AddCHPModal
-        open={showAddCHPModal}
-        onOpenChange={setShowAddCHPModal}
-        onSubmit={async (chpData) => {
-          try {
-            const chp = await addChp(chpData);
-            setShowAddCHPModal(false);
-            toast.success(`${chp.fullName} ${t('chp.addedSuccess') || 'registered as CHP'}`);
-          } catch (err: any) {
-            toast.error(err.message || t('chp.addError') || 'Failed to register CHP');
-          }
-        }}
-      />
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
