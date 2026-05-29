@@ -19,6 +19,7 @@ import {
   Activity, TrendingUp, Send, Download, Sparkles,
   FileText, Loader2, User, Stethoscope,
   ClipboardList, HeartPulse, Baby, AlertTriangle,
+  Filter, X, CalendarDays, MapPin, ShieldAlert,
 } from 'lucide-react';
 import {
   getAllReferralsV2, sendAIChat, generateAIExportReport,
@@ -51,6 +52,13 @@ export default function UnifiedAdminDashboard() {
   const [exportLoading, setExportLoading] = useState(false);
   const [showExport, setShowExport] = useState(false);
 
+  // Filter state
+  const [filterStationType, setFilterStationType] = useState<'all' | 'household' | 'hip' | 'referral-center'>('all');
+  const [filterUrgency, setFilterUrgency] = useState<'all' | 'emergency' | 'urgent' | 'routine'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'in-transit' | 'accepted' | 'in-treatment' | 'counter-referral-created' | 'completed'>('all');
+  const [filterDateRange, setFilterDateRange] = useState<'all' | '7days' | '30days' | '90days'>('all');
+  const [showFilters, setShowFilters] = useState(false);
+
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
@@ -62,9 +70,34 @@ export default function UnifiedAdminDashboard() {
     finally { setLoading(false); }
   };
 
+  // ─── FILTERED DATASET (all charts + KPIs use this) ───
+  const filteredReferrals = useMemo(() => {
+    const now = new Date();
+    return referrals.filter(r => {
+      // Station type filter
+      if (filterStationType !== 'all') {
+        const st = r.sourceStationType || r.destinationStationType;
+        if (st !== filterStationType) return false;
+      }
+      // Urgency filter
+      if (filterUrgency !== 'all' && r.urgency !== filterUrgency) return false;
+      // Status filter
+      if (filterStatus !== 'all' && r.status !== filterStatus) return false;
+      // Date range filter
+      if (filterDateRange !== 'all') {
+        const rDate = new Date(r.createdAt);
+        const days = filterDateRange === '7days' ? 7 : filterDateRange === '30days' ? 30 : 90;
+        const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+        if (rDate < cutoff) return false;
+      }
+      return true;
+    });
+  }, [referrals, filterStationType, filterUrgency, filterStatus, filterDateRange]);
+
   // ─── 1. LINE CHART: Referral activities per facility over time ───
   const { lineChartData, facilityNames } = useMemo(() => {
-    if (referrals.length === 0) return { lineChartData: [], facilityNames: [], totalLine: [] as { period: string; total: number }[] };
+    const data = filteredReferrals;
+    if (data.length === 0) return { lineChartData: [], facilityNames: [] };
 
     // Determine date range
     const dates = referrals.map(r => new Date(r.createdAt));
@@ -136,7 +169,7 @@ export default function UnifiedAdminDashboard() {
   // ─── 2. PIE CHARTS: Gender & Age distribution ───
   const genderData = useMemo(() => {
     const counts: Record<string, number> = {};
-    referrals.forEach(r => {
+    filteredReferrals.forEach(r => {
       const g = r.patientGender || 'unknown';
       counts[g] = (counts[g] || 0) + 1;
     });
@@ -149,7 +182,7 @@ export default function UnifiedAdminDashboard() {
 
   const ageData = useMemo(() => {
     const groups: Record<string, number> = { '0-5': 0, '6-18': 0, '19-35': 0, '36-50': 0, '50+': 0 };
-    referrals.forEach(r => {
+    filteredReferrals.forEach(r => {
       const age = r.patientAge;
       if (age <= 5) groups['0-5']++;
       else if (age <= 18) groups['6-18']++;
@@ -165,7 +198,7 @@ export default function UnifiedAdminDashboard() {
   // ─── 3. BAR CHART: Disease prevalence & referral reasons ───
   const diseaseData = useMemo(() => {
     const counts: Record<string, number> = {};
-    referrals.forEach(r => {
+    filteredReferrals.forEach(r => {
       const d = r.initialDiagnosis?.toLowerCase().trim() || 'Unspecified';
       // Truncate long diagnosis names
       const key = d.length > 30 ? d.slice(0, 30) + '...' : d;
@@ -179,7 +212,7 @@ export default function UnifiedAdminDashboard() {
 
   const referralReasonData = useMemo(() => {
     const counts: Record<string, number> = {};
-    referrals.forEach(r => {
+    filteredReferrals.forEach(r => {
       const reason = r.reasonForReferral?.toLowerCase().trim() || 'Unspecified';
       const key = reason.length > 30 ? reason.slice(0, 30) + '...' : reason;
       counts[key] = (counts[key] || 0) + 1;
@@ -353,11 +386,15 @@ export default function UnifiedAdminDashboard() {
 
   // ─── KPI Summary ───
   const kpi = useMemo(() => ({
-    total: referrals.length,
-    emergency: referrals.filter(r => r.urgency === 'emergency').length,
-    urgent: referrals.filter(r => r.urgency === 'urgent').length,
-    completed: referrals.filter(r => r.status === 'counter-referral-created' || r.status === 'completed').length,
-  }), [referrals]);
+    total: filteredReferrals.length,
+    emergency: filteredReferrals.filter(r => r.urgency === 'emergency').length,
+    urgent: filteredReferrals.filter(r => r.urgency === 'urgent').length,
+    completed: filteredReferrals.filter(r => r.status === 'counter-referral-created' || r.status === 'completed').length,
+  }), [filteredReferrals]);
+
+  // Active filter count for badge
+  const activeFilterCount = [filterStationType, filterUrgency, filterStatus, filterDateRange]
+    .filter(f => f !== 'all').length;
 
   if (loading) {
     return (
@@ -478,6 +515,154 @@ export default function UnifiedAdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Filter Bar */}
+      <div className="bg-card rounded-xl border border-border p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              showFilters || activeFilterCount > 0
+                ? 'bg-primary text-primary-foreground'
+                : 'hover:bg-muted text-muted-foreground'
+            }`}
+          >
+            <Filter className="w-4 h-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="bg-primary-foreground text-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={() => {
+                setFilterStationType('all');
+                setFilterUrgency('all');
+                setFilterStatus('all');
+                setFilterDateRange('all');
+              }}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 transition-colors px-2 py-1 rounded hover:bg-red-50"
+            >
+              <X className="w-3 h-3" /> Clear all
+            </button>
+          )}
+        </div>
+
+        {showFilters && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-border">
+            {/* Station Type */}
+            <div className="space-y-1">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                <MapPin className="w-3 h-3" /> Station Type
+              </label>
+              <select
+                value={filterStationType}
+                onChange={e => setFilterStationType(e.target.value as any)}
+                className="w-full px-2.5 py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="all">All Types</option>
+                <option value="household">Household</option>
+                <option value="hip">HIP</option>
+                <option value="referral-center">Referral Center</option>
+              </select>
+            </div>
+
+            {/* Urgency */}
+            <div className="space-y-1">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                <ShieldAlert className="w-3 h-3" /> Urgency
+              </label>
+              <select
+                value={filterUrgency}
+                onChange={e => setFilterUrgency(e.target.value as any)}
+                className="w-full px-2.5 py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="all">All Levels</option>
+                <option value="emergency">Emergency</option>
+                <option value="urgent">Urgent</option>
+                <option value="routine">Routine</option>
+              </select>
+            </div>
+
+            {/* Status */}
+            <div className="space-y-1">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                <Activity className="w-3 h-3" /> Status
+              </label>
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value as any)}
+                className="w-full px-2.5 py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="in-transit">In Transit</option>
+                <option value="accepted">Accepted</option>
+                <option value="in-treatment">In Treatment</option>
+                <option value="counter-referral-created">Counter-Referral</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+
+            {/* Date Range */}
+            <div className="space-y-1">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                <CalendarDays className="w-3 h-3" /> Date Range
+              </label>
+              <select
+                value={filterDateRange}
+                onChange={e => setFilterDateRange(e.target.value as any)}
+                className="w-full px-2.5 py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="all">All Time</option>
+                <option value="7days">Last 7 Days</option>
+                <option value="30days">Last 30 Days</option>
+                <option value="90days">Last 90 Days</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Active filter chips */}
+        {activeFilterCount > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {filterStationType !== 'all' && (
+              <button
+                onClick={() => setFilterStationType('all')}
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+              >
+                <MapPin className="w-3 h-3" /> Station: {filterStationType} <X className="w-3 h-3" />
+              </button>
+            )}
+            {filterUrgency !== 'all' && (
+              <button
+                onClick={() => setFilterUrgency('all')}
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors"
+              >
+                <ShieldAlert className="w-3 h-3" /> Urgency: {filterUrgency} <X className="w-3 h-3" />
+              </button>
+            )}
+            {filterStatus !== 'all' && (
+              <button
+                onClick={() => setFilterStatus('all')}
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+              >
+                <Activity className="w-3 h-3" /> Status: {filterStatus} <X className="w-3 h-3" />
+              </button>
+            )}
+            {filterDateRange !== 'all' && (
+              <button
+                onClick={() => setFilterDateRange('all')}
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition-colors"
+              >
+                <CalendarDays className="w-3 h-3" /> {filterDateRange === '7days' ? 'Last 7 Days' : filterDateRange === '30days' ? 'Last 30 Days' : 'Last 90 Days'} <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
