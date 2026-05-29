@@ -504,6 +504,10 @@ export const Translations = {
     'myPatients.addMedicalRecord': 'Add Medical Record',
 
     // Toast messages
+    'toast.welcome': 'Welcome back!',
+    'toast.sessionExpired': 'Your session has expired. Please log in again.',
+    'toast.invalidCredentials': 'Invalid email or password. Please try again.',
+    'toast.connectionFailed': 'Connection failed. Please check your internet connection.',
     'toast.statusUpdateFailed': 'Failed to update status',
     'toast.noReferralsToExport': 'No referrals to export',
     'toast.referralPipelineExported': 'Referral pipeline exported successfully',
@@ -1015,6 +1019,10 @@ export const Translations = {
     'myPatients.addMedicalRecord': 'Ongeza Kumbukumbu ya Kimatibabu',
 
     // Toast messages (Swahili)
+    'toast.welcome': 'Karibu tena!',
+    'toast.sessionExpired': 'Kipindi chako kimekwisha. Tafadhali ingia tena.',
+    'toast.invalidCredentials': 'Barua pepe au neno la siri si sahihi. Jaribu tena.',
+    'toast.connectionFailed': 'Muunganisho umeshindwa. Tafadhali angalia muunganisho wako wa intaneti.',
     'toast.statusUpdateFailed': 'Imeshindwa kusasisha hali',
     'toast.noReferralsToExport': 'Hakuna marekebisho ya kuhamisha',
     'toast.referralPipelineExported': 'Bomba la marekebisho lihamishwa kwa mafanikio',
