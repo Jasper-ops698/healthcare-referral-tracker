@@ -51,7 +51,7 @@ export async function handleCreateUser(req: Request, res: Response): Promise<voi
     const authReq = req as AuthenticatedRequest;
     if (!requireAdmin(authReq, res)) return;
 
-    const { firstName, lastName, email, phone, role, assignedFacility, region } = req.body;
+    const { firstName, lastName, email, phone, role, assignedFacility, stationName, stationType, stationId, region } = req.body;
 
     // Validation
     if (!firstName || !lastName || !email || !phone || !role) {
@@ -90,6 +90,9 @@ export async function handleCreateUser(req: Request, res: Response): Promise<voi
       status: 'active',
       region: (region || 'default').trim(),
       facilityId: assignedFacility ? assignedFacility.toString().trim() : undefined,
+      stationName: stationName ? stationName.toString().trim() : undefined,
+      stationType: stationType || undefined,
+      stationId: stationId ? stationId.toString().trim() : (stationName ? stationName.toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') : undefined),
       forcePasswordChange: true,
       preferences: {
         language: 'en',
@@ -311,6 +314,62 @@ export async function handleUpdateProfile(req: Request, res: Response): Promise<
       success: false,
       error: { code: 'INTERNAL_ERROR', message: 'Failed to update profile' },
     });
+  }
+}
+
+// ─── GET CURRENT USER (ME) ───
+
+export async function handleGetMe(req: Request, res: Response): Promise<void> {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    if (!authReq.user) {
+      res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } });
+      return;
+    }
+
+    const user = await User.findById(authReq.user._id)
+      .select('-password -twoFactorSecret -twoFactorBackupCodes -passwordResetToken')
+      .lean()
+      .exec();
+
+    if (!user) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: user._id.toString(),
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone || '',
+        role: user.role,
+        status: user.status,
+        region: user.region,
+        assignedFacility: user.facilityId?.toString(),
+        stationId: user.stationId?.toString(),
+        stationName: user.stationName,
+        stationType: user.stationType,
+        dateOfBirth: user.dateOfBirth,
+        gender: user.gender,
+        nationalId: user.nationalId,
+        emergencyContact: user.emergencyContact,
+        languages: user.languages,
+        homeCounty: user.homeCounty,
+        bloodGroup: user.bloodGroup,
+        physicalAddress: user.physicalAddress,
+        nextOfKin: user.nextOfKin,
+        bio: user.bio,
+        preferences: user.preferences,
+        avatar: user.avatar,
+        lastLogin: user.lastLoginAt,
+      },
+    });
+  } catch (error: any) {
+    console.error('[UserController] Get me error:', error);
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to get user' } });
   }
 }
 
