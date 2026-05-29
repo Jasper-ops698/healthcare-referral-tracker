@@ -145,7 +145,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
     }
     setSubmitting(true);
     try {
-      const cRes = await createCounterReferral({
+      const payload = {
         referralId: refId, patientId: selected.patientId, patientName: selected.patientName,
         stationId, stationName, collectorId, collectorName,
         finalDiagnosis, treatmentProvided: treatment,
@@ -153,9 +153,12 @@ export default function CounterReferralView({ stationId, stationName, collectorI
         recoveryStatus, nextVisitDate: nextVisitDate ? new Date(nextVisitDate) : undefined,
         followUpInstructions: followUp, warningSigns: warningSigns || undefined,
         chpName, chpPhone: chpPhone || undefined, chpEmail: chpEmail || undefined,
-      });
+      };
+      const cRes = await createCounterReferral(payload);
       if (!cRes.success) {
-        toast.error((cRes as any).error?.message || 'Failed to create counter-referral');
+        const errMsg = (cRes as any).error?.message || JSON.stringify((cRes as any).error) || 'Failed to create counter-referral';
+        toast.error(errMsg);
+        console.error('[CounterReferral] API error:', cRes);
         setSubmitting(false);
         return;
       }
@@ -168,6 +171,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
         toast.error((sRes as any).error?.message || 'Failed to update status');
       }
     } catch (e: any) {
+      console.error('[CounterReferral] Exception:', e);
       toast.error(e.message || 'Network error. Please try again.');
     } finally { setSubmitting(false); }
   };

@@ -112,6 +112,7 @@ app.use(`${API_PREFIX}/referrals-v2`, referralV2Routes);
 // Counter-referral routes
 import counterReferralRoutes from './routes/counterReferrals.js';
 app.use(`${API_PREFIX}/counter-referrals`, counterReferralRoutes);
+console.log('[Routes] Counter-referral routes registered at', `${API_PREFIX}/counter-referrals`);
 
 // Public CHP feedback form routes (shorter URL for email links)
 // These are aliases that forward to the counter-referral controller
