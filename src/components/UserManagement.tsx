@@ -27,6 +27,7 @@ import {
   Trash2,
   Wifi,
   WifiOff,
+  Sparkles,
   CloudOff,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -693,6 +694,12 @@ interface AddUserFormProps {
   onCancel: () => void;
 }
 
+// ─── Helper: generate short facility code from station name ───
+function generateFacilityCode(name: string): string {
+  if (!name.trim()) return '';
+  return name.trim().toLowerCase().split(/\s+/)[0].replace(/[^a-z0-9]/g, '');
+}
+
 function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
   const { t } = useI18n();
   const [formData, setFormData] = useState({
@@ -705,6 +712,17 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
     stationName: '',
     stationType: 'household' as 'household' | 'hip' | 'referral-center',
   });
+
+  const handleStationNameChange = (value: string) => {
+    const newCode = generateFacilityCode(value);
+    // Auto-fill assignedFacility if it was empty or matches previous auto-generated code
+    const shouldAutoFill = !formData.assignedFacility || generateFacilityCode(formData.stationName) === formData.assignedFacility;
+    setFormData(prev => ({
+      ...prev,
+      stationName: value,
+      assignedFacility: shouldAutoFill ? newCode : prev.assignedFacility,
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -784,13 +802,18 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
               className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
               placeholder={t('users.facilityPlaceholder')}
             />
+            {formData.assignedFacility && formData.stationName && generateFacilityCode(formData.stationName) === formData.assignedFacility && (
+              <p className="text-[11px] text-teal-600 mt-1 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Auto-generated from Station Name
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Station Name</label>
             <input
               type="text"
               value={formData.stationName}
-              onChange={(e) => setFormData({ ...formData, stationName: e.target.value })}
+              onChange={(e) => handleStationNameChange(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
               placeholder="e.g., Mtwapa Health Center"
             />
@@ -848,6 +871,17 @@ function EditUserForm({ user, onSubmit, onCancel }: EditUserFormProps) {
     stationName: user.stationName || '',
     stationType: (user.stationType as 'household' | 'hip' | 'referral-center') || 'household',
   });
+
+  const handleStationNameChange = (value: string) => {
+    const newCode = generateFacilityCode(value);
+    const prevAutoCode = generateFacilityCode(formData.stationName);
+    const shouldAutoFill = !formData.assignedFacility || formData.assignedFacility === prevAutoCode;
+    setFormData(prev => ({
+      ...prev,
+      stationName: value,
+      assignedFacility: shouldAutoFill ? newCode : prev.assignedFacility,
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -910,13 +944,18 @@ function EditUserForm({ user, onSubmit, onCancel }: EditUserFormProps) {
               onChange={(e) => setFormData({ ...formData, assignedFacility: e.target.value })}
               className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
             />
+            {formData.assignedFacility && formData.stationName && generateFacilityCode(formData.stationName) === formData.assignedFacility && (
+              <p className="text-[11px] text-teal-600 mt-1 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Auto-generated from Station Name
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Station Name</label>
             <input
               type="text"
               value={formData.stationName}
-              onChange={(e) => setFormData({ ...formData, stationName: e.target.value })}
+              onChange={(e) => handleStationNameChange(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
               placeholder="e.g., Mtwapa Health Center"
             />
