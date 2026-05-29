@@ -28,12 +28,14 @@ import type { ChatMessage } from '@/lib/apiClient';
 import type { ReferralV2 } from '@/types';
 import { toast } from 'sonner';
 import { LOGO_BASE64 } from '@/lib/logoBase64';
+import { useI18n } from '@/i18n/useI18n';
 
 const COLORS = ['#0ea5e9', '#14b8a6', '#f59e0b', '#ec4899', '#8b5cf6', '#f43f5e', '#06b6d4', '#84cc16'];
 const GENDER_COLORS = { male: '#0ea5e9', female: '#ec4899', other: '#94a3b8' };
 const AGE_COLORS = ['#14b8a6', '#0ea5e9', '#f59e0b', '#ec4899', '#f43f5e'];
 
 export default function UnifiedAdminDashboard() {
+  const { t } = useI18n();
   const [referrals, setReferrals] = useState<ReferralV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
@@ -411,22 +413,22 @@ export default function UnifiedAdminDashboard() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Activity className="w-6 h-6 text-primary" />
-            Referral Analytics
+            {t('analytics.title')}
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Activity across all facilities</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{t('analytics.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowExport(!showExport)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm font-medium"
           >
-            <FileText className="w-4 h-4" /> Export Report
+            <FileText className="w-4 h-4" /> {t('analytics.exportReport')}
           </button>
           <button
             onClick={() => setChatOpen(!chatOpen)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
           >
-            <Sparkles className="w-4 h-4" /> AI Advisor
+            <Sparkles className="w-4 h-4" /> {t('analytics.aiAdvisor')}
           </button>
         </div>
       </div>
@@ -435,9 +437,9 @@ export default function UnifiedAdminDashboard() {
       {showExport && (
         <div className="bg-card rounded-xl border border-border p-4 space-y-3">
           <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Download className="w-4 h-4" /> Generate Custom Report
+            <Download className="w-4 h-4" /> {t('analytics.generateCustomReport')}
           </h3>
-          <p className="text-xs text-muted-foreground">Describe what you want in the report. AI will analyze all data and generate it.</p>
+          <p className="text-xs text-muted-foreground">{t('analytics.reportPrompt')}</p>
           <div className="flex gap-2">
             <input
               type="text"
@@ -463,9 +465,9 @@ export default function UnifiedAdminDashboard() {
         <div className="absolute top-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm rounded-xl border border-primary/30 shadow-2xl flex flex-col mx-0" style={{ height: '420px' }}>
           <div className="px-4 py-3 border-b border-primary/20 bg-primary/5 flex items-center justify-between shrink-0">
             <h3 className="text-sm font-bold flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" /> HealthTrack AI Advisor
+              <Sparkles className="w-4 h-4 text-primary" /> {t('analytics.aiChatTitle')}
             </h3>
-            <button onClick={() => setChatOpen(false)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors">Close</button>
+            <button onClick={() => setChatOpen(false)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors">{t('common.close')}</button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
             {chatMessages.map((msg, i) => (
@@ -501,7 +503,7 @@ export default function UnifiedAdminDashboard() {
               type="text"
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              placeholder="Ask about disease trends, station performance, referrals..."
+              placeholder={t('analytics.chatPlaceholder')}
               className="flex-1 px-3 py-2 rounded-lg border border-border text-sm bg-background"
               onKeyDown={e => e.key === 'Enter' && handleChatSend()}
             />
@@ -528,7 +530,7 @@ export default function UnifiedAdminDashboard() {
             }`}
           >
             <Filter className="w-4 h-4" />
-            Filters
+            {t('analytics.filters')}
             {activeFilterCount > 0 && (
               <span className="bg-primary-foreground text-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                 {activeFilterCount}
@@ -545,7 +547,7 @@ export default function UnifiedAdminDashboard() {
               }}
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 transition-colors px-2 py-1 rounded hover:bg-red-50"
             >
-              <X className="w-3 h-3" /> Clear all
+              <X className="w-3 h-3" /> {t('analytics.clearAll')}
             </button>
           )}
         </div>
@@ -555,71 +557,71 @@ export default function UnifiedAdminDashboard() {
             {/* Station Type */}
             <div className="space-y-1">
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                <MapPin className="w-3 h-3" /> Station Type
+                <MapPin className="w-3 h-3" /> {t('analytics.stationType')}
               </label>
               <select
                 value={filterStationType}
                 onChange={e => setFilterStationType(e.target.value as any)}
                 className="w-full px-2.5 py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
-                <option value="all">All Types</option>
-                <option value="household">Household</option>
-                <option value="hip">HIP</option>
-                <option value="referral-center">Referral Center</option>
+                <option value="all">{t('analytics.allTypes')}</option>
+                <option value="household">{t('analytics.household')}</option>
+                <option value="hip">{t('analytics.hip')}</option>
+                <option value="referral-center">{t('analytics.referralCenter')}</option>
               </select>
             </div>
 
             {/* Urgency */}
             <div className="space-y-1">
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                <ShieldAlert className="w-3 h-3" /> Urgency
+                <ShieldAlert className="w-3 h-3" /> {t('analytics.urgency')}
               </label>
               <select
                 value={filterUrgency}
                 onChange={e => setFilterUrgency(e.target.value as any)}
                 className="w-full px-2.5 py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
-                <option value="all">All Levels</option>
-                <option value="emergency">Emergency</option>
-                <option value="urgent">Urgent</option>
-                <option value="routine">Routine</option>
+                <option value="all">{t('analytics.allLevels')}</option>
+                <option value="emergency">{t('analytics.emergency')}</option>
+                <option value="urgent">{t('analytics.urgent')}</option>
+                <option value="routine">{t('analytics.routine')}</option>
               </select>
             </div>
 
             {/* Status */}
             <div className="space-y-1">
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                <Activity className="w-3 h-3" /> Status
+                <Activity className="w-3 h-3" /> {t('analytics.status')}
               </label>
               <select
                 value={filterStatus}
                 onChange={e => setFilterStatus(e.target.value as any)}
                 className="w-full px-2.5 py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
-                <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="in-transit">In Transit</option>
-                <option value="accepted">Accepted</option>
-                <option value="in-treatment">In Treatment</option>
-                <option value="counter-referral-created">Counter-Referral</option>
-                <option value="completed">Completed</option>
+                <option value="all">{t('analytics.allStatuses')}</option>
+                <option value="pending">{t('analytics.pending')}</option>
+                <option value="in-transit">{t('analytics.inTransit')}</option>
+                <option value="accepted">{t('analytics.accepted')}</option>
+                <option value="in-treatment">{t('analytics.inTreatment')}</option>
+                <option value="counter-referral-created">{t('analytics.counterReferral')}</option>
+                <option value="completed">{t('analytics.completed')}</option>
               </select>
             </div>
 
             {/* Date Range */}
             <div className="space-y-1">
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                <CalendarDays className="w-3 h-3" /> Date Range
+                <CalendarDays className="w-3 h-3" /> {t('analytics.dateRange')}
               </label>
               <select
                 value={filterDateRange}
                 onChange={e => setFilterDateRange(e.target.value as any)}
                 className="w-full px-2.5 py-2 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
-                <option value="all">All Time</option>
-                <option value="7days">Last 7 Days</option>
-                <option value="30days">Last 30 Days</option>
-                <option value="90days">Last 90 Days</option>
+                <option value="all">{t('analytics.allTime')}</option>
+                <option value="7days">{t('analytics.last7Days')}</option>
+                <option value="30days">{t('analytics.last30Days')}</option>
+                <option value="90days">{t('analytics.last90Days')}</option>
               </select>
             </div>
           </div>
@@ -641,7 +643,7 @@ export default function UnifiedAdminDashboard() {
                 onClick={() => setFilterUrgency('all')}
                 className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors"
               >
-                <ShieldAlert className="w-3 h-3" /> Urgency: {filterUrgency} <X className="w-3 h-3" />
+                <ShieldAlert className="w-3 h-3" /> {t('analytics.urgency')}: {filterUrgency} <X className="w-3 h-3" />
               </button>
             )}
             {filterStatus !== 'all' && (
@@ -649,7 +651,7 @@ export default function UnifiedAdminDashboard() {
                 onClick={() => setFilterStatus('all')}
                 className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
               >
-                <Activity className="w-3 h-3" /> Status: {filterStatus} <X className="w-3 h-3" />
+                <Activity className="w-3 h-3" /> {t('analytics.status')}: {filterStatus} <X className="w-3 h-3" />
               </button>
             )}
             {filterDateRange !== 'all' && (
@@ -666,10 +668,10 @@ export default function UnifiedAdminDashboard() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi icon={ClipboardList} color="text-primary" bg="bg-primary/10" label="Total Referrals" value={kpi.total} />
-        <Kpi icon={HeartPulse} color="text-red-600" bg="bg-red-50" label="Emergencies" value={kpi.emergency} />
-        <Kpi icon={AlertTriangle} color="text-amber-600" bg="bg-amber-50" label="Urgent" value={kpi.urgent} />
-        <Kpi icon={TrendingUp} color="text-emerald-600" bg="bg-emerald-50" label="Completed" value={kpi.completed} />
+        <Kpi icon={ClipboardList} color="text-primary" bg="bg-primary/10" label={t('analytics.totalReferrals')} value={kpi.total} />
+        <Kpi icon={HeartPulse} color="text-red-600" bg="bg-red-50" label={t('analytics.emergencies')} value={kpi.emergency} />
+        <Kpi icon={AlertTriangle} color="text-amber-600" bg="bg-amber-50" label={t('analytics.urgentCases')} value={kpi.urgent} />
+        <Kpi icon={TrendingUp} color="text-emerald-600" bg="bg-emerald-50" label={t('analytics.completedCases')} value={kpi.completed} />
       </div>
 
       {/* ─── 1. LINE CHART: Referral Activities Per Facility ─── */}
@@ -677,7 +679,7 @@ export default function UnifiedAdminDashboard() {
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <h2 className="text-base font-semibold flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-primary" />
-            Referral Activities Per Facility
+            {t('analytics.referralActivitiesPerFacility')}
           </h2>
           <div className="flex items-center gap-2">
             <div className="flex rounded-lg border border-border overflow-hidden">
@@ -685,19 +687,19 @@ export default function UnifiedAdminDashboard() {
                 onClick={() => setPeriod('monthly')}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${period === 'monthly' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
               >
-                Monthly
+                {t('analytics.monthly')}
               </button>
               <button
                 onClick={() => setPeriod('yearly')}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${period === 'yearly' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
               >
-                Yearly
+                {t('analytics.yearly')}
               </button>
             </div>
           </div>
         </div>
         {lineChartData.length === 0 ? (
-          <EmptyState message="No referral data yet. Activities will appear here as collectors submit referrals." />
+          <EmptyState message={t('analytics.noReferralData')} />
         ) : (
           <ResponsiveContainer width="100%" height={340}>
             <AreaChart data={lineChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -736,7 +738,7 @@ export default function UnifiedAdminDashboard() {
                           <span className="font-bold">{p.value}</span>
                         </div>
                       ))}
-                      {nonZero.length === 0 && <span className="text-muted-foreground">No referrals</span>}
+                      {nonZero.length === 0 && <span className="text-muted-foreground">{t('analytics.noReferrals')}</span>}
                     </div>
                   );
                 }}
@@ -778,10 +780,10 @@ export default function UnifiedAdminDashboard() {
         <div className="bg-card rounded-xl border border-border p-5">
           <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
             <User className="w-4 h-4 text-primary" />
-            Gender Distribution
+            {t('analytics.genderDistribution')}
           </h2>
           {genderData.length === 0 ? (
-            <EmptyState message="No gender data available" />
+            <EmptyState message={t('analytics.noGenderData')} />
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
@@ -801,10 +803,10 @@ export default function UnifiedAdminDashboard() {
         <div className="bg-card rounded-xl border border-border p-5">
           <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
             <Baby className="w-4 h-4 text-primary" />
-            Age Distribution
+            {t('analytics.ageDistribution')}
           </h2>
           {ageData.length === 0 ? (
-            <EmptyState message="No age data available" />
+            <EmptyState message={t('analytics.noAgeData')} />
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
@@ -827,10 +829,10 @@ export default function UnifiedAdminDashboard() {
         <div className="bg-card rounded-xl border border-border p-5">
           <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
             <Stethoscope className="w-4 h-4 text-primary" />
-            Disease Prevalence
+            {t('analytics.diseasePrevalence')}
           </h2>
           {diseaseData.length === 0 ? (
-            <EmptyState message="No diagnosis data available" />
+            <EmptyState message={t('analytics.noDiagnosisData')} />
           ) : (
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={diseaseData} layout="vertical">
@@ -848,10 +850,10 @@ export default function UnifiedAdminDashboard() {
         <div className="bg-card rounded-xl border border-border p-5">
           <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
             <ClipboardList className="w-4 h-4 text-primary" />
-            Top Referral Reasons
+            {t('analytics.topReferralReasons')}
           </h2>
           {referralReasonData.length === 0 ? (
-            <EmptyState message="No referral reason data available" />
+            <EmptyState message={t('analytics.noReferralReasonData')} />
           ) : (
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={referralReasonData} layout="vertical">
@@ -895,4 +897,4 @@ function EmptyState({ message }: { message: string }) {
     </div>
   );
 }
-// Build timestamp: 2026-05-28T10:54:14Z
+// Build timestamp: 2026-05
