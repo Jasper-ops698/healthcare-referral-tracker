@@ -347,6 +347,11 @@ export async function getUsers(): Promise<ApiResponse> {
   return res.json();
 }
 
+export async function getCollectorStations(): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/users/stations');
+  return res.json();
+}
+
 export async function createUser(data: Record<string, unknown>): Promise<ApiResponse> {
   const res = await apiFetch('/api/v1/users', {
     method: 'POST',

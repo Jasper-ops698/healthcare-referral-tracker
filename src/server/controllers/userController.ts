@@ -373,6 +373,42 @@ export async function handleGetMe(req: Request, res: Response): Promise<void> {
   }
 }
 
+// ─── LIST COLLECTOR STATIONS (PUBLIC, NO ADMIN REQUIRED) ───
+
+export async function handleListCollectorStations(req: Request, res: Response): Promise<void> {
+  try {
+    // No admin check — any authenticated user can see station list
+    const collectors = await User.find(
+      { role: 'collector', stationName: { $exists: true, $ne: '' } },
+      { stationName: 1, stationType: 1, firstName: 1, lastName: 1, _id: 0 }
+    ).lean().exec();
+
+    // Group by stationName
+    const map = new Map<string, { name: string; type: string; collectors: string[] }>();
+    collectors.forEach((c: any) => {
+      const key = c.stationName.toLowerCase().trim();
+      const existing = map.get(key);
+      if (existing) {
+        existing.collectors.push(`${c.firstName} ${c.lastName}`.trim());
+      } else {
+        map.set(key, {
+          name: c.stationName.trim(),
+          type: c.stationType || 'household',
+          collectors: [`${c.firstName} ${c.lastName}`.trim()],
+        });
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { stations: Array.from(map.values()), count: map.size },
+    });
+  } catch (error: any) {
+    console.error('[UserController] List stations error:', error);
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to list stations' } });
+  }
+}
+
 // ─── LIST USERS (ADMIN ONLY) ───
 
 export async function handleListUsers(req: Request, res: Response): Promise<void> {

@@ -17,7 +17,7 @@ import {
   Shield, UserCheck, Search, X,
 } from 'lucide-react';
 import { useEdgeAI } from '@/hooks/useEdgeAI';
-import { getUsers } from '@/lib/apiClient';
+import { getCollectorStations } from '@/lib/apiClient';
 
 import type { ReferralV2 } from '@/types';
 
@@ -74,28 +74,17 @@ export default function ReferralForm({
   const [showDestSuggestions, setShowDestSuggestions] = useState(false);
   const destInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch collectors and build facility list
+  // Fetch collector stations for facility autocomplete
   useEffect(() => {
-    getUsers().then(res => {
+    getCollectorStations().then(res => {
       if (res.success) {
-        const users = (res.data as any)?.users || [];
-        // Group by stationName to get unique facilities with their collectors
-        const map = new Map<string, Facility>();
-        users.filter((u: any) => u.role === 'collector' && u.stationName?.trim()).forEach((u: any) => {
-          const key = u.stationName.toLowerCase().trim();
-          const existing = map.get(key);
-          if (existing) {
-            existing.collectors.push(`${u.firstName} ${u.lastName}`.trim());
-          } else {
-            map.set(key, {
-              name: u.stationName.trim(),
-              type: u.stationType || 'household',
-              typeLabel: u.stationType === 'referral-center' ? 'Referral Center' : u.stationType === 'hip' ? 'HIP' : 'Household',
-              collectors: [`${u.firstName} ${u.lastName}`.trim()],
-            });
-          }
-        });
-        setFacilities(Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name)));
+        const stations = (res.data as any)?.stations || [];
+        setFacilities(stations.map((s: any) => ({
+          name: s.name,
+          type: s.type || 'household',
+          typeLabel: s.type === 'referral-center' ? 'Referral Center' : s.type === 'hip' ? 'HIP' : 'Household',
+          collectors: s.collectors || [],
+        })).sort((a: Facility, b: Facility) => a.name.localeCompare(b.name)));
       }
       setFacilitiesLoading(false);
     }).catch(() => setFacilitiesLoading(false));
