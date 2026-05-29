@@ -9,14 +9,15 @@
  *   - Review summary before submit
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Ambulance, Bus, Car, Footprints, Armchair, StretchHorizontal,
   AlertTriangle, Sparkles, Send, User, MapPin, Home, Building2,
   ChevronRight, ChevronLeft, Check, Stethoscope, HeartPulse,
-  Shield, UserCheck,
+  Shield, UserCheck, Search, X,
 } from 'lucide-react';
 import { useEdgeAI } from '@/hooks/useEdgeAI';
+import { getUsers } from '@/lib/apiClient';
 
 import type { ReferralV2 } from '@/types';
 
@@ -52,12 +53,91 @@ const STEPS = [
   { id: 4, label: 'Review', icon: Check },
 ];
 
+interface Facility {
+  name: string;
+  type: 'household' | 'hip' | 'referral-center';
+  typeLabel: string;
+  collectors: string[];
+}
+
 export default function ReferralForm({
   onSubmit, collectorId, collectorName, sourceStationId, sourceStationName, sourceStationType,
 }: ReferralFormProps) {
   const { classifySymptoms, isLoading: aiLoading } = useEdgeAI();
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Facility autocomplete ──
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [facilitiesLoading, setFacilitiesLoading] = useState(true);
+  const [destQuery, setDestQuery] = useState('');
+  const [showDestSuggestions, setShowDestSuggestions] = useState(false);
+  const destInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch collectors and build facility list
+  useEffect(() => {
+    getUsers().then(res => {
+      if (res.success) {
+        const users = (res.data as any)?.users || [];
+        // Group by stationName to get unique facilities with their collectors
+        const map = new Map<string, Facility>();
+        users.filter((u: any) => u.role === 'collector' && u.stationName?.trim()).forEach((u: any) => {
+          const key = u.stationName.toLowerCase().trim();
+          const existing = map.get(key);
+          if (existing) {
+            existing.collectors.push(`${u.firstName} ${u.lastName}`.trim());
+          } else {
+            map.set(key, {
+              name: u.stationName.trim(),
+              type: u.stationType || 'household',
+              typeLabel: u.stationType === 'referral-center' ? 'Referral Center' : u.stationType === 'hip' ? 'HIP' : 'Household',
+              collectors: [`${u.firstName} ${u.lastName}`.trim()],
+            });
+          }
+        });
+        setFacilities(Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name)));
+      }
+      setFacilitiesLoading(false);
+    }).catch(() => setFacilitiesLoading(false));
+  }, []);
+
+  // Filter facilities based on query
+  const filteredFacilities = useMemo(() => {
+    if (!destQuery.trim()) return facilities;
+    const q = destQuery.toLowerCase();
+    return facilities.filter(f => f.name.toLowerCase().includes(q) || f.typeLabel.toLowerCase().includes(q));
+  }, [destQuery, facilities]);
+
+  // Also allow typing a custom facility (shown at bottom of list)
+  const isCustomFacility = destQuery.trim() && !facilities.some(f => f.name.toLowerCase() === destQuery.toLowerCase().trim());
+
+  const selectFacility = (facility: Facility) => {
+    setForm(p => ({
+      ...p,
+      destinationStationName: facility.name,
+      destinationStationType: facility.type,
+      destinationStationId: `${facility.type}-${facility.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    }));
+    setDestQuery(facility.name);
+    setShowDestSuggestions(false);
+  };
+
+  const clearFacility = () => {
+    setForm(p => ({ ...p, destinationStationName: '', destinationStationId: '' }));
+    setDestQuery('');
+    setShowDestSuggestions(true);
+    destInputRef.current?.focus();
+  };
+
+  const handleDestInputChange = (value: string) => {
+    setDestQuery(value);
+    setForm(p => ({
+      ...p,
+      destinationStationName: value,
+      destinationStationId: value ? `${p.destinationStationType}-${value.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : '',
+    }));
+    setShowDestSuggestions(true);
+  };
 
   const [form, setForm] = useState({
     patientName: '', patientAge: '', patientGender: 'male' as 'male' | 'female' | 'other',
@@ -162,25 +242,107 @@ export default function ReferralForm({
 
           <SectionCard icon={MapPin} title="Destination" accent="bg-sky-500">
             <div className="space-y-4">
-              <div>
+              {/* Facility Autocomplete */}
+              <div className="relative">
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">
-                  Destination Facility * <span className="normal-case font-normal text-sky-600">(type the facility name)</span>
+                  Destination Facility *
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={form.destinationStationName}
-                  onChange={e => setForm(p => ({ ...p, destinationStationName: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="e.g., Kilifi General Hospital, Oasis Hospital, Mombasa County Hospital..."
-                />
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    ref={destInputRef}
+                    type="text"
+                    required
+                    value={destQuery}
+                    onChange={e => handleDestInputChange(e.target.value)}
+                    onFocus={() => setShowDestSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowDestSuggestions(false), 200)}
+                    className="w-full pl-9 pr-9 py-2.5 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    placeholder="Search facilities with stationed collectors..."
+                  />
+                  {form.destinationStationName && (
+                    <button
+                      type="button"
+                      onClick={clearFacility}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Suggestions dropdown */}
+                {showDestSuggestions && (
+                  <div className="absolute z-30 left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+                    {facilitiesLoading ? (
+                      <div className="px-3 py-4 text-center text-xs text-muted-foreground">Loading facilities...</div>
+                    ) : filteredFacilities.length === 0 && !isCustomFacility ? (
+                      <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                        {destQuery.trim() ? 'No matching facilities' : 'Start typing to find facilities'}
+                      </div>
+                    ) : (
+                      <>
+                        {filteredFacilities.map(facility => (
+                          <button
+                            key={`${facility.name}-${facility.type}`}
+                            type="button"
+                            onMouseDown={e => { e.preventDefault(); selectFacility(facility); }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-primary/5 text-left transition-colors border-b border-border/50 last:border-b-0"
+                          >
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${
+                              facility.type === 'referral-center' ? 'bg-emerald-500' :
+                              facility.type === 'hip' ? 'bg-sky-500' : 'bg-amber-500'
+                            }`} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{facility.name}</p>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                  facility.type === 'referral-center' ? 'bg-emerald-50 text-emerald-700' :
+                                  facility.type === 'hip' ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'
+                                }`}>
+                                  {facility.typeLabel}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {facility.collectors.length} collector{facility.collectors.length > 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            </div>
+                            {form.destinationStationName === facility.name && (
+                              <Check className="w-4 h-4 text-primary shrink-0" />
+                            )}
+                          </button>
+                        ))}
+                        {/* Custom facility option */}
+                        {isCustomFacility && destQuery.trim().length > 2 && (
+                          <button
+                            type="button"
+                            onMouseDown={e => { e.preventDefault(); setShowDestSuggestions(false); }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-amber-50 text-left transition-colors border-t border-dashed border-border"
+                          >
+                            <MapPin className="w-4 h-4 text-amber-500 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">Use &ldquo;{destQuery.trim()}&rdquo;</p>
+                              <p className="text-[10px] text-muted-foreground">Custom facility (no stationed collectors)</p>
+                            </div>
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground mt-1">
-                  Enter the name of the facility the patient is being referred to
+                  {facilities.length > 0
+                    ? `${facilities.length} facility${facilities.length > 1 ? 'ies' : 'y'} with stationed collectors`
+                    : facilitiesLoading ? 'Loading facilities...' : 'No facilities found. Register collectors with station names to see them here.'}
                 </p>
               </div>
 
+              {/* Station Type */}
               <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">Station Type *</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">
+                  Station Type {form.destinationStationName ? `for &ldquo;${form.destinationStationName}&rdquo;` : ''} *
+                </label>
                 <div className="grid grid-cols-3 gap-2">
                   {([
                     { value: 'household', label: 'Household', icon: Home },
