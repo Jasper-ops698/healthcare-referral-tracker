@@ -346,7 +346,7 @@ export default function UnifiedAdminDashboard() {
   }
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="space-y-6 w-full relative">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -399,9 +399,9 @@ export default function UnifiedAdminDashboard() {
         </div>
       )}
 
-      {/* AI Chat Panel — Floating Overlay */}
+      {/* AI Chat Panel — Modal Overlay */}
       {chatOpen && (
-        <div className="fixed bottom-4 right-4 z-50 bg-card rounded-xl border border-primary/30 shadow-2xl flex flex-col" style={{ width: 'min(420px, calc(100vw - 2rem))', height: 'min(520px, calc(100vh - 6rem))' }}>
+        <div className="absolute top-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm rounded-xl border border-primary/30 shadow-2xl flex flex-col mx-0" style={{ height: '420px' }}>
           <div className="px-4 py-3 border-b border-primary/20 bg-primary/5 flex items-center justify-between shrink-0">
             <h3 className="text-sm font-bold flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" /> HealthTrack AI Advisor
