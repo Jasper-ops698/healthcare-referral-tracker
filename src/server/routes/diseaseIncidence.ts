@@ -8,7 +8,7 @@
 import { Router } from 'express';
 import { authenticateJWT } from '../middleware/regionalAuth.js';
 import { callGemini } from '../services/geminiService.js';
-import { ReferralV2Model } from '../schemas/ReferralV2.js';
+import ReferralV2Model from '../schemas/ReferralV2.js';
 
 const router = Router();
 
