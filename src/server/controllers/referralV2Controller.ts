@@ -65,6 +65,7 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
       urgency: body.urgency || 'routine',
       status: 'pending',
       notes: body.notes,
+      village: body.village?.trim() || undefined,
     });
 
     await newReferral.save();

@@ -22,7 +22,7 @@ import {
   Filter, X, CalendarDays, MapPin, ShieldAlert,
 } from 'lucide-react';
 import {
-  getAllReferralsV2, sendAIChat, generateAIExportReport,
+  getAllReferralsV2, sendAIChat, generateAIExportReport, analyzeDiseaseIncidence,
 } from '@/lib/apiClient';
 import type { ChatMessage } from '@/lib/apiClient';
 import type { ReferralV2 } from '@/types';
@@ -53,6 +53,13 @@ export default function UnifiedAdminDashboard() {
   const [exportPrompt, setExportPrompt] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
   const [showExport, setShowExport] = useState(false);
+
+  // Disease incidence state
+  const [incidenceData, setIncidenceData] = useState<any[]>([]);
+  const [incidencePeriod, setIncidencePeriod] = useState<'monthly' | 'yearly'>('yearly');
+  const [incidenceLoading, setIncidenceLoading] = useState(false);
+  const [incidenceSummary, setIncidenceSummary] = useState('');
+  const [showIncidence, setShowIncidence] = useState(false);
 
   // Filter state
   const [filterStationType, setFilterStationType] = useState<'all' | 'household' | 'hip' | 'referral-center'>('all');
@@ -383,6 +390,26 @@ export default function UnifiedAdminDashboard() {
       toast.error('Network error generating report');
     } finally {
       setExportLoading(false);
+    }
+  };
+
+  // ─── Disease Incidence Analysis ───
+  const handleAnalyzeIncidence = async () => {
+    setIncidenceLoading(true);
+    try {
+      const res = await analyzeDiseaseIncidence(incidencePeriod);
+      if (res.success && res.data) {
+        setIncidenceData((res.data as any).results || []);
+        setIncidenceSummary((res.data as any).summary || '');
+        setShowIncidence(true);
+        toast.success('Disease incidence analysis complete');
+      } else {
+        toast.error('Failed to analyze disease incidence');
+      }
+    } catch {
+      toast.error('Network error analyzing incidence');
+    } finally {
+      setIncidenceLoading(false);
     }
   };
 
@@ -821,6 +848,107 @@ export default function UnifiedAdminDashboard() {
             </ResponsiveContainer>
           )}
         </div>
+      </div>
+
+      {/* ─── 4. DISEASE INCIDENCE: Village Population at Risk ─── */}
+      <div className="bg-card rounded-xl border border-border p-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 className="text-base font-semibold flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary" />
+            {t('analytics.diseaseIncidence')}
+          </h2>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden">
+              <button
+                onClick={() => setIncidencePeriod('monthly')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${incidencePeriod === 'monthly' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                {t('analytics.monthly')}
+              </button>
+              <button
+                onClick={() => setIncidencePeriod('yearly')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${incidencePeriod === 'yearly' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                {t('analytics.yearly')}
+              </button>
+            </div>
+            <button
+              onClick={handleAnalyzeIncidence}
+              disabled={incidenceLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {incidenceLoading ? <><Loader2 className="w-3 h-3 animate-spin" /> {t('analytics.analyzing')}</> : <><Sparkles className="w-3 h-3" /> {t('analytics.analyze')}</>}
+            </button>
+          </div>
+        </div>
+
+        {!showIncidence ? (
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+            <MapPin className="w-10 h-10 mb-3 opacity-30" />
+            <p className="text-sm">{t('analytics.incidencePrompt')}</p>
+            <p className="text-xs mt-1 max-w-sm text-center">{t('analytics.incidenceDescription')}</p>
+          </div>
+        ) : incidenceData.length === 0 ? (
+          <EmptyState message={t('analytics.noVillageData')} />
+        ) : (
+          <>
+            {incidenceSummary && (
+              <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="text-xs font-semibold text-amber-800">{t('analytics.aiInsight')}</span>
+                </div>
+                <p className="text-xs text-amber-700 leading-relaxed">{incidenceSummary}</p>
+              </div>
+            )}
+            <ResponsiveContainer width="100%" height={360}>
+              <BarChart data={incidenceData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="village" tick={{ fontSize: 10 }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} label={{ value: '%', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#94a3b8' } }} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-white border border-border rounded-lg shadow-lg p-3 text-xs max-w-xs">
+                        <p className="font-semibold mb-1" style={{ color: d.color }}>{d.village}</p>
+                        <p className="text-muted-foreground">{t('analytics.population')}: <span className="font-semibold text-foreground">{d.population?.toLocaleString()}</span></p>
+                        <p className="text-muted-foreground">{t('analytics.referrals')}: <span className="font-semibold text-foreground">{d.referralCount}</span></p>
+                        <p className="mt-1 font-semibold" style={{ color: d.color }}>{d.overallAtRiskPercentage}% {t('analytics.atRisk')}</p>
+                        {Object.entries(d.diseaseBreakdown || {}).length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-border">
+                            <p className="text-[10px] font-semibold text-muted-foreground mb-1 uppercase">{t('analytics.byDisease')}</p>
+                            {Object.entries(d.diseaseBreakdown).map(([disease, info]: [string, any]) => (
+                              <div key={disease} className="flex justify-between py-0.5">
+                                <span className="capitalize">{disease}</span>
+                                <span className="font-medium">{info.count} ({info.percentageOfPopulation}%)</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="overallAtRiskPercentage" name={t('analytics.percentageAtRisk')} radius={[4, 4, 0, 0]} maxBarSize={60}>
+                  {incidenceData.map((entry: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap gap-3 mt-3">
+              {incidenceData.map((v: any) => (
+                <div key={v.village} className="flex items-center gap-1.5 text-[11px]">
+                  <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: v.color }} />
+                  <span className="text-muted-foreground">{v.village}</span>
+                  <span className="font-semibold">{v.overallAtRiskPercentage}%</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ─── 3. BAR CHARTS: Disease Prevalence + Referral Reasons ─── */}

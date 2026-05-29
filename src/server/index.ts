@@ -39,6 +39,7 @@ import notificationRoutes from './routes/notifications.js';
 import systemRoutes from './routes/system.js';
 import analyticsRoutes from './routes/analytics.js';
 import aiChatRoutes from './routes/aiChat.js';
+import diseaseIncidenceRoutes from './routes/diseaseIncidence.js';
 import { corsConfig } from './middleware/cors.js';
 import cors from 'cors';
 import { bootstrapPrimaryAdmin } from './controllers/authController.js';
@@ -143,6 +144,7 @@ app.use(`${API_PREFIX}/system`, systemRoutes);
 // Analytics routes (dashboard KPIs)
 app.use(`${API_PREFIX}/analytics`, analyticsRoutes);
 app.use(`${API_PREFIX}/ai`, aiChatRoutes);
+app.use(`${API_PREFIX}/disease-incidence`, diseaseIncidenceRoutes);
 
 // Sync routes (auth + regional scoping applied internally)
 app.use(`${API_PREFIX}/sync`, syncRoutes);

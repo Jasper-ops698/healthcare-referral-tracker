@@ -249,6 +249,7 @@ export interface ReferralV2 {
   patientAge: number;
   patientGender: 'male' | 'female' | 'other';
   patientPhone: string;
+  village?: string;
 
   sourceStationId: string;
   sourceStationName: string;

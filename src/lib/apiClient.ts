@@ -555,6 +555,14 @@ export async function sendAIChat(messages: ChatMessage[], context?: { period?: s
   return res.json();
 }
 
+export async function analyzeDiseaseIncidence(period?: 'monthly' | 'yearly', villages?: string[]): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/disease-incidence/analyze', {
+    method: 'POST',
+    body: JSON.stringify({ period, villages }),
+  });
+  return res.json();
+}
+
 export async function generateAIExportReport(prompt: string, format: 'html' | 'markdown' = 'html'): Promise<ApiResponse> {
   const res = await apiFetch('/api/v1/ai/export', {
     method: 'POST',

@@ -15,6 +15,7 @@ export interface IReferralV2 extends mongoose.Document {
   patientAge: number;
   patientGender: 'male' | 'female' | 'other';
   patientPhone: string;
+  village?: string;        // Village of origin for disease incidence mapping
 
   // Source (where the referral originated)
   sourceStationId: string;
@@ -71,6 +72,7 @@ const ReferralV2Schema = new Schema<IReferralV2>(
     patientAge: { type: Number, required: true, min: 0, max: 150 },
     patientGender: { type: String, enum: ['male', 'female', 'other'], required: true },
     patientPhone: { type: String, required: true, trim: true },
+    village: { type: String, trim: true, index: true },
 
     sourceStationId: { type: String, required: true, index: true },
     sourceStationName: { type: String, required: true },

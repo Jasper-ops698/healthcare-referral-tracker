@@ -130,7 +130,7 @@ export default function ReferralForm({
 
   const [form, setForm] = useState({
     patientName: '', patientAge: '', patientGender: 'male' as 'male' | 'female' | 'other',
-    patientPhone: '', patientId: `REF-${Date.now().toString(36).toUpperCase()}`,
+    patientPhone: '', patientId: `REF-${Date.now().toString(36).toUpperCase()}`, village: '',
     destinationStationId: '', destinationStationName: '', destinationStationType: 'referral-center' as 'household' | 'hip' | 'referral-center',
     chpName: '', chpPhone: '', chpEmail: '',
     initialDiagnosis: '', aiSuggestedCategory: '', aiConfidence: 0,
@@ -158,6 +158,7 @@ export default function ReferralForm({
       await onSubmit({
         patientId: form.patientId, patientName: form.patientName,
         patientAge: parseInt(form.patientAge) || 0, patientGender: form.patientGender, patientPhone: form.patientPhone,
+        village: form.village?.trim() || undefined,
         sourceStationId, sourceStationName, sourceStationType,
         sourceCollectorId: collectorId, sourceCollectorName: collectorName,
         destinationStationId: destId, destinationStationName: form.destinationStationName, destinationStationType: form.destinationStationType,
@@ -226,6 +227,15 @@ export default function ReferralForm({
                 </div>
               </div>
               <InputField label="Phone *" type="tel" value={form.patientPhone} onChange={v => setForm(p => ({ ...p, patientPhone: v }))} placeholder="2547XXXXXXXX" required />
+              <div className="sm:col-span-2">
+                <InputField
+                  label="Village"
+                  value={form.village}
+                  onChange={v => setForm(p => ({ ...p, village: v }))}
+                  placeholder="e.g., Kisauni, Mtwapa, Ganze"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">Used for disease incidence mapping in your area</p>
+              </div>
             </div>
           </SectionCard>
 
