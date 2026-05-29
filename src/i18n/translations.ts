@@ -40,10 +40,12 @@ export const Translations = {
     'common.cases': 'Cases',
     'common.referrals': 'Referrals',
     'common.female': 'Female',
+    'common.male': 'Male',
     'common.patients': 'Patients',
     'common.days': 'days',
     'common.year': 'year',
     'common.years': 'years',
+    'common.status': 'Status',
 
     // Status labels
     'status.registered': 'Registered',
@@ -261,6 +263,12 @@ export const Translations = {
     'users.adjustSearch': 'Try adjusting your search filters',
 
     // CHP
+    'chp.county': 'County',
+    'chp.email': 'Email',
+    'chp.languages': 'Languages',
+    'chp.phone': 'Phone',
+    'chp.village': 'Village',
+    'chp.ward': 'Ward',
     'chp.addedSuccess': 'registered as CHP',
     'chp.addError': 'Failed to register CHP',
 
@@ -541,6 +549,8 @@ export const Translations = {
 
     // Common
     'common.active': 'Amilifu',
+    'common.male': 'Mwanaume',
+    'common.status': 'Hali',
     'common.inactive': 'Haisimu',
     'common.online': 'Njiani',
     'common.offline': 'Nje ya njia',
@@ -776,6 +786,12 @@ export const Translations = {
     'users.adjustSearch': 'Jaribu kubadilisha kichaguo chako cha utafutaji',
 
     // CHP (Swahili)
+    'chp.county': 'Kaunti',
+    'chp.email': 'Barua pepe',
+    'chp.languages': 'Lugha',
+    'chp.phone': 'Simu',
+    'chp.village': 'Kijiji',
+    'chp.ward': 'Kata',
     'chp.addedSuccess': 'imesajiliwa kama CHP',
     'chp.addError': 'Imeshindwa kusajili CHP',
 
