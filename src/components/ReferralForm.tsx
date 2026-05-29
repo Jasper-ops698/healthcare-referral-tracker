@@ -227,7 +227,7 @@ export default function ReferralForm({
                 </div>
               </div>
               <InputField label="Phone *" type="tel" value={form.patientPhone} onChange={v => setForm(p => ({ ...p, patientPhone: v }))} placeholder="2547XXXXXXXX" required />
-              <div className="sm:col-span-2">
+              <div>
                 <InputField
                   label="Village"
                   value={form.village}
