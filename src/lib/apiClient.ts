@@ -401,8 +401,11 @@ export async function createReferralV2(data: Record<string, unknown>): Promise<A
   return res.json();
 }
 
-export async function getIncomingReferrals(stationId: string, status?: string): Promise<ApiResponse> {
-  const query = status ? `?status=${status}` : '';
+export async function getIncomingReferrals(stationId: string, status?: string, stationName?: string): Promise<ApiResponse> {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  if (stationName) params.append('stationName', stationName);
+  const query = params.toString() ? `?${params.toString()}` : '';
   const res = await apiFetch(`/api/v1/referrals-v2/incoming/${stationId}${query}`);
   return res.json();
 }

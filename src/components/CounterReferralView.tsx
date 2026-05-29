@@ -86,14 +86,14 @@ export default function CounterReferralView({ stationId, stationName, collectorI
   const [chpPhone, setChpPhone] = useState('');
   const [chpEmail, setChpEmail] = useState('');
 
-  useEffect(() => { loadData(); }, [stationId, collectorId]);
+  useEffect(() => { loadData(); }, [stationId, stationName, collectorId]);
 
   const loadData = async () => {
     if (!stationId) return;
     setLoading(true);
     try {
       const [iRes, oRes] = await Promise.all([
-        getIncomingReferrals(stationId),
+        getIncomingReferrals(stationId, undefined, stationName),
         getOutgoingReferrals(stationId),
       ]);
       if (iRes.success) setIncoming(((iRes.data as any)?.referrals || []) as ReferralV2[]);

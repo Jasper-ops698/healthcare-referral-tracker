@@ -82,8 +82,14 @@ export async function handleListIncoming(req: Request, res: Response): Promise<v
     if (!authReq) return;
 
     const { stationId } = req.params;
-    const { status } = req.query;
-    const filter: Record<string, unknown> = { destinationStationId: stationId };
+    const { status, stationName } = req.query;
+    // Match by destinationStationId OR destinationStationName (readable name)
+    // since stationId formats vary between collector profile and referral
+    const orConditions: Record<string, unknown>[] = [{ destinationStationId: stationId }];
+    if (stationName) {
+      orConditions.push({ destinationStationName: stationName as string });
+    }
+    const filter: Record<string, unknown> = { $or: orConditions };
     if (status) filter.status = status;
 
     const referrals = await ReferralV2.find(filter).sort({ createdAt: -1 }).lean().exec();
