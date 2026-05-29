@@ -134,11 +134,19 @@ export default function CounterReferralView({ stationId, stationName, collectorI
   };
 
   const submitCounter = async () => {
-    if (!finalDiagnosis || !treatment || !followUp || !chpName || !selected) return;
+    if (!finalDiagnosis || !treatment || !followUp || !chpName || !selected) {
+      toast.error('Please fill all required fields (*)');
+      return;
+    }
+    const refId = selected.id || (selected as any)._id;
+    if (!refId) {
+      toast.error('Invalid referral. Please refresh and try again.');
+      return;
+    }
     setSubmitting(true);
     try {
-      await createCounterReferral({
-        referralId: selected.id, patientId: selected.patientId, patientName: selected.patientName,
+      const cRes = await createCounterReferral({
+        referralId: refId, patientId: selected.patientId, patientName: selected.patientName,
         stationId, stationName, collectorId, collectorName,
         finalDiagnosis, treatmentProvided: treatment,
         medicationsGiven: medications || undefined, proceduresDone: procedures || undefined,
@@ -146,10 +154,22 @@ export default function CounterReferralView({ stationId, stationName, collectorI
         followUpInstructions: followUp, warningSigns: warningSigns || undefined,
         chpName, chpPhone: chpPhone || undefined, chpEmail: chpEmail || undefined,
       });
-      await updateReferralV2Status(selected.id, 'counter-referral-created');
-      setShowForm(false); await loadData();
-    } catch (e) { console.error('Counter-referral failed:', e); }
-    finally { setSubmitting(false); }
+      if (!cRes.success) {
+        toast.error((cRes as any).error?.message || 'Failed to create counter-referral');
+        setSubmitting(false);
+        return;
+      }
+      const sRes = await updateReferralV2Status(refId, 'counter-referral-created');
+      if (sRes.success) {
+        toast.success('Counter-referral created — CHP notified');
+        setShowForm(false);
+        await loadData();
+      } else {
+        toast.error((sRes as any).error?.message || 'Failed to update status');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Network error. Please try again.');
+    } finally { setSubmitting(false); }
   };
 
   // Merge and filter
