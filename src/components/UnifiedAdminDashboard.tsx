@@ -63,53 +63,75 @@ export default function UnifiedAdminDashboard() {
   };
 
   // ─── 1. LINE CHART: Referral activities per facility over time ───
-  const lineChartData = useMemo(() => {
-    if (referrals.length === 0) return [];
+  const { lineChartData, facilityNames } = useMemo(() => {
+    if (referrals.length === 0) return { lineChartData: [], facilityNames: [], totalLine: [] as { period: string; total: number }[] };
 
-    // Group by time period and facility
-    const timeMap = new Map<string, Map<string, number>>();
+    // Determine date range
+    const dates = referrals.map(r => new Date(r.createdAt));
+    const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+    const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
 
-    referrals.forEach(r => {
-      const date = new Date(r.createdAt);
-      let key: string;
-      if (period === 'monthly') {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      } else {
-        key = `${date.getFullYear()}`;
+    // Generate all periods in range (fills gaps with 0)
+    const allPeriods: string[] = [];
+    if (period === 'monthly') {
+      const d = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+      while (d <= maxDate) {
+        allPeriods.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        d.setMonth(d.getMonth() + 1);
       }
+    } else {
+      for (let y = minDate.getFullYear(); y <= maxDate.getFullYear(); y++) {
+        allPeriods.push(`${y}`);
+      }
+    }
 
+    // Group referrals by period and facility
+    const periodFacilityMap = new Map<string, Map<string, number>>();
+    referrals.forEach(r => {
+      const d = new Date(r.createdAt);
+      const key = period === 'monthly'
+        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        : `${d.getFullYear()}`;
       const facility = r.destinationStationName || r.sourceStationName || 'Unknown';
-      if (!timeMap.has(key)) timeMap.set(key, new Map());
-      const fMap = timeMap.get(key)!;
-      fMap.set(facility, (fMap.get(facility) || 0) + 1);
+      if (!periodFacilityMap.has(key)) periodFacilityMap.set(key, new Map());
+      periodFacilityMap.get(key)!.set(facility, (periodFacilityMap.get(key)!.get(facility) || 0) + 1);
     });
 
-    // Get unique facilities (top 6)
-    const facilityCounts = new Map<string, number>();
+    // Top 6 facilities by total volume
+    const facilityTotals = new Map<string, number>();
     referrals.forEach(r => {
       const f = r.destinationStationName || r.sourceStationName || 'Unknown';
-      facilityCounts.set(f, (facilityCounts.get(f) || 0) + 1);
+      facilityTotals.set(f, (facilityTotals.get(f) || 0) + 1);
     });
-    const topFacilities = Array.from(facilityCounts.entries())
+    const topFacilities = Array.from(facilityTotals.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([name]) => name);
 
-    // Build chart data rows
-    const sortedKeys = Array.from(timeMap.keys()).sort();
-    return sortedKeys.map(key => {
-      const row: Record<string, string | number> = { period: key };
+    // Build rows with ALL periods (gaps filled with 0)
+    const rows = allPeriods.map(p => {
+      const row: Record<string, string | number> = { period: p };
+      let total = 0;
       topFacilities.forEach(f => {
-        row[f] = timeMap.get(key)?.get(f) || 0;
+        const count = periodFacilityMap.get(p)?.get(f) || 0;
+        row[f] = count;
+        total += count;
       });
+      row['All Facilities'] = total;
       return row;
     });
+
+    return { lineChartData: rows, facilityNames: topFacilities };
   }, [referrals, period]);
 
-  const facilityNames = useMemo(() => {
-    if (lineChartData.length === 0) return [];
-    return Object.keys(lineChartData[0]).filter(k => k !== 'period');
-  }, [lineChartData]);
+  // Format period labels for display
+  const formatPeriodLabel = (p: string) => {
+    if (period === 'monthly') {
+      const [year, month] = p.split('-');
+      return new Date(`${year}-${month}-01`).toLocaleDateString('en', { month: 'short', year: 'numeric' });
+    }
+    return p;
+  };
 
   // ─── 2. PIE CHARTS: Gender & Age distribution ───
   const genderData = useMemo(() => {
@@ -492,22 +514,72 @@ export default function UnifiedAdminDashboard() {
         {lineChartData.length === 0 ? (
           <EmptyState message="No referral data yet. Activities will appear here as collectors submit referrals." />
         ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <AreaChart data={lineChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+          <ResponsiveContainer width="100%" height={340}>
+            <AreaChart data={lineChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                {facilityNames.map((name, i) => (
+                  <linearGradient key={name} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.15} />
+                    <stop offset="95%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+                <linearGradient id="grad-total" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#334155" stopOpacity={0.1} />
+                  <stop offset="95%" stopColor="#334155" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+              <XAxis
+                dataKey="period"
+                tick={{ fontSize: 10 }}
+                tickFormatter={formatPeriodLabel}
+                axisLine={{ stroke: '#e2e8f0' }}
+                tickLine={false}
+              />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} axisLine={false} tickLine={false} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload) return null;
+                  const nonZero = payload.filter(p => p.value && Number(p.value) > 0);
+                  return (
+                    <div className="bg-white border border-border rounded-lg shadow-lg p-3 text-xs">
+                      <p className="font-semibold text-muted-foreground mb-1.5">{formatPeriodLabel(label)}</p>
+                      {nonZero.map((p, i) => (
+                        <div key={i} className="flex items-center gap-2 py-0.5">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                          <span className="flex-1">{p.name}:</span>
+                          <span className="font-bold">{p.value}</span>
+                        </div>
+                      ))}
+                      {nonZero.length === 0 && <span className="text-muted-foreground">No referrals</span>}
+                    </div>
+                  );
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+              {/* Total line (dashed, on top) */}
+              <Area
+                type="monotone"
+                dataKey="All Facilities"
+                stroke="#334155"
+                fill="url(#grad-total)"
+                strokeWidth={2}
+                strokeDasharray="6 3"
+                dot={{ r: 3, fill: '#334155' }}
+                activeDot={{ r: 5 }}
+              />
               {facilityNames.map((name, i) => (
                 <Area
                   key={name}
                   type="monotone"
                   dataKey={name}
                   stroke={COLORS[i % COLORS.length]}
-                  fill={COLORS[i % COLORS.length]}
-                  fillOpacity={0.1}
+                  fill={`url(#grad-${i})`}
                   strokeWidth={2}
+                  dot={{ r: 3, fill: COLORS[i % COLORS.length], strokeWidth: 0 }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'white' }}
+                  animationDuration={600}
+                  animationEasing="ease-in-out"
                 />
               ))}
             </AreaChart>
