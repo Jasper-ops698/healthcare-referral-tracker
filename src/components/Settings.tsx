@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   changePassword, saveSettings, get2FAStatus, type UserSettings,
-  getSystemConfig, updateSystemConfig, exportPatients, exportAuditLogs,
+  getSystemConfig, updateSystemConfig,
   type SystemConfig,
 } from '@/lib/apiClient';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,7 +17,6 @@ import {
   Shield,
   Lock,
   Database,
-  Download,
   CheckCircle2,
   Loader2,
   ChevronRight,
@@ -25,7 +24,6 @@ import {
   Mail,
   MessageSquare,
   HardDrive,
-  FileText,
   Activity,
   KeyRound,
   Save,
@@ -70,7 +68,6 @@ export default function Settings() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [twoFactorModal, setTwoFactorModal] = useState<'setup' | 'disable' | null>(null);
   const [sysConfig, setSysConfig] = useState<SystemConfig | null>(null);
-  const [exporting, setExporting] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -182,46 +179,6 @@ export default function Settings() {
       toast.success(`Audit logging ${next ? 'enabled' : 'disabled'}`);
     } catch {
       toast.error('Failed to update. Server may be offline.');
-    }
-  };
-
-  const handleExportPatients = async (format: 'csv' | 'json') => {
-    setExporting(`patients-${format}`);
-    try {
-      const blob = await exportPatients(format);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `patients-${new Date().toISOString().split('T')[0]}.${format}`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
-      toast.success(`Patient data exported as ${format.toUpperCase()}`);
-    } catch {
-      toast.error('Export failed. Server may be offline.');
-    } finally {
-      setExporting(null);
-    }
-  };
-
-  const handleExportAuditLogs = async () => {
-    setExporting('audit');
-    try {
-      const blob = await exportAuditLogs();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `audit-logs-${new Date().toISOString().split('T')[0]}.json`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
-      toast.success('Audit logs exported as JSON');
-    } catch {
-      toast.error('Export failed. Server may be offline.');
-    } finally {
-      setExporting(null);
     }
   };
 
@@ -550,40 +507,6 @@ export default function Settings() {
                 />
               </SettingCard>
 
-              <SettingCard
-                icon={<Download className="w-5 h-5 text-teal-600" />}
-                iconBg="bg-teal-50"
-                title={t('settings.dataExport')}
-                subtitle={t('settings.dataExportSubtitle')}
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <ExportButton
-                    icon={<FileText className="w-4 h-4" />}
-                    label={t('settings.exportPatients')}
-                    format="CSV"
-                    color="sky"
-                    loading={exporting === 'patients-csv'}
-                    onClick={() => handleExportPatients('csv')}
-                  />
-                  <ExportButton
-                    icon={<FileText className="w-4 h-4" />}
-                    label={t('settings.exportPatients')}
-                    format="JSON"
-                    color="amber"
-                    loading={exporting === 'patients-json'}
-                    onClick={() => handleExportPatients('json')}
-                  />
-                  <ExportButton
-                    icon={<Activity className="w-4 h-4" />}
-                    label={t('settings.exportLogs')}
-                    format="JSON"
-                    color="emerald"
-                    loading={exporting === 'audit'}
-                    onClick={handleExportAuditLogs}
-                  />
-                </div>
-              </SettingCard>
-
               {/* Danger Zone */}
               <div className="bg-white rounded-xl border border-rose-200 p-5 shadow-sm">
                 <div className="flex items-center gap-3 mb-4">
@@ -724,32 +647,5 @@ function StatusPill({ icon, label, value, color }: {
         <span className="text-sm font-semibold text-gray-900">{value}</span>
       </div>
     </div>
-  );
-}
-
-function ExportButton({ icon, label, format, color, loading, onClick }: {
-  icon: React.ReactNode; label: string; format: string; color: 'sky' | 'amber' | 'emerald';
-  loading: boolean; onClick: () => void;
-}) {
-  const colorMap = {
-    sky:     'hover:border-sky-300 hover:bg-sky-50 hover:shadow-sky-500/10',
-    amber:   'hover:border-amber-300 hover:bg-amber-50 hover:shadow-amber-500/10',
-    emerald: 'hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-emerald-500/10',
-  };
-  return (
-    <button
-      onClick={onClick}
-      disabled={loading}
-      className={`flex items-center gap-3 p-4 rounded-xl border border-gray-200 bg-white transition-all hover:shadow-md ${colorMap[color]} disabled:opacity-50 text-left group`}
-    >
-      <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-        {loading ? <Loader2 className="w-5 h-5 text-gray-400 animate-spin" /> : icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-gray-900 text-sm">{label}</p>
-        <p className="text-xs text-gray-400">{format}</p>
-      </div>
-      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors" />
-    </button>
   );
 }
