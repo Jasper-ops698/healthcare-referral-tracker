@@ -193,7 +193,11 @@ export default function UnifiedAdminDashboard() {
   }, [chatInput, chatMessages, chatLoading, period]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll only within the chat container, never the page
+    const el = chatEndRef.current;
+    if (el && el.parentElement) {
+      el.parentElement.scrollTop = el.parentElement.scrollHeight;
+    }
   }, [chatMessages, chatLoading]);
 
   // ─── Export Report as PDF ───
@@ -395,16 +399,16 @@ export default function UnifiedAdminDashboard() {
         </div>
       )}
 
-      {/* AI Chat Panel */}
+      {/* AI Chat Panel — Floating Overlay */}
       {chatOpen && (
-        <div className="bg-card rounded-xl border border-primary/30 overflow-hidden flex flex-col" style={{ height: '420px' }}>
-          <div className="px-4 py-3 border-b border-primary/20 bg-primary/5 flex items-center justify-between">
+        <div className="fixed bottom-4 right-4 z-50 bg-card rounded-xl border border-primary/30 shadow-2xl flex flex-col" style={{ width: 'min(420px, calc(100vw - 2rem))', height: 'min(520px, calc(100vh - 6rem))' }}>
+          <div className="px-4 py-3 border-b border-primary/20 bg-primary/5 flex items-center justify-between shrink-0">
             <h3 className="text-sm font-bold flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" /> HealthTrack AI Advisor
             </h3>
-            <button onClick={() => setChatOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">Close</button>
+            <button onClick={() => setChatOpen(false)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors">Close</button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
             {chatMessages.map((msg, i) => (
               <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'model' && (
@@ -412,12 +416,12 @@ export default function UnifiedAdminDashboard() {
                     <Sparkles className="w-3.5 h-3.5 text-primary" />
                   </div>
                 )}
-                <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+                <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm ${
                   msg.role === 'user'
                     ? 'bg-primary text-primary-foreground rounded-br-sm'
                     : 'bg-muted rounded-bl-sm'
                 }`}>
-                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                  <p className="whitespace-pre-wrap break-words">{msg.text}</p>
                 </div>
               </div>
             ))}
@@ -433,7 +437,7 @@ export default function UnifiedAdminDashboard() {
             )}
             <div ref={chatEndRef} />
           </div>
-          <div className="p-3 border-t border-border flex gap-2">
+          <div className="p-3 border-t border-border flex gap-2 shrink-0">
             <input
               type="text"
               value={chatInput}
