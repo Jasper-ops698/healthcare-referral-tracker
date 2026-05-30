@@ -378,9 +378,16 @@ export async function handleGetMe(req: Request, res: Response): Promise<void> {
 export async function handleListCollectorStations(req: Request, res: Response): Promise<void> {
   try {
     // No admin check — any authenticated user can see station list
+    // Include collectors with either stationName OR facilityId (assignedFacility)
     const collectors = await User.find(
-      { role: 'collector', stationName: { $exists: true, $ne: '' } },
-      { stationName: 1, stationType: 1, firstName: 1, lastName: 1, _id: 0 }
+      {
+        role: 'collector',
+        $or: [
+          { stationName: { $exists: true, $ne: '' } },
+          { facilityId: { $exists: true, $ne: '' } },
+        ],
+      },
+      { stationName: 1, stationType: 1, facilityId: 1, firstName: 1, lastName: 1, _id: 0 }
     ).lean().exec();
 
     // Group by stationName (fallback to facilityId/assignedFacility if stationName empty)
