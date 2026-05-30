@@ -162,9 +162,16 @@ export default function CounterReferralView({ stationId, stationName, collectorI
         setSubmitting(false);
         return;
       }
+      const cData = cRes.data as any;
+      if (!cData?.emailSent && chpEmail) {
+        toast.warning(
+          `Counter-referral saved, but CHP email failed: ${cData?.emailError || 'Check SMTP settings'}. Contact CHP manually.`,
+          { duration: 8000 }
+        );
+      }
       const sRes = await updateReferralV2Status(refId, 'counter-referral-created');
       if (sRes.success) {
-        toast.success('Counter-referral created — CHP notified');
+        toast.success(cData?.emailSent ? 'Counter-referral created — CHP notified' : 'Counter-referral created');
         setShowForm(false);
         await loadData();
       } else {

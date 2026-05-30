@@ -68,10 +68,15 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
     await original.save();
 
     // Send CHP follow-up email if email provided
+    let emailResult: { success: boolean; messageId?: string; error?: string } = { success: false, error: 'No CHP email provided' };
     if (body.chpEmail) {
       try {
-        const baseUrl = process.env.APP_BASE_URL || 'https://healthtrack.onrender.com';
-        await sendChpFollowUpEmail({
+        const baseUrl = process.env.APP_BASE_URL || (process.env.RENDER_EXTERNAL_URL) || '';
+        if (!baseUrl) {
+          console.warn('[CounterReferral] APP_BASE_URL not set — CHP form link will be broken');
+        }
+        const formUrl = baseUrl ? `${baseUrl}/chp-feedback/${responseToken}` : '';
+        emailResult = await sendChpFollowUpEmail({
           to: body.chpEmail,
           chpName: body.chpName,
           patientName: body.patientName,
@@ -81,15 +86,22 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
           nextVisitDate: body.nextVisitDate ? new Date(body.nextVisitDate).toLocaleDateString() : undefined,
           warningSigns: body.warningSigns,
           recoveryStatus: body.recoveryStatus || 'still-unwell',
-          formUrl: `${baseUrl}/chp-feedback/${responseToken}`,
+          formUrl,
         });
-        counter.chpEmailSent = true;
-        counter.chpEmailSentAt = new Date();
-        counter.chpEmailStatus = 'sent';
+        if (emailResult.success) {
+          counter.chpEmailSent = true;
+          counter.chpEmailSentAt = new Date();
+          counter.chpEmailStatus = 'sent';
+          console.log('[CounterReferral] CHP email sent to', body.chpEmail, 'messageId:', emailResult.messageId);
+        } else {
+          counter.chpEmailStatus = 'failed';
+          console.error('[CounterReferral] CHP email failed:', emailResult.error);
+        }
         await counter.save();
       } catch (emailErr: any) {
-        console.error('[CounterReferral] Email failed:', emailErr);
+        console.error('[CounterReferral] Email exception:', emailErr);
         counter.chpEmailStatus = 'failed';
+        emailResult = { success: false, error: emailErr.message };
         await counter.save();
       }
     }
@@ -97,7 +109,11 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
     res.status(201).json({
       success: true,
       data: { counterReferral: counter.toJSON() },
-      message: `Counter-referral created for ${body.patientName}. CHP ${body.chpName} assigned for follow-up.`,
+      emailSent: emailResult.success,
+      emailError: emailResult.error || undefined,
+      message: emailResult.success
+        ? `Counter-referral created for ${body.patientName}. CHP ${body.chpName} assigned — follow-up email sent.`
+        : `Counter-referral created for ${body.patientName}. CHP ${body.chpName} assigned — but follow-up email failed: ${emailResult.error}. Please contact CHP manually.`,
     });
   } catch (error: any) {
     console.error('[CounterReferral] Create error:', error);
