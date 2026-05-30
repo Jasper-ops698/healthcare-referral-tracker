@@ -29,5 +29,6 @@ router.get('/ai-report', authenticateJWT, handleListAll); // Admin AI report dat
 router.get('/:id', authenticateJWT, handleGet);
 router.post('/:id/accept', authenticateJWT, handleAccept);
 router.put('/:id/status', authenticateJWT, handleUpdateStatus);
+router.patch('/:id/status', authenticateJWT, handleUpdateStatus);
 
 export default router;
