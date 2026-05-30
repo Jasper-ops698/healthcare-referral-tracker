@@ -555,6 +555,12 @@ export async function sendAIChat(messages: ChatMessage[], context?: { period?: s
   return res.json();
 }
 
+export async function getChpFollowUpStats(period?: 'monthly' | 'yearly'): Promise<ApiResponse> {
+  const query = period ? `?period=${period}` : '';
+  const res = await apiFetch(`/api/v1/counter-referrals/stats/all${query}`);
+  return res.json();
+}
+
 export async function analyzeDiseaseIncidence(period?: 'monthly' | 'yearly', villages?: string[]): Promise<ApiResponse> {
   const res = await apiFetch('/api/v1/disease-incidence/analyze', {
     method: 'POST',

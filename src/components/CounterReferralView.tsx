@@ -190,10 +190,11 @@ export default function CounterReferralView({ stationId, stationName, collectorI
     return r.patientName.toLowerCase().includes(q) || r.patientId.toLowerCase().includes(q);
   }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  // Stats — collector action buckets
-  const needsAttention = incoming.filter(r => toBucket(r.status) === 'needs-attention').length;
-  const inCare = incoming.filter(r => toBucket(r.status) === 'in-care').length;
-  const completed = incoming.filter(r => toBucket(r.status) === 'completed').length;
+  // Stats — collector action buckets (count across both incoming + outgoing)
+  const allCaseReferrals = [...incoming, ...outgoing];
+  const needsAttention = allCaseReferrals.filter(r => toBucket(r.status) === 'needs-attention').length;
+  const inCare = allCaseReferrals.filter(r => toBucket(r.status) === 'in-care').length;
+  const completed = allCaseReferrals.filter(r => toBucket(r.status) === 'completed').length;
 
   const stats = [
     { label: 'Needs Attention', value: needsAttention, icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50', desc: 'Patients to receive' },

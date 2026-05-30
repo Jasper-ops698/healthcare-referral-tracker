@@ -20,9 +20,10 @@ import {
   FileText, Loader2, User, Stethoscope,
   ClipboardList, HeartPulse, Baby, AlertTriangle,
   Filter, X, CalendarDays, MapPin, ShieldAlert,
+  RefreshCw, UserCheck,
 } from 'lucide-react';
 import {
-  getAllReferralsV2, sendAIChat, generateAIExportReport, analyzeDiseaseIncidence,
+  getAllReferralsV2, sendAIChat, generateAIExportReport, analyzeDiseaseIncidence, getChpFollowUpStats,
 } from '@/lib/apiClient';
 import type { ChatMessage } from '@/lib/apiClient';
 import type { ReferralV2 } from '@/types';
@@ -60,6 +61,21 @@ export default function UnifiedAdminDashboard() {
   const [incidenceLoading, setIncidenceLoading] = useState(false);
   const [incidenceSummary, setIncidenceSummary] = useState('');
   const [showIncidence, setShowIncidence] = useState(false);
+
+  // CHP follow-up state
+  const [chpStats, setChpStats] = useState<any>(null);
+  const [chpStatsPeriod, setChpStatsPeriod] = useState<'monthly' | 'yearly'>('yearly');
+  const [chpStatsLoading, setChpStatsLoading] = useState(false);
+  const loadChpStats = async () => {
+    setChpStatsLoading(true);
+    try {
+      const res = await getChpFollowUpStats(chpStatsPeriod);
+      if (res.success && res.data) {
+        setChpStats(res.data);
+      }
+    } catch (e) { console.error('CHP stats load failed:', e); }
+    finally { setChpStatsLoading(false); }
+  };
 
   // Filter state
   const [filterStationType, setFilterStationType] = useState<'all' | 'household' | 'hip' | 'referral-center'>('all');
@@ -951,7 +967,73 @@ export default function UnifiedAdminDashboard() {
         )}
       </div>
 
-      {/* ─── 3. BAR CHARTS: Disease Prevalence + Referral Reasons ─── */}
+      {/* ─── 3. CHP FOLLOW-UP TRACKING ─── */}
+      <div className="bg-card rounded-xl border border-border p-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 className="text-base font-semibold flex items-center gap-2">
+            <UserCheck className="w-4 h-4 text-primary" />
+            {t('analytics.chpFollowUp')}
+          </h2>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden">
+              <button onClick={() => setChpStatsPeriod('monthly')} className={`px-3 py-1.5 text-xs font-medium transition-colors ${chpStatsPeriod === 'monthly' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>{t('analytics.monthly')}</button>
+              <button onClick={() => setChpStatsPeriod('yearly')} className={`px-3 py-1.5 text-xs font-medium transition-colors ${chpStatsPeriod === 'yearly' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>{t('analytics.yearly')}</button>
+            </div>
+            <button onClick={loadChpStats} disabled={chpStatsLoading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
+              {chpStatsLoading ? <><Loader2 className="w-3 h-3 animate-spin" /> {t('analytics.loading')}</> : <><RefreshCw className="w-3 h-3" /> {t('analytics.refresh')}</>}
+            </button>
+          </div>
+        </div>
+
+        {!chpStats ? (
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+            <UserCheck className="w-10 h-10 mb-3 opacity-30" />
+            <p className="text-sm">{t('analytics.chpNoData')}</p>
+            <p className="text-xs mt-1 max-w-sm text-center">{t('analytics.chpDescription')}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Response Rate */}
+            <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
+              <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide mb-2">{t('analytics.chpResponseRate')}</p>
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-bold text-emerald-700">{chpStats.chpResponseRate || 0}%</span>
+                <span className="text-xs text-emerald-600 mb-1">({chpStats.chpResponseReceived || 0}/{chpStats.totalCounterReferrals || 0})</span>
+              </div>
+              <p className="text-[11px] text-emerald-600 mt-1">{t('analytics.chpsResponded')}</p>
+            </div>
+            {/* Recovery Status Breakdown */}
+            <div className="sm:col-span-2 bg-muted/30 rounded-xl p-4 border border-border">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">{t('analytics.recoveryOutcomes')}</p>
+              {chpStats.recoveryStatusBreakdown && Object.keys(chpStats.recoveryStatusBreakdown).length > 0 ? (
+                <div className="space-y-2">
+                  {Object.entries(chpStats.recoveryStatusBreakdown as Record<string, number>).map(([status, count]) => {
+                    const total = chpStats.chpResponseReceived || 1;
+                    const pct = Math.round((count / total) * 100);
+                    const colors: Record<string, string> = { 'fully-recovered': 'bg-emerald-500', 'partially-recovered': 'bg-sky-500', 'still-unwell': 'bg-amber-500', 'deceased': 'bg-slate-500', 'lost-to-follow-up': 'bg-red-400' };
+                    const labels: Record<string, string> = { 'fully-recovered': t('analytics.fullyRecovered'), 'partially-recovered': t('analytics.partiallyRecovered'), 'still-unwell': t('analytics.stillUnwell'), 'deceased': t('analytics.deceased'), 'lost-to-follow-up': t('analytics.lostToFollowUp') };
+                    return (
+                      <div key={status}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>{labels[status] || status}</span>
+                          <span className="font-semibold">{count} ({pct}%)</span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${colors[status] || 'bg-gray-400'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t('analytics.noRecoveryData')}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ─── 4. BAR CHARTS: Disease Prevalence + Referral Reasons ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Disease Prevalence */}
         <div className="bg-card rounded-xl border border-border p-5">
