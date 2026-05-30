@@ -93,7 +93,8 @@ export function verifyJWT(token: string): JWTPayload | null {
       issuer: 'healthtrack-sync',
       audience: 'healthtrack-client',
     }) as JWTPayload;
-  } catch {
+  } catch (err: any) {
+    console.error(`[JWT] Verification failed: ${err.message}. Token prefix: ${token.slice(0, 20)}...`);
     return null;
   }
 }
@@ -113,6 +114,7 @@ export async function authenticateJWT(
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.error(`[Auth] 401 for ${req.method} ${req.path} — Missing or invalid Authorization header: ${authHeader?.slice(0, 30) || 'undefined'}`);
     res.status(401).json({
       success: false,
       error: { code: 'UNAUTHORIZED', message: 'Missing or invalid Authorization header. Expected: Bearer <token>' },
@@ -125,6 +127,7 @@ export async function authenticateJWT(
   // Verify JWT signature and expiry
   const payload = verifyJWT(token);
   if (!payload) {
+    console.error(`[Auth] 401 for ${req.method} ${req.path} — JWT verification failed. Token length: ${token.length}, prefix: ${token.slice(0, 20)}...`);
     res.status(401).json({
       success: false,
       error: { code: 'TOKEN_INVALID', message: 'JWT is invalid or expired' },

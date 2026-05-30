@@ -69,7 +69,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
             action: {
               label: 'Re-Login',
               onClick: () => {
-                window.location.href = '/logout';
+                // Dispatch session expiry event instead of hard redirect
+                window.dispatchEvent(new CustomEvent('healthtrack-session-expired'));
               },
             },
           });

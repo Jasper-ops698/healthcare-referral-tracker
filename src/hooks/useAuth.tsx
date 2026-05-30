@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  // Ensure primary admin exists on mount
+  // Ensure primary admin exists on mount + listen for session expiry events
   useEffect(() => {
     ensurePrimaryAdmin();
 
@@ -128,6 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (parsed.status !== 'inactive') setUser(parsed);
       } catch { localStorage.removeItem('healthtrack_current_user'); }
     }
+
+    // Listen for session expiry events from apiFetch (401 responses)
+    const handleSessionExpired = () => {
+      console.log('[Auth] Session expired event received — logging out');
+      setUser(null);
+      localStorage.removeItem('healthtrack_current_user');
+      localStorage.removeItem('healthtrack_jwt_token');
+    };
+    window.addEventListener('healthtrack-session-expired', handleSessionExpired);
+    return () => window.removeEventListener('healthtrack-session-expired', handleSessionExpired);
   }, []);
 
   const completeLogin = useCallback((token: string, apiUser: any) => {

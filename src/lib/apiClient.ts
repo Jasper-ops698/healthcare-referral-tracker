@@ -111,7 +111,8 @@ async function apiFetch(
     // Handle 401 — token expired or invalid
     if (res.status === 401) {
       clearToken();
-      window.location.href = '/?expired=true';
+      // Notify AuthProvider to properly update React state (don't hard-redirect)
+      window.dispatchEvent(new CustomEvent('healthtrack-session-expired'));
       throw new Error('Session expired. Please log in again.');
     }
 
