@@ -610,6 +610,11 @@ export const Translations = {
     'analytics.noRecoveryData': 'No recovery data yet. CHPs must submit follow-up forms.',
     'analytics.loading': 'Loading...',
     'analytics.refresh': 'Refresh',
+    'email.diagnostics': 'Email Diagnostics',
+    'email.smtpConnected': 'SMTP Connected',
+    'email.smtpError': 'SMTP Error',
+    'email.notConfigured': 'Not Configured',
+    'email.howToFix': 'How to Fix Email on Render',
     'common.close': 'Close',
   },
   sw: {
@@ -1210,6 +1215,11 @@ export const Translations = {
     'analytics.noRecoveryData': 'Hakuna data ya kupona bado. CHP wanapaswa kuwasilisha fomu za ufuatiliaji.',
     'analytics.loading': 'Inapakia...',
     'analytics.refresh': 'Sasisha',
+    'email.diagnostics': 'Uchunguzi wa Barua Pepe',
+    'email.smtpConnected': 'SMTP Imeunganishwa',
+    'email.smtpError': 'Kosa la SMTP',
+    'email.notConfigured': 'Haijasanidiwa',
+    'email.howToFix': 'Jinsi Kurekebisha Barua Pepe kwenye Render',
     'common.close': 'Funga',
   }
 };

@@ -16,6 +16,7 @@ import {
   getQueueStatus,
   checkSMTPHealth,
   sendEmail,
+  processPendingEmails,
 } from '../services/emailService.js';
 import type { AuthenticatedRequest } from '../middleware/regionalAuth.js';
 
@@ -186,11 +187,30 @@ router.post('/send', async (req: Request, res: Response) => {
 
 // ─── QUEUE STATUS ───
 
-router.get('/queue', (_req: Request, res: Response) => {
+router.get('/queue', async (_req: Request, res: Response) => {
+  const queue = await getQueueStatus();
   res.json({
     success: true,
-    queue: getQueueStatus(),
+    queue,
   });
+});
+
+// ─── RETRY QUEUED EMAILS ───
+
+router.post('/retry', async (_req: Request, res: Response) => {
+  try {
+    const stats = await processPendingEmails(20);
+    res.json({
+      success: true,
+      data: stats,
+      message: `Processed ${stats.processed} emails: ${stats.sent} sent, ${stats.failed} failed, ${stats.cancelled} cancelled`,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Retry failed',
+    });
+  }
 });
 
 export default router;

@@ -577,6 +577,44 @@ export async function generateAIExportReport(prompt: string, format: 'html' | 'm
   return res.json();
 }
 
+// ─── EMAIL HEALTH API ───
+
+export interface EmailHealthResponse {
+  success: boolean;
+  configured: boolean;
+  smtp: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    passConfigured: boolean;
+    passLength: number;
+  };
+  connection: {
+    tested: boolean;
+    success: boolean;
+    error?: string;
+  };
+  suggestions: string[];
+  queue: {
+    pending: number;
+    sent: number;
+    failed: number;
+    cancelled: number;
+    total: number;
+  };
+}
+
+export async function checkEmailHealth(): Promise<ApiResponse<EmailHealthResponse>> {
+  const res = await apiFetch('/api/v1/email/health');
+  return res.json();
+}
+
+export async function retryQueuedEmails(): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/email/retry', { method: 'POST' });
+  return res.json();
+}
+
 // ─── EXPORT ───
 
 export { getToken, setToken, clearToken };
