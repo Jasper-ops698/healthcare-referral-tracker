@@ -141,12 +141,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeLogin = useCallback((token: string, apiUser: any) => {
+    // Defensive: validate role — must be 'admin' or 'collector'
+    const rawRole = apiUser.role;
+    const validRole: UserRole = rawRole === 'admin' || rawRole === 'collector' ? rawRole : 'collector';
+    if (rawRole !== validRole) {
+      console.warn(`[Auth] Invalid role "${rawRole}" from backend for ${apiUser.email}. Defaulting to "collector".`);
+    }
+
     const user: User = {
       id: apiUser.id,
       email: apiUser.email,
       firstName: apiUser.firstName,
       lastName: apiUser.lastName,
-      role: apiUser.role,
+      role: validRole,
       status: apiUser.status || 'active',
       region: apiUser.region || 'default',
       createdAt: new Date(),
@@ -232,6 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data.token && data.user) {
+          console.log(`[Auth] Backend login success for ${data.user.email}, role=${data.user.role}, stationName=${data.user.stationName}`);
           completeLogin(data.token, data.user);
           setIsLoading(false);
           return { success: true };
@@ -251,6 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const localUser = await localAuthenticate(email, password);
     if (localUser) {
+      console.log(`[Auth] Local auth success for ${localUser.email}, role=${(localUser as any).role}`);
       setUser(localUser);
       localStorage.setItem('healthtrack_current_user', JSON.stringify(localUser));
       // Generate a local session token so API calls don't fail immediately.

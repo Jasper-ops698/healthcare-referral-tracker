@@ -31,12 +31,15 @@ function IdleAutoLogout({ children }: { children: React.ReactNode }) {
     } catch { return 30; }
   };
 
+  const timeoutMinutes = getTimeoutMinutes();
+
   const handleIdle = () => {
+    console.log(`[IdleAutoLogout] Idle timeout reached (${timeoutMinutes}min) — logging out`);
     toast.info(t('toast.sessionExpired'));
     logout();
   };
 
-  useIdleTimer(handleIdle, getTimeoutMinutes());
+  useIdleTimer(handleIdle, timeoutMinutes);
 
   return <>{children}</>;
 }
@@ -51,9 +54,14 @@ function getChpFeedbackToken(): string | null {
 }
 
 function AppContent() {
-  const { isAuthenticated, isAdmin, isCollector } = useAuth();
+  const { isAuthenticated, isAdmin, isCollector, user } = useAuth();
   const [chpToken, setChpToken] = useState<string | null>(getChpFeedbackToken);
   useI18n();
+
+  // Debug: log auth state changes
+  useEffect(() => {
+    console.log(`[App] Auth state: isAuthenticated=${isAuthenticated}, isAdmin=${isAdmin}, isCollector=${isCollector}, role=${user?.role || 'null'}, email=${user?.email || 'null'}`);
+  }, [isAuthenticated, isAdmin, isCollector, user]);
 
   // Listen for URL changes (e.g., back/forward navigation)
   useEffect(() => {
@@ -71,9 +79,15 @@ function AppContent() {
     return <LoginPage />;
   }
 
+  // Defensive: if authenticated but role is unrecognized, show login with warning
+  if (!isAdmin && !isCollector) {
+    console.error(`[App] Authenticated but unrecognized role: ${user?.role}. Forcing logout.`);
+    return <LoginPage />;
+  }
+
   return (
     <IdleAutoLogout>
-      {isAdmin ? <AdminDashboard /> : isCollector ? <CollectorDashboard /> : <LoginPage />}
+      {isAdmin ? <AdminDashboard /> : <CollectorDashboard />}
     </IdleAutoLogout>
   );
 }
