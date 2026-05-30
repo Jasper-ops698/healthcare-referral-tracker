@@ -17,6 +17,9 @@
 
 import 'dotenv/config'; // Load .env IMMEDIATELY — before any module reads process.env
 
+// Early startup log — confirms tsx loaded this file
+console.log(`[Startup] index.ts loaded. PORT=${process.env.PORT || 'unset'}, NODE_ENV=${process.env.NODE_ENV || 'unset'}, MONGODB_URI=${process.env.MONGODB_URI ? 'set' : 'MISSING'}, JWT_SECRET=${process.env.JWT_SECRET ? 'set' : 'MISSING'}`);
+
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
@@ -198,21 +201,30 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // ─── SERVER START ───
 
 async function startServer(): Promise<void> {
+  // Safety timeout: if startup takes >60s, force exit so Render can restart
+  const safetyTimeout = setTimeout(() => {
+    console.error('[FATAL] Server startup timed out after 60s. Forcing exit.');
+    process.exit(1);
+  }, 60000);
+
   try {
-    // Connect to MongoDB
+    console.log('[Startup] Step 1/5: Connecting to MongoDB...');
     await connectDatabase();
+    console.log('[Startup] Step 2/5: MongoDB connected. Bootstrapping admin...');
 
-    // Bootstrap primary admin if needed
     await bootstrapPrimaryAdmin();
+    console.log('[Startup] Step 3/5: Admin ready. Running migrations...');
 
-    // Run database migrations
     await migrateRenameCHPToCollector();
+    console.log('[Startup] Step 4/5: Migrations done. Seeding stations...');
 
-    // Seed default stations if needed
     await seedStations();
+    console.log('[Startup] Step 5/5: Stations seeded. Starting HTTP server...');
 
     // Start HTTP server
     app.listen(PORT, () => {
+      clearTimeout(safetyTimeout);
+      console.log(`[Startup] HTTP server listening on port ${PORT}`);
       console.log(`
 ╔══════════════════════════════════════════════════════════════════╗
 ║     Patient Referral Tracker — Production Server                 ║
