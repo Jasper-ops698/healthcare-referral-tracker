@@ -383,16 +383,19 @@ export async function handleListCollectorStations(req: Request, res: Response): 
       { stationName: 1, stationType: 1, firstName: 1, lastName: 1, _id: 0 }
     ).lean().exec();
 
-    // Group by stationName
+    // Group by stationName (fallback to facilityId/assignedFacility if stationName empty)
     const map = new Map<string, { name: string; type: string; collectors: string[] }>();
     collectors.forEach((c: any) => {
-      const key = c.stationName.toLowerCase().trim();
+      // Use stationName if set, otherwise fall back to facilityId (assignedFacility)
+      const rawName = (c.stationName && c.stationName.trim()) || (c.facilityId && c.facilityId.toString().trim()) || '';
+      if (!rawName) return; // Skip if no name at all
+      const key = rawName.toLowerCase().trim();
       const existing = map.get(key);
       if (existing) {
         existing.collectors.push(`${c.firstName} ${c.lastName}`.trim());
       } else {
         map.set(key, {
-          name: c.stationName.trim(),
+          name: rawName.trim(),
           type: c.stationType || 'household',
           collectors: [`${c.firstName} ${c.lastName}`.trim()],
         });

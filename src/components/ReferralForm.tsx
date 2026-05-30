@@ -333,7 +333,7 @@ export default function ReferralForm({
                 <p className="text-xs text-muted-foreground mt-1">
                   {facilities.length > 0
                     ? `${facilities.length} facility${facilities.length > 1 ? 'ies' : 'y'} with stationed collectors`
-                    : facilitiesLoading ? 'Loading facilities...' : 'No facilities found. Register collectors with station names to see them here.'}
+                    : facilitiesLoading ? 'Loading facilities...' : 'No facilities found. Register collectors with station names or assigned facilities.'}
                 </p>
               </div>
 
