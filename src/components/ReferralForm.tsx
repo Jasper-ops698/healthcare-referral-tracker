@@ -320,7 +320,7 @@ export default function ReferralForm({
                           >
                             <MapPin className="w-4 h-4 text-amber-500 shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">Use &ldquo;{destQuery.trim()}&rdquo;</p>
+                              <p className="text-sm font-medium truncate">Use "{destQuery.trim()}"</p>
                               <p className="text-[10px] text-muted-foreground">Custom facility (no stationed collectors)</p>
                             </div>
                           </button>
@@ -340,7 +340,7 @@ export default function ReferralForm({
               {/* Station Type */}
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">
-                  Station Type {form.destinationStationName ? `for &ldquo;${form.destinationStationName}&rdquo;` : ''} *
+                  Station Type {form.destinationStationName ? `for "${form.destinationStationName}"` : ''} *
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {([
