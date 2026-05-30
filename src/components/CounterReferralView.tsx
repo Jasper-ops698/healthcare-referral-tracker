@@ -21,6 +21,7 @@ import {
 import {
   getIncomingReferrals, getOutgoingReferrals, acceptReferralV2,
   updateReferralV2Status, createCounterReferral,
+  getChpAlertJourney,
 } from '@/lib/apiClient';
 import type { ReferralV2, RecoveryStatus } from '@/types';
 
@@ -73,6 +74,10 @@ export default function CounterReferralView({ stationId, stationName, collectorI
   const [selectedDir, setSelectedDir] = useState<'incoming' | 'outgoing'>('incoming');
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Phase C: Previous journey state for follow-up referrals
+  const [previousJourney, setPreviousJourney] = useState<any>(null);
+  const [journeyLoading, setJourneyLoading] = useState(false);
 
   // Form state
   const [finalDiagnosis, setFinalDiagnosis] = useState('');
@@ -131,6 +136,20 @@ export default function CounterReferralView({ stationId, stationName, collectorI
   const openDetail = (r: ReferralV2, dir: 'incoming' | 'outgoing') => {
     setSelected(r); setSelectedDir(dir); setView('detail'); setShowForm(false);
     setChpName(r.chpName || ''); setChpPhone(r.chpPhone || ''); setChpEmail(r.chpEmail || '');
+    setPreviousJourney(null);
+
+    // Phase C: Fetch previous journey for follow-up referrals
+    if (r.referralType === 'follow-up' && (r as any).previousReferralId) {
+      setJourneyLoading(true);
+      getChpAlertJourney((r as any).chpAlertId || (r as any).previousReferralId)
+        .then(res => {
+          if (res.success && res.data) {
+            setPreviousJourney((res.data as any).journey);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setJourneyLoading(false));
+    }
   };
 
   const submitCounter = async () => {
@@ -440,6 +459,62 @@ export default function CounterReferralView({ stationId, stationName, collectorI
           <JStep icon={Stethoscope} color="bg-emerald-500" label="Destination" station={selected.destinationStationName} isCurrent />
         </div>
       </div>
+
+      {/* Phase C: Follow-up badge */}
+      {selected.referralType === 'follow-up' && (
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-3">
+          <TrendingUp className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Follow-up Referral</p>
+            <p className="text-xs text-amber-600">
+              Patient returning for continued care. Previous treatment and CHP observations are available below.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Phase C: Previous Patient Journey (for follow-ups) */}
+      {selected.referralType === 'follow-up' && (previousJourney || journeyLoading) && (
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="px-5 py-3 border-b border-border bg-blue-50/50 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-blue-500" />
+            <h3 className="text-sm font-bold">Previous Patient Journey</h3>
+          </div>
+          <div className="p-5">
+            {journeyLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : previousJourney?.timeline ? (
+              <div className="space-y-3">
+                {previousJourney.timeline.map((event: any, i: number) => (
+                  <div key={i} className="flex gap-3">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                      event.stage === 'chp-response' ? 'bg-red-500' :
+                      event.stage === 'counter-referral' ? 'bg-emerald-500' :
+                      'bg-blue-400'
+                    }`} />
+                    <div>
+                      <p className="text-sm font-medium">{event.title}</p>
+                      <p className="text-xs text-muted-foreground">{event.description}</p>
+                      {event.details?.chpSymptomsObserved && (
+                        <p className="text-xs text-red-600 mt-1">
+                          <strong>CHP observed:</strong> {event.details.chpSymptomsObserved}
+                        </p>
+                      )}
+                      {event.details?.chpNeedsMedicalAttention && (
+                        <p className="text-xs text-red-600 font-medium">⚠ Needs medical attention</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Previous journey data not available</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Context */}
       <div className="bg-card rounded-xl border border-border overflow-hidden">

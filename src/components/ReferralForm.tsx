@@ -28,6 +28,7 @@ interface ReferralFormProps {
   sourceStationId: string;
   sourceStationName: string;
   sourceStationType: 'household' | 'hip' | 'referral-center';
+  followUpData?: Record<string, unknown>;
 }
 
 const TRANSPORT_MODES = [
@@ -62,6 +63,7 @@ interface Facility {
 
 export default function ReferralForm({
   onSubmit, collectorId, collectorName, sourceStationId, sourceStationName, sourceStationType,
+  followUpData,
 }: ReferralFormProps) {
   const { classifySymptoms, isLoading: aiLoading } = useEdgeAI();
   const [step, setStep] = useState(1);
@@ -137,6 +139,23 @@ export default function ReferralForm({
     reasonForReferral: '', modeOfTransport: 'ambulance' as ReferralV2['modeOfTransport'],
     transportNotes: '', urgency: 'routine' as 'routine' | 'urgent' | 'emergency', notes: '',
   });
+
+  // Phase C: Pre-populate form from follow-up data
+  useEffect(() => {
+    if (followUpData) {
+      setForm(p => ({
+        ...p,
+        patientName: (followUpData.patientName as string) || p.patientName,
+        patientAge: String(followUpData.patientAge || ''),
+        patientGender: (followUpData.patientGender as 'male' | 'female' | 'other') || p.patientGender,
+        patientPhone: (followUpData.patientPhone as string) || p.patientPhone,
+        initialDiagnosis: (followUpData.initialDiagnosis as string) || p.initialDiagnosis,
+        reasonForReferral: (followUpData.reasonForReferral as string) || p.reasonForReferral,
+        urgency: (followUpData.urgency as 'routine' | 'urgent' | 'emergency') || p.urgency,
+        notes: (followUpData.notes as string) || p.notes,
+      }));
+    }
+  }, [followUpData]);
 
   const handleDiagnosisChange = async (text: string) => {
     setForm(p => ({ ...p, initialDiagnosis: text }));

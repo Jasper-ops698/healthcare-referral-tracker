@@ -210,15 +210,28 @@ export async function handleUpdate(req: Request, res: Response): Promise<void> {
 
 // ─── CHP FORM SUBMISSION (no auth — public token-based) ───
 const VALID_RECOVERY_STATUSES = ['fully-recovered', 'partially-recovered', 'still-unwell', 'deceased', 'lost-to-follow-up'];
+const VALID_RECOMMENDED_ACTIONS = ['see-doctor', 'return-to-facility', 'emergency', 'monitor', 'other'];
 
 export async function handleChpFormSubmit(req: Request, res: Response): Promise<void> {
   try {
     const { token } = req.params;
-    const { recoveryStatus, recoveryNotes } = req.body;
+    const {
+      recoveryStatus,
+      recoveryNotes,
+      needsMedicalAttention,
+      recommendedAction,
+      symptomsObserved,
+    } = req.body;
 
     // Validate recoveryStatus
     if (!recoveryStatus || !VALID_RECOVERY_STATUSES.includes(recoveryStatus)) {
       res.status(400).json({ success: false, error: `recoveryStatus must be one of: ${VALID_RECOVERY_STATUSES.join(', ')}` });
+      return;
+    }
+
+    // Validate recommendedAction if provided
+    if (recommendedAction && !VALID_RECOMMENDED_ACTIONS.includes(recommendedAction)) {
+      res.status(400).json({ success: false, error: `recommendedAction must be one of: ${VALID_RECOMMENDED_ACTIONS.join(', ')}` });
       return;
     }
 
@@ -231,15 +244,70 @@ export async function handleChpFormSubmit(req: Request, res: Response): Promise<
       return;
     }
 
+    // Save CHP response
     counter.chpResponseReceived = true;
     counter.chpResponseDate = new Date();
     counter.chpResponseNotes = recoveryNotes;
     counter.chpResponseRecoveryStatus = recoveryStatus;
+
+    // Phase C: Save escalation fields
+    counter.chpNeedsMedicalAttention = !!needsMedicalAttention;
+    counter.chpRecommendedAction = recommendedAction || undefined;
+    counter.chpSymptomsObserved = symptomsObserved || undefined;
+
+    // Auto-escalate if CHP flags medical attention needed
+    const isEscalated = !!needsMedicalAttention || recoveryStatus === 'still-unwell';
+    if (isEscalated) {
+      counter.status = 'escalated';
+    }
+
     await counter.save();
+
+    // Phase C: Create CHP Alert for collector if escalated
+    if (isEscalated) {
+      try {
+        const ChpAlert = (await import('../schemas/ChpAlert.js')).default;
+        await ChpAlert.create({
+          collectorId: counter.collectorId,
+          counterReferralId: counter._id,
+          referralId: counter.referralId,
+          patientId: counter.patientId,
+          patientName: counter.patientName,
+          chpName: counter.chpName,
+          status: 'open',
+          priority: recommendedAction === 'emergency' ? 'emergency' : recommendedAction === 'see-doctor' ? 'urgent' : 'routine',
+          message: `CHP ${counter.chpName} reports ${counter.patientName} needs medical attention. ` +
+            `Status: ${recoveryStatus}. ` +
+            `${symptomsObserved ? `Observed: ${symptomsObserved}. ` : ''}` +
+            `${recommendedAction ? `Recommended: ${recommendedAction.replace(/-/g, ' ')}.` : ''}`,
+          chpSymptomsObserved: symptomsObserved,
+          chpRecommendedAction: recommendedAction,
+        });
+        console.log(`[ChpAlert] Created alert for collector ${counter.collectorId} — patient ${counter.patientName}`);
+      } catch (alertErr: any) {
+        console.error('[ChpAlert] Failed to create alert:', alertErr.message);
+        // Don't fail the CHP submission if alert creation fails
+      }
+    }
+
+    // Also update the original referral status if escalated
+    if (isEscalated) {
+      try {
+        await ReferralV2.findByIdAndUpdate(
+          counter.referralId,
+          { status: 'counter-referral-created' }, // Keep as is, but alert signals the issue
+        );
+      } catch {
+        // Non-critical, don't fail the submission
+      }
+    }
 
     res.status(200).json({
       success: true,
-      message: `Thank you. Recovery update for ${counter.patientName} has been recorded.`,
+      escalated: isEscalated,
+      message: isEscalated
+        ? `Thank you. Recovery update recorded. The community health worker has been alerted about ${counter.patientName}'s condition.`
+        : `Thank you. Recovery update for ${counter.patientName} has been recorded.`,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -263,6 +331,8 @@ export async function handleChpFormData(req: Request, res: Response): Promise<vo
         chpName: counter.chpName,
         recoveryStatus: counter.recoveryStatus,
         alreadyResponded: counter.chpResponseReceived,
+        // Phase C: Show escalation fields if available
+        showEscalationFields: true,
       },
     });
   } catch (error: any) {

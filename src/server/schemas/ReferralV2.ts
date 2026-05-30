@@ -61,6 +61,11 @@ export interface IReferralV2 extends mongoose.Document {
   rejectedAt?: Date;
   rejectedReason?: string;
 
+  // Referral chain (Phase C)
+  referralType?: 'initial' | 'follow-up'; // default: 'initial'
+  previousReferralId?: mongoose.Types.ObjectId; // links to the referral that led to this one
+  chpAlertId?: mongoose.Types.ObjectId; // links to the CHP escalation that triggered this
+
   // Notes
   notes?: string;
 }
@@ -126,6 +131,24 @@ const ReferralV2Schema = new Schema<IReferralV2>(
     completedAt: { type: Date },
     rejectedAt: { type: Date },
     rejectedReason: { type: String, trim: true },
+
+    // Referral chain (Phase C)
+    referralType: {
+      type: String,
+      enum: ['initial', 'follow-up'],
+      default: 'initial',
+      index: true,
+    },
+    previousReferralId: {
+      type: Schema.Types.ObjectId,
+      ref: 'ReferralV2',
+      index: true,
+    },
+    chpAlertId: {
+      type: Schema.Types.ObjectId,
+      ref: 'ChpAlert',
+      index: true,
+    },
 
     notes: { type: String, trim: true },
   },

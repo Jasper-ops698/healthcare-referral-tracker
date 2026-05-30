@@ -52,6 +52,11 @@ export interface ICounterReferral extends mongoose.Document {
   chpResponseNotes?: string;
   chpResponseRecoveryStatus?: RecoveryStatus;
 
+  // CHP escalation fields (Phase C)
+  chpNeedsMedicalAttention?: boolean;
+  chpRecommendedAction?: 'see-doctor' | 'return-to-facility' | 'emergency' | 'monitor' | 'other';
+  chpSymptomsObserved?: string;
+
   // Status
   status: 'active' | 'closed' | 'escalated';
 
@@ -115,6 +120,14 @@ const CounterReferralSchema = new Schema<ICounterReferral>(
       type: String,
       enum: ['fully-recovered', 'partially-recovered', 'still-unwell', 'deceased', 'lost-to-follow-up'],
     },
+
+    // CHP escalation fields
+    chpNeedsMedicalAttention: { type: Boolean, default: false },
+    chpRecommendedAction: {
+      type: String,
+      enum: ['see-doctor', 'return-to-facility', 'emergency', 'monitor', 'other'],
+    },
+    chpSymptomsObserved: { type: String, trim: true },
 
     status: {
       type: String,

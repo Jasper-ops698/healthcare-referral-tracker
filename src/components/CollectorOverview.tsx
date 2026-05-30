@@ -14,10 +14,15 @@ import {
   TrendingUp, CheckCircle2,
   AlertTriangle, Stethoscope, Calendar,
   ChevronRight, Loader2,
+  Bell, BellRing, Eye, ShieldAlert,
 } from 'lucide-react';
 import { format, subDays, isToday, parseISO } from 'date-fns';
-import { getDailyVisits, getOutgoingReferrals, getIncomingReferrals } from '@/lib/apiClient';
+import {
+  getDailyVisits, getOutgoingReferrals, getIncomingReferrals,
+  getChpAlerts, acknowledgeChpAlert, resolveChpAlert, getChpAlertJourney,
+} from '@/lib/apiClient';
 import type { ReferralV2 } from '@/types';
+import { toast } from 'sonner';
 
 interface Props {
   stationId: string;
@@ -26,6 +31,18 @@ interface Props {
   onLogVisits: () => void;
   onSendReferral: () => void;
   onCounterReferral: () => void;
+  onCreateFollowUpReferral?: (data: {
+    patientName: string;
+    patientAge?: number;
+    patientGender?: string;
+    patientPhone?: string;
+    initialDiagnosis: string;
+    reasonForReferral: string;
+    urgency?: string;
+    previousReferralId?: string;
+    chpAlertId?: string;
+    notes?: string;
+  }) => void;
 }
 
 interface DailyVisit {
@@ -36,14 +53,25 @@ interface DailyVisit {
 
 export default function CollectorOverview({
   stationId, stationName, collectorId, onLogVisits, onSendReferral, onCounterReferral,
+  onCreateFollowUpReferral,
 }: Props) {
   const [visits, setVisits] = useState<DailyVisit[]>([]);
   const [outgoing, setOutgoing] = useState<ReferralV2[]>([]);
   const [incoming, setIncoming] = useState<ReferralV2[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // CHP Alert state (Phase C)
+  const [chpAlerts, setChpAlerts] = useState<any[]>([]);
+  const [alertCounts, setAlertCounts] = useState({ total: 0, open: 0, emergency: 0, urgent: 0 });
+  const [alertsLoading, setAlertsLoading] = useState(true);
+  const [selectedAlert, setSelectedAlert] = useState<any>(null);
+  const [journeyData, setJourneyData] = useState<any>(null);
+  const [showJourney, setShowJourney] = useState(false);
+  const [journeyLoading, setJourneyLoading] = useState(false);
+
   useEffect(() => {
     loadData();
+    loadChpAlerts();
   }, [stationId, collectorId]);
 
   const loadData = async () => {
@@ -59,6 +87,58 @@ export default function CollectorOverview({
       if (iRes.success) setIncoming((iRes.data as any)?.referrals || []);
     } catch (e) { console.error('Dashboard load failed:', e); }
     finally { setLoading(false); }
+  };
+
+  const loadChpAlerts = async () => {
+    setAlertsLoading(true);
+    try {
+      const res = await getChpAlerts();
+      if (res.success && res.data) {
+        const data = res.data as any;
+        setChpAlerts(data.alerts || []);
+        setAlertCounts(data.counts || { total: 0, open: 0, emergency: 0, urgent: 0 });
+      }
+    } catch (e) { console.error('CHP alerts load failed:', e); }
+    finally { setAlertsLoading(false); }
+  };
+
+  const handleAckAlert = async (alertId: string) => {
+    try {
+      const res = await acknowledgeChpAlert(alertId);
+      if (res.success) {
+        toast.success('Alert acknowledged');
+        loadChpAlerts();
+      } else {
+        toast.error(res.error?.message || 'Failed to acknowledge');
+      }
+    } catch { toast.error('Network error'); }
+  };
+
+  const handleResolveAlert = async (alertId: string) => {
+    try {
+      const res = await resolveChpAlert(alertId, { resolutionAction: 'monitored' });
+      if (res.success) {
+        toast.success('Alert resolved');
+        loadChpAlerts();
+      } else {
+        toast.error(res.error?.message || 'Failed to resolve');
+      }
+    } catch { toast.error('Network error'); }
+  };
+
+  const handleViewJourney = async (alertId: string) => {
+    setJourneyLoading(true);
+    setShowJourney(true);
+    try {
+      const res = await getChpAlertJourney(alertId);
+      if (res.success && res.data) {
+        setJourneyData((res.data as any).journey);
+        setSelectedAlert((res.data as any).alert);
+      } else {
+        toast.error('Failed to load patient journey');
+      }
+    } catch { toast.error('Network error'); }
+    setJourneyLoading(false);
   };
 
   // KPIs
@@ -146,6 +226,135 @@ export default function CollectorOverview({
           bgColor="bg-emerald-50"
         />
       </div>
+
+      {/* CHP Alerts Banner (Phase C) */}
+      {!alertsLoading && alertCounts.open > 0 && (
+        <div className={`rounded-xl border p-4 ${
+          alertCounts.emergency > 0
+            ? 'bg-red-50 border-red-200'
+            : alertCounts.urgent > 0
+            ? 'bg-amber-50 border-amber-200'
+            : 'bg-blue-50 border-blue-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+              alertCounts.emergency > 0 ? 'bg-red-100' : alertCounts.urgent > 0 ? 'bg-amber-100' : 'bg-blue-100'
+            }`}>
+              <BellRing className={`w-5 h-5 ${
+                alertCounts.emergency > 0 ? 'text-red-600' : alertCounts.urgent > 0 ? 'text-amber-600' : 'text-blue-600'
+              }`} />
+            </div>
+            <div className="flex-1">
+              <p className={`font-semibold text-sm ${
+                alertCounts.emergency > 0 ? 'text-red-800' : alertCounts.urgent > 0 ? 'text-amber-800' : 'text-blue-800'
+              }`}>
+                {alertCounts.emergency > 0 && <span className="mr-1">{alertCounts.emergency} emergency</span>}
+                {alertCounts.urgent > 0 && <span className="mr-1">{alertCounts.urgent} urgent</span>}
+                {alertCounts.open - alertCounts.emergency - alertCounts.urgent > 0 && (
+                  <span>{alertCounts.open - alertCounts.emergency - alertCounts.urgent} routine</span>
+                )}
+                {' '}CHP alert{alertCounts.open > 1 ? 's' : ''} need{alertCounts.open === 1 ? 's' : ''} attention
+              </p>
+              <p className={`text-xs ${
+                alertCounts.emergency > 0 ? 'text-red-600' : alertCounts.urgent > 0 ? 'text-amber-600' : 'text-blue-600'
+              }`}>
+                CHPs flagged patients needing medical follow-up. Review and take action below.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CHP Alerts List */}
+      {!alertsLoading && chpAlerts.filter((a: any) => a.status === 'open').length > 0 && (
+        <div className="bg-card rounded-xl border border-border p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-red-500" />
+              CHP Alerts — Patients Needing Care
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              {chpAlerts.filter((a: any) => a.status === 'open').length} open
+            </span>
+          </div>
+          <div className="space-y-2">
+            {chpAlerts
+              .filter((a: any) => a.status === 'open')
+              .sort((a: any, b: any) => {
+                const priorityOrder = { emergency: 0, urgent: 1, routine: 2 };
+                return priorityOrder[a.priority as keyof typeof priorityOrder] - priorityOrder[b.priority as keyof typeof priorityOrder];
+              })
+              .map((alert: any) => (
+                <div
+                  key={alert._id}
+                  className={`p-4 rounded-lg border ${
+                    alert.priority === 'emergency'
+                      ? 'bg-red-50 border-red-200'
+                      : alert.priority === 'urgent'
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-blue-50 border-blue-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
+                      alert.priority === 'emergency' ? 'bg-red-500' :
+                      alert.priority === 'urgent' ? 'bg-amber-500' : 'bg-blue-400'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-semibold">{alert.patientName}</p>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                          alert.priority === 'emergency' ? 'bg-red-200 text-red-700' :
+                          alert.priority === 'urgent' ? 'bg-amber-200 text-amber-700' :
+                          'bg-blue-200 text-blue-700'
+                        }`}>
+                          {alert.priority}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-2">{alert.message}</p>
+                      {alert.chpSymptomsObserved && (
+                        <p className="text-xs text-red-600 mb-2">
+                          <strong>Symptoms:</strong> {alert.chpSymptomsObserved}
+                        </p>
+                      )}
+                      {alert.chpRecommendedAction && (
+                        <p className="text-xs text-muted-foreground mb-3">
+                          <strong>CHP recommends:</strong> {alert.chpRecommendedAction.replace(/-/g, ' ')}
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleViewJourney(alert._id)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-border hover:bg-muted text-xs font-medium transition-colors"
+                        >
+                          <Eye className="w-3 h-3" /> View Journey
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAckAlert(alert._id)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-border hover:bg-muted text-xs font-medium transition-colors"
+                        >
+                          Acknowledge
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleResolveAlert(alert._id)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-medium transition-colors"
+                        >
+                          <CheckCircle2 className="w-3 h-3" /> Resolve
+                        </button>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {format(new Date(alert.createdAt), 'MMM d')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center py-8">
@@ -256,6 +465,152 @@ export default function CollectorOverview({
           <div>
             <p className="font-semibold text-emerald-800">All caught up</p>
             <p className="text-xs text-emerald-600">No pending incoming patients. {acceptedIncoming} currently in treatment.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Patient Journey Modal (Phase C) */}
+      {showJourney && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowJourney(false)}>
+          <div className="bg-card rounded-xl border border-border shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-card border-b border-border px-5 py-4 flex items-center justify-between rounded-t-xl z-10">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-primary" />
+                Patient Journey
+              </h3>
+              <button onClick={() => setShowJourney(false)} className="text-sm text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors">
+                Close
+              </button>
+            </div>
+
+            {journeyLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : journeyData ? (
+              <div className="p-5 space-y-4">
+                {/* Patient header */}
+                <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-xl font-bold">{journeyData.patientName}</p>
+                  <p className="text-sm text-muted-foreground">ID: {journeyData.patientId}</p>
+                  {selectedAlert?.chpRecommendedAction && (
+                    <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-sm font-medium">
+                      <ShieldAlert className="w-4 h-4" />
+                      CHP recommends: {selectedAlert.chpRecommendedAction.replace(/-/g, ' ')}
+                    </div>
+                  )}
+                </div>
+
+                {/* Timeline */}
+                {journeyData.timeline?.length > 0 && (
+                  <div className="relative pl-6 space-y-4">
+                    {/* Vertical line */}
+                    <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border" />
+
+                    {journeyData.timeline.map((event: any, i: number) => (
+                      <div key={i} className="relative">
+                        {/* Dot */}
+                        <div className={`absolute -left-6 w-5 h-5 rounded-full border-2 bg-card flex items-center justify-center ${
+                          event.stage === 'chp-response' ? 'border-red-500' :
+                          event.stage === 'referral-created' ? 'border-primary' :
+                          event.stage === 'counter-referral' ? 'border-emerald-500' :
+                          'border-amber-500'
+                        }`}>
+                          <div className={`w-2 h-2 rounded-full ${
+                            event.stage === 'chp-response' ? 'bg-red-500' :
+                            event.stage === 'referral-created' ? 'bg-primary' :
+                            event.stage === 'counter-referral' ? 'bg-emerald-500' :
+                            'bg-amber-500'
+                          }`} />
+                        </div>
+
+                        <div className={`p-3 rounded-lg border ${
+                          event.stage === 'chp-response' ? 'bg-red-50 border-red-200' : 'bg-muted/30 border-border'
+                        }`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-sm font-semibold">{event.title}</p>
+                            <span className="text-[10px] text-muted-foreground">
+                              {format(new Date(event.date), 'MMM d, yyyy · h:mm a')}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-1">{event.description}</p>
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                            <span>By: {event.actor}</span>
+                            <span>·</span>
+                            <span>At: {event.location}</span>
+                          </div>
+                          {event.details && (
+                            <div className="mt-2 p-2 rounded bg-white/60 text-xs space-y-0.5">
+                              {event.details.urgency && (
+                                <p><span className="text-muted-foreground">Urgency:</span> <span className="font-medium">{event.details.urgency}</span></p>
+                              )}
+                              {event.details.reasonForReferral && (
+                                <p><span className="text-muted-foreground">Reason:</span> <span className="font-medium">{event.details.reasonForReferral}</span></p>
+                              )}
+                              {event.details.finalDiagnosis && (
+                                <p><span className="text-muted-foreground">Diagnosis:</span> <span className="font-medium">{event.details.finalDiagnosis}</span></p>
+                              )}
+                              {event.details.treatmentProvided && (
+                                <p><span className="text-muted-foreground">Treatment:</span> <span className="font-medium">{event.details.treatmentProvided}</span></p>
+                              )}
+                              {event.details.followUpInstructions && (
+                                <p><span className="text-muted-foreground">Instructions:</span> <span className="font-medium">{event.details.followUpInstructions}</span></p>
+                              )}
+                              {event.details.chpSymptomsObserved && (
+                                <p className="text-red-600"><span className="text-red-400">Symptoms observed:</span> <span className="font-medium">{event.details.chpSymptomsObserved}</span></p>
+                              )}
+                              {event.details.chpNeedsMedicalAttention && (
+                                <p className="text-red-600 font-medium">⚠ CHP flagged: Needs medical attention</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                {selectedAlert?.status === 'open' && (
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleAckAlert(selectedAlert._id);
+                        setShowJourney(false);
+                      }}
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-muted hover:bg-muted/80 text-sm font-medium transition-colors"
+                    >
+                      Acknowledge
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onCreateFollowUpReferral && selectedAlert && journeyData) {
+                          onCreateFollowUpReferral({
+                            patientName: journeyData.patientName,
+                            initialDiagnosis: `Follow-up: ${selectedAlert.chpSymptomsObserved || 'CHP recommended medical attention'}`,
+                            reasonForReferral: `CHP follow-up: ${selectedAlert.chpRecommendedAction?.replace(/-/g, ' ') || 'medical attention recommended'}`,
+                            urgency: selectedAlert.priority === 'emergency' ? 'emergency' : selectedAlert.priority === 'urgent' ? 'urgent' : 'routine',
+                            previousReferralId: selectedAlert.referralId,
+                            chpAlertId: selectedAlert._id,
+                            notes: `CHP ${selectedAlert.chpName} observed: ${selectedAlert.chpSymptomsObserved || 'Patient needs care'}`,
+                          });
+                          setShowJourney(false);
+                        }
+                      }}
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Send className="w-4 h-4" /> Create Follow-up Referral
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-16 text-muted-foreground">
+                <p>No journey data available</p>
+              </div>
+            )}
           </div>
         </div>
       )}

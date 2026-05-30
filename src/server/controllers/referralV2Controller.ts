@@ -66,6 +66,11 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
       status: 'pending',
       notes: body.notes,
       village: body.village?.trim() || undefined,
+
+      // Phase C: Referral chain
+      referralType: body.referralType || 'initial',
+      previousReferralId: body.previousReferralId || undefined,
+      chpAlertId: body.chpAlertId || undefined,
     });
 
     await newReferral.save();

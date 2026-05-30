@@ -115,6 +115,11 @@ import counterReferralRoutes from './routes/counterReferrals.js';
 app.use(`${API_PREFIX}/counter-referrals`, counterReferralRoutes);
 console.log('[Routes] Counter-referral routes registered at', `${API_PREFIX}/counter-referrals`);
 
+// CHP Alert routes (collector notifications for CHP escalations)
+import chpAlertRoutes from './routes/chpAlerts.js';
+app.use(`${API_PREFIX}/chp-alerts`, chpAlertRoutes);
+console.log('[Routes] CHP Alert routes registered at', `${API_PREFIX}/chp-alerts`);
+
 // Public CHP feedback form routes (shorter URL for email links)
 // These are aliases that forward to the counter-referral controller
 import { handleChpFormData, handleChpFormSubmit } from './controllers/counterReferralController.js';
@@ -225,6 +230,13 @@ async function startServer(): Promise<void> {
 ║    POST /sync/push             Push local changes                ║
 ║    POST /sync/pull             Pull remote changes               ║
 ║    GET  /sync/status           Sync statistics                   ║
+║                                                                  ║
+║  CHP Alert Endpoints (Phase C):                                  ║
+║    GET  /api/v1/chp-alerts           List collector alerts       ║
+║    GET  /api/v1/chp-alerts/stats     Alert statistics            ║
+║    GET  /api/v1/chp-alerts/:id/journey  Alert + patient journey   ║
+║    PATCH /api/v1/chp-alerts/:id/ack  Acknowledge alert           ║
+║    PATCH /api/v1/chp-alerts/:id/resolve  Resolve alert           ║
 ║                                                                  ║
 ║  Email Endpoints:                                                ║
 ║    GET  /api/v1/email/health   SMTP health check                 ║

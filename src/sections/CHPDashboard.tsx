@@ -79,6 +79,9 @@ export default function CollectorDashboard() {
   const { user, logout } = useAuth();
   const { status, pendingCount, isOnline, triggerSync, needsReLogin } = useSync();
 
+  // Phase C: Follow-up referral state (pre-populated from CHP alert)
+  const [followUpData, setFollowUpData] = useState<Record<string, unknown> | null>(null);
+
   const { updateUser } = useUsers();
   const { t } = useI18n();
 
@@ -105,13 +108,47 @@ export default function CollectorDashboard() {
 
 
   const handleCreateReferral = async (referral: Partial<import('@/types').ReferralV2>) => {
-    const result = await createReferralV2(referral as Record<string, unknown>);
+    // Phase C: Include follow-up fields if present
+    const payload = followUpData
+      ? { ...referral, ...followUpData }
+      : referral;
+    const result = await createReferralV2(payload as Record<string, unknown>);
     if (result.success) {
       toast.success(`Referral created for ${referral.patientName}`);
+      setFollowUpData(null); // Clear follow-up data after creation
       setActiveTab('dashboard');
     } else {
       toast.error(result.error?.toString() || 'Failed to create referral');
     }
+  };
+
+  // Phase C: Open referral form with pre-populated follow-up data from CHP alert
+  const handleCreateFollowUpReferral = (data: {
+    patientName: string;
+    patientAge?: number;
+    patientGender?: string;
+    patientPhone?: string;
+    initialDiagnosis: string;
+    reasonForReferral: string;
+    urgency?: string;
+    previousReferralId?: string;
+    chpAlertId?: string;
+    notes?: string;
+  }) => {
+    setFollowUpData({
+      referralType: 'follow-up',
+      previousReferralId: data.previousReferralId,
+      chpAlertId: data.chpAlertId,
+      patientName: data.patientName,
+      patientAge: data.patientAge || 0,
+      patientGender: data.patientGender || 'other',
+      patientPhone: data.patientPhone || '',
+      initialDiagnosis: data.initialDiagnosis,
+      reasonForReferral: data.reasonForReferral,
+      urgency: data.urgency || 'urgent',
+      notes: data.notes || '',
+    });
+    setActiveTab('referrals');
   };
 
 
@@ -127,6 +164,7 @@ export default function CollectorDashboard() {
             onLogVisits={() => setActiveTab('visits')}
             onSendReferral={() => setActiveTab('referrals')}
             onCounterReferral={() => setActiveTab('counter')}
+            onCreateFollowUpReferral={handleCreateFollowUpReferral}
           />
         );
       case 'visits':
@@ -144,10 +182,19 @@ export default function CollectorDashboard() {
         return (
           <div className="w-full">
             <div className="mb-4">
-              <h2 className="text-lg font-semibold">Create Patient Referral</h2>
+              <h2 className="text-lg font-semibold">
+                {followUpData ? 'Create Follow-up Referral' : 'Create Patient Referral'}
+              </h2>
               <p className="text-sm text-muted-foreground">
-                From {stationName} to a referral center
+                {followUpData
+                  ? 'Patient referred back for follow-up care based on CHP observation'
+                  : `From ${stationName} to a referral center`}
               </p>
+              {followUpData && (
+                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-medium">
+                  <AlertTriangle className="w-3 h-3" /> Follow-up from CHP alert
+                </span>
+              )}
             </div>
             <ReferralForm
               onSubmit={handleCreateReferral}
@@ -156,6 +203,7 @@ export default function CollectorDashboard() {
               sourceStationId={stationId}
               sourceStationName={stationName}
               sourceStationType={stationType as 'household' | 'hip' | 'referral-center'}
+              followUpData={followUpData || undefined}
             />
           </div>
         );

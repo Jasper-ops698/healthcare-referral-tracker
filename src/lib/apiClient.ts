@@ -615,6 +615,40 @@ export async function retryQueuedEmails(): Promise<ApiResponse> {
   return res.json();
 }
 
+// ─── CHP ALERT API ───
+
+export async function getChpAlerts(status?: string, priority?: string): Promise<ApiResponse> {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  if (priority) params.append('priority', priority);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiFetch(`/api/v1/chp-alerts${query}`);
+  return res.json();
+}
+
+export async function getChpAlertJourney(id: string): Promise<ApiResponse> {
+  const res = await apiFetch(`/api/v1/chp-alerts/${id}/journey`);
+  return res.json();
+}
+
+export async function acknowledgeChpAlert(id: string): Promise<ApiResponse> {
+  const res = await apiFetch(`/api/v1/chp-alerts/${id}/ack`, { method: 'PATCH' });
+  return res.json();
+}
+
+export async function resolveChpAlert(id: string, data?: { resolutionAction?: string; resolutionNotes?: string; followUpReferralId?: string }): Promise<ApiResponse> {
+  const res = await apiFetch(`/api/v1/chp-alerts/${id}/resolve`, {
+    method: 'PATCH',
+    body: JSON.stringify(data || {}),
+  });
+  return res.json();
+}
+
+export async function getChpAlertStats(): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/chp-alerts/stats');
+  return res.json();
+}
+
 // ─── EXPORT ───
 
 export { getToken, setToken, clearToken };
