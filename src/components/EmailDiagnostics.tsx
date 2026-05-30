@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { checkEmailHealth, retryQueuedEmails, type EmailHealthResponse } from '@/lib/apiClient';
-import { Mail, AlertTriangle, CheckCircle, XCircle, RefreshCw, Clock, Send, X } from 'lucide-react';
+import { Mail, AlertTriangle, CheckCircle, XCircle, RefreshCw, Clock, Send } from 'lucide-react';
 import { useI18n } from '@/i18n/useI18n';
 
 type HealthState = 'loading' | 'ok' | 'error' | 'unconfigured';

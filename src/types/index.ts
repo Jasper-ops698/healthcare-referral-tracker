@@ -276,6 +276,11 @@ export interface ReferralV2 {
   status: 'pending' | 'in-transit' | 'accepted' | 'in-treatment' | 'counter-referral-created' | 'completed' | 'rejected';
   counterReferralId?: string;
 
+  // Referral chain (Phase C)
+  referralType?: 'initial' | 'follow-up';
+  previousReferralId?: string;
+  chpAlertId?: string;
+
   urgency: 'routine' | 'urgent' | 'emergency';
 
   createdAt: Date;

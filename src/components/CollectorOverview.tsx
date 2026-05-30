@@ -14,7 +14,7 @@ import {
   TrendingUp, CheckCircle2,
   AlertTriangle, Stethoscope, Calendar,
   ChevronRight, Loader2,
-  Bell, BellRing, Eye, ShieldAlert,
+  BellRing, Eye, ShieldAlert,
 } from 'lucide-react';
 import { format, subDays, isToday, parseISO } from 'date-fns';
 import {
