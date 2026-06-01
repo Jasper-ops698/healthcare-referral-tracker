@@ -1234,7 +1234,6 @@ export const Translations = {
     'profile.lastName': 'Jina la Familia',
     'profile.nationalId': 'Kitambulisho cha Kitaifa',
     'profile.homeCounty': 'Kaunti ya Makazi',
-    'profile.physicalAddress': 'Anuani ya Kimwili',
     'profile.addressPlaceholder': 'Ingiza anuani yako ya kimwili...',
     'profile.bioPlaceholder': 'Tuambia kuhusu wewe...',
     'profile.fullName': 'Jina Kamili',
