@@ -16,8 +16,12 @@ import {
   handleResolve,
   handleStats,
 } from '../controllers/chpAlertController.js';
+import { authenticateJWT } from '../middleware/regionalAuth.js';
 
 const router = Router();
+
+// All CHP alert routes require authentication
+router.use(authenticateJWT);
 
 router.get('/', handleListForCollector);
 router.get('/stats', handleStats);
