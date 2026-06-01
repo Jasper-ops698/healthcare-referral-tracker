@@ -11,6 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useI18n } from '@/i18n/useI18n';
 import {
   ClipboardList, Search, CheckCircle, Clock, AlertTriangle,
   ArrowLeft, Stethoscope, User, MapPin, Ambulance, Send,
@@ -63,6 +64,7 @@ function toBucket(status: string): 'needs-attention' | 'in-care' | 'completed' {
 }
 
 export default function CounterReferralView({ stationId, stationName, collectorId, collectorName }: Props) {
+  const { t } = useI18n();
   const [incoming, setIncoming] = useState<ReferralV2[]>([]);
   const [outgoing, setOutgoing] = useState<ReferralV2[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,20 +116,20 @@ export default function CounterReferralView({ stationId, stationName, collectorI
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const handleReceive = async (id: string) => {
     if (!id || id === 'undefined') {
-      toast.error('Invalid referral ID. Please refresh and try again.');
+      toast.error(t('counterReferral.invalidId'));
       return;
     }
     setReceivingId(id);
     try {
       const res = await acceptReferralV2(id);
       if (res.success) {
-        toast.success('Patient received — care started');
+        toast.success(t('counterReferral.careStarted'));
         await loadData();
       } else {
-        toast.error((res as any).error?.message || 'Failed to receive patient');
+        toast.error((res as any).error?.message || t('counterReferral.receiveFailed'));
       }
     } catch (e: any) {
-      toast.error(e.message || 'Network error. Please try again.');
+      toast.error(e.message || t('counterReferral.networkError'));
     } finally {
       setReceivingId(null);
     }
@@ -154,12 +156,12 @@ export default function CounterReferralView({ stationId, stationName, collectorI
 
   const submitCounter = async () => {
     if (!finalDiagnosis || !treatment || !followUp || !chpName || !selected) {
-      toast.error('Please fill all required fields (*)');
+      toast.error(t('counterReferral.fillRequired'));
       return;
     }
     const refId = selected.id || (selected as any)._id;
     if (!refId) {
-      toast.error('Invalid referral. Please refresh and try again.');
+      toast.error(t('counterReferral.invalidReferral'));
       return;
     }
     setSubmitting(true);
@@ -190,15 +192,15 @@ export default function CounterReferralView({ stationId, stationName, collectorI
       }
       const sRes = await updateReferralV2Status(refId, 'counter-referral-created');
       if (sRes.success) {
-        toast.success(cData?.emailSent ? 'Counter-referral created — CHP notified' : 'Counter-referral created');
+        toast.success(cData?.emailSent ? t('counterReferral.chpNotified') : t('counterReferral.counterCreated'));
         setShowForm(false);
         await loadData();
       } else {
-        toast.error((sRes as any).error?.message || 'Failed to update status');
+        toast.error((sRes as any).error?.message || t('counterReferral.statusFailed'));
       }
     } catch (e: any) {
       console.error('[CounterReferral] Exception:', e);
-      toast.error(e.message || 'Network error. Please try again.');
+      toast.error(e.message || t('counterReferral.networkError'));
     } finally { setSubmitting(false); }
   };
 
@@ -280,7 +282,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search by patient name or ID..."
+              placeholder={t('counterReferral.searchPlaceholder')}
               className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-border text-sm bg-background"
             />
           </div>
@@ -447,16 +449,16 @@ export default function CounterReferralView({ stationId, stationName, collectorI
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-bold">Referral Journey</h3>
+          <h3 className="text-sm font-bold">{t('counterReferral.patientJourney')}</h3>
         </div>
         <div className="p-5 space-y-4">
-          <JStep icon={MapPin} color="bg-blue-500" label="Origin" station={selected.sourceStationName} collector={selected.sourceCollectorName} />
+          <JStep icon={MapPin} color="bg-blue-500" label={t('counterReferral.origin')} station={selected.sourceStationName} collector={selected.sourceCollectorName} />
           <div className="flex items-center gap-3 pl-3">
             <ChevronRight className="w-4 h-4 text-muted-foreground/40" />
             <div className="flex-1 h-px bg-border" />
             <span className="text-xs text-muted-foreground">{selected.modeOfTransport} &middot; {selected.urgency}</span>
           </div>
-          <JStep icon={Stethoscope} color="bg-emerald-500" label="Destination" station={selected.destinationStationName} isCurrent />
+          <JStep icon={Stethoscope} color="bg-emerald-500" label={t('counterReferral.destination')} station={selected.destinationStationName} isCurrent />
         </div>
       </div>
 
@@ -587,11 +589,11 @@ export default function CounterReferralView({ stationId, stationName, collectorI
             <h3 className="text-sm font-bold">Counter-Referral Form</h3>
           </div>
           <div className="p-5 space-y-4">
-            <F label="Final Diagnosis *" value={finalDiagnosis} onChange={setFinalDiagnosis} rows={2} placeholder="e.g., Confirmed malaria with mild anemia" />
-            <F label="Treatment Provided *" value={treatment} onChange={setTreatment} rows={2} placeholder="e.g., Artemether-Lumefantrine course, IV fluids" />
+            <F label={`${t('counterReferral.finalDiagnosis')} *`} value={finalDiagnosis} onChange={setFinalDiagnosis} rows={2} placeholder="e.g., Confirmed malaria with mild anemia" />
+            <F label={`${t('counterReferral.treatmentProvided')} *`} value={treatment} onChange={setTreatment} rows={2} placeholder="e.g., Artemether-Lumefantrine course, IV fluids" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <F label="Medications" value={medications} onChange={setMedications} rows={2} placeholder="List medications with dosages" />
-              <F label="Procedures" value={procedures} onChange={setProcedures} rows={2} placeholder="e.g., RDT, hemoglobin test" />
+              <F label={t('counterReferral.medications')} value={medications} onChange={setMedications} rows={2} placeholder="List medications with dosages" />
+              <F label={t('counterReferral.procedures')} value={procedures} onChange={setProcedures} rows={2} placeholder="e.g., RDT, hemoglobin test" />
             </div>
 
             <div>
@@ -623,8 +625,8 @@ export default function CounterReferralView({ stationId, stationName, collectorI
               />
             </div>
 
-            <F label="Follow-up Instructions *" value={followUp} onChange={setFollowUp} rows={3} placeholder="Instructions for CHP and patient" />
-            <F label="Warning Signs" value={warningSigns} onChange={setWarningSigns} rows={2} placeholder="Signs requiring immediate re-referral" cls="border-red-200 bg-red-50/30" />
+            <F label={`${t('counterReferral.followUpInstructions')} *`} value={followUp} onChange={setFollowUp} rows={3} placeholder="Instructions for CHP and patient" />
+            <F label={t('counterReferral.warningSigns')} value={warningSigns} onChange={setWarningSigns} rows={2} placeholder="Signs requiring immediate re-referral" cls="border-red-200 bg-red-50/30" />
 
             {/* CHP Assignment */}
             <div className="bg-blue-50 rounded-xl p-4 border border-blue-200 space-y-3">
@@ -640,7 +642,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
                     value={chpName}
                     onChange={e => setChpName(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-background"
-                    placeholder="CHP full name"
+                    placeholder={t('counterReferral.chpNamePlaceholder')}
                   />
                 </div>
                 <div>
@@ -652,7 +654,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
                     value={chpPhone}
                     onChange={e => setChpPhone(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-background"
-                    placeholder="2547XXXXXXXX"
+                    placeholder={t('counterReferral.chpPhonePlaceholder')}
                   />
                 </div>
                 <div>
@@ -664,7 +666,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
                     value={chpEmail}
                     onChange={e => setChpEmail(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-background"
-                    placeholder="For follow-up form"
+                    placeholder={t('counterReferral.chpEmailPlaceholder')}
                   />
                 </div>
               </div>

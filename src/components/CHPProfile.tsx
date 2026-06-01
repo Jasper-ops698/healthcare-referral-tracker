@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useI18n } from '@/i18n/useI18n';
 import {
   Shield, User, MapPin, FileText, Globe, HeartPulse,
   Contact, Save, Pencil, X, Loader2, Info,
@@ -15,6 +16,7 @@ const GENDERS = ['male', 'female', 'other', 'prefer-not-to-say'] as const;
 const LANGUAGES_LIST = ['English', 'Swahili', 'Kikuyu', 'Luo', 'Kalenjin', 'Kamba', 'Meru', 'Somali', 'Turkana', 'Arabic'];
 
 export default function CollectorProfile() {
+  const { t } = useI18n();
   const { user, refreshUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -159,7 +161,7 @@ export default function CollectorProfile() {
             onClick={() => setEditing(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
           >
-            <Pencil className="w-4 h-4" /> Edit Profile
+            <Pencil className="w-4 h-4" /> {t('profile.edit')}
           </button>
         ) : (
           <div className="flex items-center gap-2">
@@ -167,7 +169,7 @@ export default function CollectorProfile() {
               onClick={handleCancel}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
             >
-              <X className="w-4 h-4" /> Cancel
+              <X className="w-4 h-4" /> {t('profile.cancel')}
             </button>
             <button
               onClick={handleSave}
@@ -175,7 +177,7 @@ export default function CollectorProfile() {
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-                : <><Save className="w-4 h-4" /> Save Changes</>}
+                : <><Save className="w-4 h-4" /> {t('profile.save')}</>}
             </button>
           </div>
         )}
@@ -214,19 +216,19 @@ export default function CollectorProfile() {
         <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-bold uppercase tracking-wide">Work Information</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wide">{t('profile.workInfo')}</h3>
           </div>
           <span className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-            <Info className="w-3 h-3" /> Admin-managed
+            <Info className="w-3 h-3" /> {t('profile.adminManaged')}
           </span>
         </div>
         <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          <ReadOnly label="Role" value={user.role === 'admin' ? 'Administrator' : 'Collector'} />
-          <ReadOnly label="Assigned Facility" value={user.assignedFacility || 'Not assigned'} />
-          <ReadOnly label="Station" value={user.stationName || 'Not assigned'} />
-          <ReadOnly label="Station Type" value={user.stationType || '—'} />
-          <ReadOnly label="Region" value={user.region || '—'} />
-          <ReadOnly label="Last Login" value={user.lastLogin ? format(new Date(user.lastLogin), 'MMM d, yyyy h:mm a') : 'Never'} />
+          <ReadOnly label={t('profile.role')} value={user.role === 'admin' ? t('profile.administrator') : t('profile.collector')} />
+          <ReadOnly label={t('profile.assignedFacility')} value={user.assignedFacility || t('profile.notAssigned')} />
+          <ReadOnly label={t('profile.station')} value={user.stationName || t('profile.notAssigned')} />
+          <ReadOnly label={t('profile.stationType')} value={user.stationType || '—'} />
+          <ReadOnly label={t('profile.region')} value={user.region || '—'} />
+          <ReadOnly label={t('profile.lastLogin')} value={user.lastLogin ? format(new Date(user.lastLogin), 'MMM d, yyyy h:mm a') : t('profile.never')} />
         </div>
       </div>
 
@@ -235,13 +237,13 @@ export default function CollectorProfile() {
         <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <User className="w-4 h-4 text-emerald-500" />
-            <h3 className="text-sm font-bold uppercase tracking-wide">Personal Information</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wide">{t('profile.personalInfo')}</h3>
           </div>
           {editing && <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">Editable</span>}
         </div>
         <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="First Name" value={form.firstName} editing={editing} onChange={v => updateField('firstName', v)} required />
-          <Field label="Last Name" value={form.lastName} editing={editing} onChange={v => updateField('lastName', v)} required />
+          <Field label={t('profile.firstName')} value={form.firstName} editing={editing} onChange={v => updateField('firstName', v)} required />
+          <Field label={t('profile.lastName')} value={form.lastName} editing={editing} onChange={v => updateField('lastName', v)} required />
           <Field label="Email" type="email" value={form.email} editing={editing} onChange={v => updateField('email', v)} required />
           <Field label="Phone" type="tel" value={form.phone} editing={editing} onChange={v => updateField('phone', v)} required />
           <Field label="Date of Birth" type="date" value={form.dateOfBirth} editing={editing} onChange={v => updateField('dateOfBirth', v)} />
@@ -265,8 +267,8 @@ export default function CollectorProfile() {
             )}
           </div>
 
-          <Field label="National ID" value={form.nationalId} editing={editing} onChange={v => updateField('nationalId', v)} />
-          <Field label="Home County" value={form.homeCounty} editing={editing} onChange={v => updateField('homeCounty', v)} />
+          <Field label={t('profile.nationalId')} value={form.nationalId} editing={editing} onChange={v => updateField('nationalId', v)} />
+          <Field label={t('profile.homeCounty')} value={form.homeCounty} editing={editing} onChange={v => updateField('homeCounty', v)} />
 
           {/* Blood Group */}
           <div className="sm:col-span-2">
@@ -336,7 +338,7 @@ export default function CollectorProfile() {
               value={form.physicalAddress}
               onChange={e => updateField('physicalAddress', e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              placeholder="Enter your physical address..."
+              placeholder={t('profile.addressPlaceholder')}
             />
           ) : (
             <p className="text-sm whitespace-pre-wrap">{form.physicalAddress || <span className="text-muted-foreground">Not provided</span>}</p>
@@ -357,7 +359,7 @@ export default function CollectorProfile() {
               value={form.bio}
               onChange={e => updateField('bio', e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg border border-border text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              placeholder="Tell us about yourself..."
+              placeholder={t('profile.bioPlaceholder')}
             />
           ) : (
             <p className="text-sm whitespace-pre-wrap">{form.bio || <span className="text-muted-foreground">No bio provided</span>}</p>
@@ -372,8 +374,8 @@ export default function CollectorProfile() {
           <h3 className="text-sm font-bold uppercase tracking-wide">Emergency Contact</h3>
         </div>
         <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field label="Full Name" value={form.emergencyName} editing={editing} onChange={v => updateField('emergencyName', v)} />
-          <Field label="Relationship" value={form.emergencyRelationship} editing={editing} onChange={v => updateField('emergencyRelationship', v)} />
+          <Field label={t('profile.fullName')} value={form.emergencyName} editing={editing} onChange={v => updateField('emergencyName', v)} />
+          <Field label={t('profile.relationship')} value={form.emergencyRelationship} editing={editing} onChange={v => updateField('emergencyRelationship', v)} />
           <Field label="Phone" type="tel" value={form.emergencyPhone} editing={editing} onChange={v => updateField('emergencyPhone', v)} />
         </div>
       </div>
@@ -385,8 +387,8 @@ export default function CollectorProfile() {
           <h3 className="text-sm font-bold uppercase tracking-wide">Next of Kin</h3>
         </div>
         <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field label="Full Name" value={form.nokName} editing={editing} onChange={v => updateField('nokName', v)} />
-          <Field label="Relationship" value={form.nokRelationship} editing={editing} onChange={v => updateField('nokRelationship', v)} />
+          <Field label={t('profile.fullName')} value={form.nokName} editing={editing} onChange={v => updateField('nokName', v)} />
+          <Field label={t('profile.relationship')} value={form.nokRelationship} editing={editing} onChange={v => updateField('nokRelationship', v)} />
           <Field label="Phone" type="tel" value={form.nokPhone} editing={editing} onChange={v => updateField('nokPhone', v)} />
         </div>
       </div>
