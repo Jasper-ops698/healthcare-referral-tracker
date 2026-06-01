@@ -99,10 +99,10 @@ export default function CollectorDashboard() {
 
   const menuItems = useMemo(() => [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: LayoutDashboard },
-    { id: 'visits', label: 'Daily Visits', icon: Users },
-    { id: 'counter', label: 'Counter-Referral', icon: ClipboardList },
-    { id: 'referrals', label: 'Send Referral', icon: Send },
-    { id: 'profile', label: 'My Profile', icon: UserCircle },
+    { id: 'visits', label: t('sidebar.dailyVisits'), icon: Users },
+    { id: 'counter', label: t('sidebar.counterReferral'), icon: ClipboardList },
+    { id: 'referrals', label: t('sidebar.sendReferral'), icon: Send },
+    { id: 'profile', label: t('sidebar.profile'), icon: UserCircle },
     { id: 'settings', label: t('sidebar.settings'), icon: SettingsIcon },
   ], [t, stationType]);
 

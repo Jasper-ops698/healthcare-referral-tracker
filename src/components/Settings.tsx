@@ -154,7 +154,7 @@ export default function Settings() {
     try {
       const updated = await updateSystemConfig({ dataRetentionDays: days });
       setSysConfig(updated);
-      toast.success('Data retention updated');
+      toast.success(t('settings.dataRetentionUpdated'));
     } catch { /* offline */ }
   };
 
@@ -164,9 +164,9 @@ export default function Settings() {
     try {
       const updated = await updateSystemConfig({ autoBackupsEnabled: next });
       setSysConfig(updated);
-      toast.success(`Automatic backups ${next ? 'enabled' : 'disabled'}`);
+      toast.success(next ? t('settings.backupsEnabled') : t('settings.backupsDisabled'));
     } catch {
-      toast.error('Failed to update. Server may be offline.');
+      toast.error(t('settings.updateFailed'));
     }
   };
 
@@ -176,9 +176,9 @@ export default function Settings() {
     try {
       const updated = await updateSystemConfig({ auditLoggingEnabled: next });
       setSysConfig(updated);
-      toast.success(`Audit logging ${next ? 'enabled' : 'disabled'}`);
+      toast.success(next ? t('settings.auditEnabled') : t('settings.auditDisabled'));
     } catch {
-      toast.error('Failed to update. Server may be offline.');
+      toast.error(t('settings.updateFailed'));
     }
   };
 
@@ -219,25 +219,25 @@ export default function Settings() {
         <StatusPill
           icon={<Globe className="w-4 h-4" />}
           label={t('settings.language')}
-          value={settings.language === 'en' ? 'English' : 'Kiswahili'}
+          value={settings.language === 'en' ? t('settings.lang.english') : t('settings.lang.swahili')}
           color="sky"
         />
         <StatusPill
           icon={<Clock className="w-4 h-4" />}
           label={t('settings.autoLogout')}
-          value={settings.autoLogout === 0 ? 'Never' : `${settings.autoLogout} min`}
+          value={settings.autoLogout === 0 ? t('settings.autoLogout.never') : `${settings.autoLogout} ${settings.autoLogout === 1 ? t('settings.autoLogout.minute') : t('settings.autoLogout.minutes')}`}
           color="amber"
         />
         <StatusPill
           icon={<Shield className="w-4 h-4" />}
           label={t('settings.twoFactor')}
-          value={twoFactorEnabled ? 'Enabled' : 'Disabled'}
+          value={twoFactorEnabled ? t('common.enabled') : t('common.disabled')}
           color={twoFactorEnabled ? 'emerald' : 'rose'}
         />
         <StatusPill
           icon={<Database className="w-4 h-4" />}
           label={t('settings.dataRetention')}
-          value={settings.dataRetention === 0 ? 'Forever' : `${settings.dataRetention}d`}
+          value={settings.dataRetention === 0 ? t('settings.forever') : `${settings.dataRetention} ${t('common.days')}`}
           color="purple"
         />
       </div>
@@ -484,7 +484,7 @@ export default function Settings() {
                     <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm">
                       <HardDrive className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-600">
-                        {sysConfig?.autoBackupsEnabled ? 'Auto-backups enabled' : 'Backups paused'}
+                        {sysConfig?.autoBackupsEnabled ? t('settings.autoBackupsEnabled') : t('settings.backupsPaused')}
                       </span>
                       <span className="ml-auto w-2 h-2 rounded-full bg-emerald-500" />
                     </div>
@@ -494,14 +494,14 @@ export default function Settings() {
                 <ToggleRow
                   icon={<HardDrive className="w-4 h-4 text-purple-500" />}
                   title={t('settings.autoBackups')}
-                  desc={sysConfig?.lastBackupAt ? `Last backup: ${new Date(sysConfig.lastBackupAt).toLocaleDateString()}` : 'Toggle automatic data backups'}
+                  desc={sysConfig?.lastBackupAt ? `${t('settings.lastBackup')}: ${new Date(sysConfig.lastBackupAt).toLocaleDateString()}` : t('settings.autoBackupsDesc')}
                   enabled={sysConfig?.autoBackupsEnabled ?? true}
                   onChange={handleToggleBackups}
                 />
                 <ToggleRow
                   icon={<Activity className="w-4 h-4 text-amber-500" />}
                   title={t('settings.auditLogging')}
-                  desc="Toggle system audit logging for security compliance"
+                  desc={t('settings.auditLoggingDesc')}
                   enabled={sysConfig?.auditLoggingEnabled ?? true}
                   onChange={handleToggleAudit}
                 />
@@ -514,26 +514,26 @@ export default function Settings() {
                     <AlertTriangle className="w-5 h-5 text-rose-600" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Danger Zone</h3>
-                    <p className="text-sm text-gray-500">Irreversible actions. Proceed with caution.</p>
+                    <h3 className="text-lg font-semibold text-gray-900">{t('settings.dangerZone')}</h3>
+                    <p className="text-sm text-gray-500">{t('settings.dangerZoneDesc')}</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between py-3 border-t border-rose-100">
                   <div>
-                    <p className="font-medium text-gray-900 text-sm">Delete All Local Data</p>
-                    <p className="text-sm text-gray-500">Removes all IndexedDB data. Cannot be undone.</p>
+                    <p className="font-medium text-gray-900 text-sm">{t('settings.deleteLocalData')}</p>
+                    <p className="text-sm text-gray-500">{t('settings.deleteLocalDataDesc')}</p>
                   </div>
                   <button
                     onClick={() => {
-                      if (confirm('Are you sure? This will delete all local patient data.')) {
+                      if (confirm(t('settings.deleteConfirm'))) {
                         localStorage.clear();
-                        toast.success('All local data cleared. Refreshing...');
+                        toast.success(t('settings.deleteSuccess'));
                         setTimeout(() => window.location.reload(), 1500);
                       }
                     }}
                     className="px-4 py-2 rounded-lg border border-rose-200 text-rose-700 text-sm font-medium hover:bg-rose-50 transition-colors"
                   >
-                    Clear Data
+                    {t('settings.clearData')}
                   </button>
                 </div>
               </div>
