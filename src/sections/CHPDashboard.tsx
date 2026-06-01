@@ -73,10 +73,11 @@ function SyncStatusChip({ status, pendingCount, isOnline, onSync }: {
 }
 
 export default function CollectorDashboard() {
+  const { user, logout } = useAuth();
+  console.log(`[CollectorDashboard] MOUNTED — user=${user?.email}, role=${user?.role}`);
   const [activeTab, setActiveTab] = useState<CollectorTab>('dashboard');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [profileUser, setProfileUser] = useState<User | null>(null);
-  const { user, logout } = useAuth();
   const { status, pendingCount, isOnline, triggerSync, needsReLogin } = useSync();
 
   // Phase C: Follow-up referral state (pre-populated from CHP alert)

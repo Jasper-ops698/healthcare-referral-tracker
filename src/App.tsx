@@ -54,14 +54,14 @@ function getChpFeedbackToken(): string | null {
 }
 
 function AppContent() {
-  const { isAuthenticated, isAdmin, isCollector, user } = useAuth();
+  const auth = useAuth();
+  const { isAuthenticated, isAdmin, isCollector, user } = auth;
   const [chpToken, setChpToken] = useState<string | null>(getChpFeedbackToken);
   useI18n();
 
-  // Debug: log auth state changes
-  useEffect(() => {
-    console.log(`[App] Auth state: isAuthenticated=${isAuthenticated}, isAdmin=${isAdmin}, isCollector=${isCollector}, role=${user?.role || 'null'}, email=${user?.email || 'null'}`);
-  }, [isAuthenticated, isAdmin, isCollector, user]);
+  // Debug: log on EVERY render + expose globally for console inspection
+  console.log(`[AppContent RENDER] isAuthenticated=${isAuthenticated}, isAdmin=${isAdmin}, isCollector=${isCollector}, role=${user?.role || 'null'}, email=${user?.email || 'null'}`);
+  (window as any).__HEALTHTRACK_AUTH = auth;
 
   // Listen for URL changes (e.g., back/forward navigation)
   useEffect(() => {

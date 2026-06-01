@@ -116,6 +116,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  // Debug: log every user state change
+  useEffect(() => {
+    console.log(`[Auth] user state changed: ${user ? `email=${user.email}, role=${user.role}` : 'null'}`);
+  }, [user]);
+
   // Ensure primary admin exists on mount + listen for session expiry events
   useEffect(() => {
     ensurePrimaryAdmin();
@@ -141,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeLogin = useCallback((token: string, apiUser: any) => {
+    console.log(`[Auth] completeLogin called for ${apiUser.email}, rawRole=${apiUser.role}, tokenPrefix=${token.slice(0, 20)}`);
     // Defensive: validate role — must be 'admin' or 'collector'
     const rawRole = apiUser.role;
     const validRole: UserRole = rawRole === 'admin' || rawRole === 'collector' ? rawRole : 'collector';
