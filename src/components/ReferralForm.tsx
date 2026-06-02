@@ -134,7 +134,7 @@ export default function ReferralForm({
     patientName: '', patientAge: '', patientGender: 'male' as 'male' | 'female' | 'other',
     patientPhone: '', patientId: `REF-${Date.now().toString(36).toUpperCase()}`, village: '',
     destinationStationId: '', destinationStationName: '', destinationStationType: 'referral-center' as 'household' | 'hip' | 'referral-center',
-    chpName: '', chpPhone: '', chpEmail: '',
+    chpName: '', chpPhone: '',
     initialDiagnosis: '', aiSuggestedCategory: '', aiConfidence: 0,
     reasonForReferral: '', modeOfTransport: 'ambulance' as ReferralV2['modeOfTransport'],
     transportNotes: '', urgency: 'routine' as 'routine' | 'urgent' | 'emergency', notes: '',
@@ -181,7 +181,7 @@ export default function ReferralForm({
         sourceStationId, sourceStationName, sourceStationType,
         sourceCollectorId: collectorId, sourceCollectorName: collectorName,
         destinationStationId: destId, destinationStationName: form.destinationStationName, destinationStationType: form.destinationStationType,
-        chpName: form.chpName || undefined, chpPhone: form.chpPhone || undefined, chpEmail: form.chpEmail || undefined,
+        chpName: form.chpName || undefined, chpPhone: form.chpPhone || undefined,
         initialDiagnosis: form.initialDiagnosis, aiSuggestedCategory: form.aiSuggestedCategory || undefined,
         aiConfidence: form.aiConfidence || undefined, reasonForReferral: form.reasonForReferral,
         modeOfTransport: form.modeOfTransport, transportNotes: form.transportNotes || undefined,
@@ -480,12 +480,11 @@ export default function ReferralForm({
 
           <SectionCard icon={UserCheck} title="CHP Assignment (Optional)" accent="bg-purple-500">
             <p className="text-xs text-muted-foreground mb-3">
-              Assign a CHP for follow-up. They will receive an email with a recovery tracking form.
+              Assign a CHP for follow-up. They will be notified via SMS for community tracking.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <InputField label="CHP Name" value={form.chpName} onChange={v => setForm(p => ({ ...p, chpName: v }))} placeholder="e.g., Janet Mwagandi" />
               <InputField label="CHP Phone" type="tel" value={form.chpPhone} onChange={v => setForm(p => ({ ...p, chpPhone: v }))} placeholder="2547XXXXXXXX" />
-              <InputField label="CHP Email" type="email" value={form.chpEmail} onChange={v => setForm(p => ({ ...p, chpEmail: v }))} placeholder="For follow-up form" />
             </div>
           </SectionCard>
 
@@ -528,7 +527,7 @@ export default function ReferralForm({
               </div>
               <div className="h-px bg-border" />
               <ReviewRow label="Transport" value={transportLabel} />
-              {form.chpName && <ReviewRow label="CHP" value={`${form.chpName} ${form.chpEmail ? `(${form.chpEmail})` : ''}`} />}
+              {form.chpName && <ReviewRow label="CHP" value={`${form.chpName} ${form.chpPhone ? `(${form.chpPhone})` : ''}`} />}
             </div>
           </SectionCard>
 
