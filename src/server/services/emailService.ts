@@ -419,6 +419,12 @@ export async function sendPatientRegistrationEmail(): Promise<EmailResult> {
   return { success: false, error: 'Deprecated — patient registration removed' };
 }
 
+// ─── RESEND WELCOME EMAIL (legacy compatibility alias) ───
+
+export async function resendWelcomeEmail(to: string, name: string, tempPassword: string, loginUrl: string): Promise<EmailResult> {
+  return sendWelcomeEmail(to, name, tempPassword, loginUrl);
+}
+
 // CHP-related email functions (legacy compatibility)
 export async function sendChpRegistrationEmail(to: string, chpName: string): Promise<EmailResult> {
   const html = `
