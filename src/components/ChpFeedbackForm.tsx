@@ -30,6 +30,10 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
 
   const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus>('partially-recovered');
   const [recoveryNotes, setRecoveryNotes] = useState('');
+  const [needsMedicalAttention, setNeedsMedicalAttention] = useState(false);
+  const [recommendedAction, setRecommendedAction] = useState('monitor');
+  const [symptomsObserved, setSymptomsObserved] = useState('');
+  const [showEscalationFields, setShowEscalationFields] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -40,7 +44,7 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
   const loadFormData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/v1/counter-referrals/chp-form/${token}`);
+      const res = await fetch(`/api/v1/chp-feedback/${token}`);
       const result = await res.json();
       if (result.success) {
         const d = result.data;
@@ -49,6 +53,7 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
         setFollowUpInstructions(d.followUpInstructions);
         setChpName(d.chpName);
         setAlreadyResponded(d.alreadyResponded);
+        setShowEscalationFields(d.showEscalationFields || false);
         if (d.alreadyResponded) {
           setSubmitted(true);
         }
@@ -69,7 +74,13 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
       const res = await fetch(`/api/v1/chp-feedback/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recoveryStatus, recoveryNotes }),
+        body: JSON.stringify({
+          recoveryStatus,
+          recoveryNotes,
+          needsMedicalAttention,
+          recommendedAction,
+          symptomsObserved,
+        }),
       });
       const result = await res.json();
       if (result.success) {
@@ -185,6 +196,59 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
               placeholder="Describe the patient's current condition, any improvements or concerns, medication adherence, etc."
             />
           </div>
+
+          {/* Phase C: Escalation fields — only show if backend supports them */}
+          {showEscalationFields && (
+            <div className="space-y-4 pt-2 border-t border-border">
+              <h3 className="text-sm font-semibold flex items-center gap-2 text-amber-700">
+                <AlertTriangle className="w-4 h-4" />
+                Medical Attention Assessment
+              </h3>
+
+              {/* Needs Medical Attention */}
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={needsMedicalAttention}
+                  onChange={e => setNeedsMedicalAttention(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-primary rounded"
+                />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">Patient needs medical attention</p>
+                  <p className="text-xs text-amber-600">Check this if the patient should see a doctor or return to the facility</p>
+                </div>
+              </label>
+
+              {/* Recommended Action */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Recommended Action</label>
+                <select
+                  value={recommendedAction}
+                  onChange={e => setRecommendedAction(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-background"
+                >
+                  <option value="monitor">Monitor at home</option>
+                  <option value="see-doctor">See a doctor</option>
+                  <option value="return-to-facility">Return to facility</option>
+                  <option value="emergency">Emergency — go immediately</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Symptoms Observed */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Symptoms Observed *</label>
+                <textarea
+                  rows={3}
+                  value={symptomsObserved}
+                  onChange={e => setSymptomsObserved(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border text-sm"
+                  placeholder="What symptoms did you observe? Fever, pain, wound condition, weakness, etc."
+                  required
+                />
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"
