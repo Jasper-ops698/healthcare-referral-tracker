@@ -9,6 +9,7 @@
 
 import { Router } from 'express';
 import { handleLogin, handleLogout, handleMe, handleChangePassword, handleUpdateSettings, handleSetPassword } from '../controllers/authController.js';
+import { handleRequestVerificationCode, handleVerifyPhone } from '../controllers/userController.js';
 import {
   handle2FASetup,
   handle2FAVerifySetup,
@@ -34,5 +35,9 @@ router.post('/2fa/verify-setup', authenticateJWT, handle2FAVerifySetup);
 router.post('/2fa/disable', authenticateJWT, handle2FADisable);
 router.post('/2fa/login-verify', twoFactorRateLimiter, handle2FALoginVerify);
 router.get('/2fa/status', authenticateJWT, handle2FAStatus);
+
+// ─── Phone Verification Routes ───
+router.post('/request-verification-code', handleRequestVerificationCode);
+router.post('/verify-phone', handleVerifyPhone);
 
 export default router;

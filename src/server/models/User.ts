@@ -49,6 +49,19 @@ export interface IUser extends Document {
   passwordResetToken?: string;
   passwordResetExpires?: Date;
   avatar?: string;
+  /** Phone verified via SMS OTP */
+  phoneVerified: boolean;
+  /** Temporary SMS verification code (not selected by default) */
+  smsVerificationCode?: string;
+  /** When the SMS verification code expires */
+  smsCodeExpires?: Date;
+  /** SMS delivery tracking */
+  smsDelivery?: {
+    welcomeSentAt?: string;
+    welcomeFailedAt?: string;
+    welcomeError?: string;
+    lastSMSStatus?: 'none' | 'sent' | 'failed' | 'pending';
+  };
   preferences: {
     language: string;
     notifications: boolean;
@@ -93,6 +106,11 @@ export interface IUserModel extends Model<IUser> {
     options?: { limit?: number },
   ): Promise<IUser[]>;
   findByEmail(email: string): Promise<IUser | null>;
+  /**
+   * Find user by phone number — for SMS-based login.
+   * Normalizes the phone before querying.
+   */
+  findByPhone(phone: string): Promise<IUser | null>;
   /**
    * Check if the given email is the primary admin.
    * Used by auth middleware to reject destructive operations.
@@ -244,7 +262,29 @@ const UserSchema = new Schema<IUser, IUserModel>(
       default: false,
     },
 
-    /** Email delivery tracking */
+    /** ─── PHONE VERIFICATION (SMS-based) ─── */
+    phoneVerified: {
+      type: Boolean,
+      default: false,
+    },
+    smsVerificationCode: {
+      type: String,
+      select: false,
+    },
+    smsCodeExpires: {
+      type: Date,
+      select: false,
+    },
+
+    /** ─── SMS DELIVERY TRACKING ─── */
+    smsDelivery: {
+      welcomeSentAt: { type: String },
+      welcomeFailedAt: { type: String },
+      welcomeError: { type: String },
+      lastSMSStatus: { type: String, enum: ['none', 'sent', 'failed', 'pending'], default: 'none' },
+    },
+
+    /** Email delivery tracking (legacy — kept for admin accounts) */
     emailDelivery: {
       welcomeSentAt: { type: String },
       welcomeFailedAt: { type: String },
@@ -277,6 +317,9 @@ const UserSchema = new Schema<IUser, IUserModel>(
 );
 
 // ─── INDEXES ───
+
+/** Phone-based login — unique index for SMS lookup */
+UserSchema.index({ phone: 1 }, { unique: true, sparse: true, name: 'phone_unique' });
 
 /** Regional sync: pull users for a region since a version */
 UserSchema.index({ '_sync.region': 1, '_sync.version': 1 }, { name: 'regional_sync_pull' });
@@ -422,6 +465,17 @@ UserSchema.statics.findByEmail = async function (
   email: string
 ): Promise<IUser | null> {
   return this.findOne({ email: email.toLowerCase() }).exec();
+};
+
+/**
+ * findByPhone — Find user by phone number for SMS login.
+ * Stores the raw phone; queries with exact match.
+ */
+UserSchema.statics.findByPhone = async function (
+  this: IUserModel,
+  phone: string
+): Promise<IUser | null> {
+  return this.findOne({ phone: phone.trim() }).exec();
 };
 
 /**

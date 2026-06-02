@@ -3,7 +3,7 @@
  *
  * Linked to the original ReferralV2 via referralId.
  * Captures final diagnosis, treatment outcome, and follow-up plan.
- * Triggers CHP email for community follow-up.
+ * Notifies CHP via SMS for community follow-up.
  */
 
 import mongoose, { Schema } from 'mongoose';
@@ -40,23 +40,18 @@ export interface ICounterReferral extends mongoose.Document {
   // CHP assignment for community follow-up
   chpName: string;
   chpPhone?: string;
-  chpEmail?: string;
 
-  // Email tracking
-  chpEmailSent: boolean;
-  chpEmailSentAt?: Date;
-  chpEmailStatus?: 'pending' | 'sent' | 'failed' | 'bounced';
-  chpPhone?: string;
+  // SMS tracking
   chpSMSSent: boolean;
   chpSMSSentAt?: Date;
   chpSMSStatus?: 'pending' | 'sent' | 'failed';
-  chpResponseToken?: string; // Unique token for CHP form link
+  chpResponseToken?: string; // Unique token for CHP form link / USSD
   chpResponseReceived: boolean;
   chpResponseDate?: Date;
   chpResponseNotes?: string;
   chpResponseRecoveryStatus?: RecoveryStatus;
 
-  // CHP escalation fields (Phase C)
+  // CHP escalation fields
   chpNeedsMedicalAttention?: boolean;
   chpRecommendedAction?: 'see-doctor' | 'return-to-facility' | 'emergency' | 'monitor' | 'other';
   chpSymptomsObserved?: string;
@@ -76,7 +71,7 @@ const CounterReferralSchema = new Schema<ICounterReferral>(
       type: Schema.Types.ObjectId,
       ref: 'ReferralV2',
       required: true,
-      unique: true, // One counter-referral per original referral
+      unique: true,
       index: true,
     },
     patientId: { type: String, required: true, index: true },
@@ -107,16 +102,7 @@ const CounterReferralSchema = new Schema<ICounterReferral>(
 
     chpName: { type: String, required: true, trim: true },
     chpPhone: { type: String, trim: true },
-    chpEmail: { type: String, trim: true },
 
-    chpEmailSent: { type: Boolean, default: false },
-    chpEmailSentAt: { type: Date },
-    chpEmailStatus: {
-      type: String,
-      enum: ['pending', 'sent', 'failed', 'bounced'],
-      default: 'pending',
-    },
-    chpPhone: { type: String, trim: true },
     chpSMSSent: { type: Boolean, default: false },
     chpSMSSentAt: { type: Date },
     chpSMSStatus: {
@@ -133,7 +119,6 @@ const CounterReferralSchema = new Schema<ICounterReferral>(
       enum: ['fully-recovered', 'partially-recovered', 'still-unwell', 'deceased', 'lost-to-follow-up'],
     },
 
-    // CHP escalation fields
     chpNeedsMedicalAttention: { type: Boolean, default: false },
     chpRecommendedAction: {
       type: String,

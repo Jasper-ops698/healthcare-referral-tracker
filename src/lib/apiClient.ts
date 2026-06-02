@@ -29,7 +29,8 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface LoginCredentials {
-  email: string;
+  email?: string;
+  phone?: string;
   password: string;
 }
 
@@ -202,6 +203,24 @@ export async function saveSettings(settings: UserSettings): Promise<ApiResponse>
   return res.json();
 }
 
+// ─── PHONE VERIFICATION ───
+
+export async function requestVerificationCode(phone: string): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/auth/request-verification-code', {
+    method: 'POST',
+    body: JSON.stringify({ phone }),
+  });
+  return res.json();
+}
+
+export async function verifyPhone(phone: string, code: string): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/auth/verify-phone', {
+    method: 'POST',
+    body: JSON.stringify({ phone, code }),
+  });
+  return res.json();
+}
+
 // ─── 2FA ───
 
 export async function get2FAStatus(): Promise<{ enabled: boolean }> {
@@ -275,10 +294,16 @@ export async function exportAuditLogs(): Promise<Blob> {
   return res.blob();
 }
 
-export async function verify2FALogin(email: string, token: string, backupCode?: string): Promise<LoginResponse> {
+export async function verify2FALogin(identifier: string, token: string, backupCode?: string): Promise<LoginResponse> {
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+  const payload: Record<string, string> = { token };
+  if (isEmail) payload.email = identifier;
+  else payload.phone = identifier;
+  if (backupCode) payload.backupCode = backupCode;
+
   const res = await apiFetch('/api/v1/auth/2fa/login-verify', {
     method: 'POST',
-    body: JSON.stringify({ email, token, ...(backupCode ? { backupCode } : {}) }),
+    body: JSON.stringify(payload),
   });
   return res.json();
 }

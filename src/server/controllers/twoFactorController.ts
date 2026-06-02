@@ -200,14 +200,20 @@ export async function handle2FADisable(req: Request, res: Response): Promise<voi
 
 export async function handle2FALoginVerify(req: Request, res: Response): Promise<void> {
   try {
-    const { email, token, backupCode } = req.body;
+    const { email, phone, token, backupCode } = req.body;
 
-    if (!email || (!token && !backupCode)) {
-      res.status(400).json({ success: false, error: { code: 'MISSING_FIELDS', message: 'Email and token or backup code are required' } });
+    if ((!email && !phone) || (!token && !backupCode)) {
+      res.status(400).json({ success: false, error: { code: 'MISSING_FIELDS', message: 'Email or phone, and token or backup code are required' } });
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes +password').exec();
+    // Find user by email or phone
+    let user: typeof User.prototype | null = null;
+    if (email) {
+      user = await User.findOne({ email: email.toLowerCase() }).select('+twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes +password').exec();
+    } else if (phone) {
+      user = await User.findOne({ phone: phone.trim() }).select('+twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes +password').exec();
+    }
     if (!user || !user.twoFactorEnabled) {
       res.status(400).json({ success: false, error: { code: '2FA_NOT_ENABLED', message: '2FA not enabled for this user' } });
       return;

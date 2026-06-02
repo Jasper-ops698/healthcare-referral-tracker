@@ -104,7 +104,7 @@ function LoginPage() {
   const { t } = useI18n();
 
   const [step, setStep] = useState<'password' | '2fa' | 'setPassword'>('password');
-  const [email, setEmail] = useState('');
+  const [loginInput, setLoginInput] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
@@ -113,12 +113,20 @@ function LoginPage() {
   const [error, setError] = useState('');
   const [pendingFirstName, setPendingFirstName] = useState('');
 
-  // Step 1: Email + Password
+  // Detect if input is email or phone number
+  const isEmail = (input: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
+
+  // Step 1: Email/Phone + Password
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const result = await login(email, password);
+    // Determine if input is email or phone
+    const inputIsEmail = isEmail(loginInput);
+    const email = inputIsEmail ? loginInput : undefined;
+    const phone = inputIsEmail ? undefined : loginInput;
+
+    const result = await login(email || loginInput, password, undefined, phone);
 
     if (result.success) {
       toast.success(t('toast.welcome'));
@@ -150,7 +158,7 @@ function LoginPage() {
 
     try {
       const result = await verify2FALogin(
-        email,
+        loginInput,
         useBackupCode ? '' : twoFactorCode,
         useBackupCode ? backupCode : undefined
       );
@@ -184,7 +192,8 @@ function LoginPage() {
 
           {step === 'setPassword' ? (
             <SetPasswordScreen
-              email={email}
+              email={isEmail(loginInput) ? loginInput : undefined}
+              phone={!isEmail(loginInput) ? loginInput : undefined}
               firstName={pendingFirstName}
               onComplete={() => {
                 toast.success(t('toast.welcome'));
@@ -194,15 +203,16 @@ function LoginPage() {
           ) : step === 'password' ? (
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.email')}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.emailOrPhone') || 'Email or Phone Number'}</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  value={loginInput}
+                  onChange={(e) => setLoginInput(e.target.value)}
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
-                  placeholder={t('login.emailPlaceholder')}
+                  placeholder={t('login.emailOrPhonePlaceholder') || 'email@example.com or 07XX XXX XXX'}
                   required
                 />
+                <p className="text-xs text-gray-400 mt-1">{t('login.emailOrPhoneHint') || 'Enter your email or phone number'}</p>
               </div>
 
               <div>
@@ -261,7 +271,7 @@ function LoginPage() {
                 <p className="text-sm text-gray-600">
                   {useBackupCode ? t('login.backupCodeHint') : t('login.2faHint')}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">{email}</p>
+                <p className="text-xs text-gray-500 mt-1">{loginInput}</p>
               </div>
 
               {useBackupCode ? (

@@ -8,8 +8,7 @@ import crypto from 'crypto';
 import CounterReferral from '../schemas/CounterReferral.js';
 import ReferralV2 from '../schemas/ReferralV2.js';
 import type { AuthenticatedRequest } from '../middleware/regionalAuth.js';
-import { sendChpFollowUpEmail } from '../services/emailService.js';
-import { sendChpCounterReferralSMS, checkSMSHealth } from '../services/smsService.js';
+import { sendChpCounterReferralSMS } from '../services/smsService.js';
 
 function requireAuth(req: Request, res: Response): AuthenticatedRequest | null {
   const authReq = req as AuthenticatedRequest;
@@ -56,7 +55,6 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
       warningSigns: body.warningSigns,
       chpName: body.chpName.trim(),
       chpPhone: body.chpPhone,
-      chpEmail: body.chpEmail,
       chpResponseToken: responseToken,
       status: 'active',
     });
@@ -67,45 +65,6 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
     original.status = 'counter-referral-created';
     original.counterReferralId = counter._id as mongoose.Types.ObjectId;
     await original.save();
-
-    // Send CHP follow-up email if email provided
-    let emailResult: { success: boolean; messageId?: string; error?: string } = { success: false, error: 'No CHP email provided' };
-    if (body.chpEmail) {
-      try {
-        const baseUrl = process.env.APP_BASE_URL || (process.env.RENDER_EXTERNAL_URL) || '';
-        if (!baseUrl) {
-          console.warn('[CounterReferral] APP_BASE_URL not set — CHP form link will be broken');
-        }
-        const formUrl = baseUrl ? `${baseUrl}/chp-feedback/${responseToken}` : '';
-        emailResult = await sendChpFollowUpEmail({
-          chpEmail: body.chpEmail,
-          chpName: body.chpName,
-          patientName: body.patientName,
-          patientId: body.patientId,
-          finalDiagnosis: body.finalDiagnosis,
-          followUpInstructions: body.followUpInstructions,
-          nextVisitDate: body.nextVisitDate ? new Date(body.nextVisitDate).toLocaleDateString() : undefined,
-          warningSigns: body.warningSigns,
-          recoveryStatus: body.recoveryStatus || 'still-unwell',
-          formUrl,
-        });
-        if (emailResult.success) {
-          counter.chpEmailSent = true;
-          counter.chpEmailSentAt = new Date();
-          counter.chpEmailStatus = 'sent';
-          console.log('[CounterReferral] CHP email sent to', body.chpEmail, 'messageId:', emailResult.messageId);
-        } else {
-          counter.chpEmailStatus = 'failed';
-          console.error('[CounterReferral] CHP email failed:', emailResult.error);
-        }
-        await counter.save();
-      } catch (emailErr: any) {
-        console.error('[CounterReferral] Email exception:', emailErr);
-        counter.chpEmailStatus = 'failed';
-        emailResult = { success: false, error: emailErr.message };
-        await counter.save();
-      }
-    }
 
     // Send CHP follow-up SMS if phone provided
     let smsResult: { success: boolean; messageId?: string; error?: string } = { success: false, error: 'No CHP phone provided' };
@@ -140,22 +99,14 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
       }
     }
 
-    // Build notification summary
-    const notifications: string[] = [];
-    if (emailResult.success) notifications.push('email');
-    if (smsResult.success) notifications.push('SMS');
-    const notificationMsg = notifications.length > 0
-      ? `follow-up ${notifications.join(' + ')} sent`
-      : `no follow-up notification sent — ${emailResult.error || smsResult.error}`;
-
     res.status(201).json({
       success: true,
       data: { counterReferral: counter.toJSON() },
-      emailSent: emailResult.success,
-      emailError: emailResult.error || undefined,
       smsSent: smsResult.success,
       smsError: smsResult.error || undefined,
-      message: `Counter-referral created for ${body.patientName}. CHP ${body.chpName} assigned — ${notificationMsg}.`,
+      message: smsResult.success
+        ? `Counter-referral created for ${body.patientName}. CHP ${body.chpName} notified via SMS.`
+        : `Counter-referral created for ${body.patientName}. CHP ${body.chpName} assigned — but SMS failed: ${smsResult.error}. Please contact CHP manually.`,
     });
   } catch (error: any) {
     console.error('[CounterReferral] Create error:', error);

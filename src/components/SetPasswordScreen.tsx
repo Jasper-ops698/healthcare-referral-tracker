@@ -4,12 +4,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { Eye, EyeOff, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 
 interface SetPasswordScreenProps {
-  email: string;
+  email?: string;
+  phone?: string;
   firstName: string;
   onComplete: () => void;
 }
 
-export default function SetPasswordScreen({ email, firstName, onComplete }: SetPasswordScreenProps) {
+export default function SetPasswordScreen({ email, phone, firstName, onComplete }: SetPasswordScreenProps) {
   const { t } = useI18n();
   const { setPassword } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
@@ -21,12 +22,18 @@ export default function SetPasswordScreen({ email, firstName, onComplete }: SetP
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const identifierLabel = email ? email : phone;
+  const viaSms = !email && !!phone;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     if (!currentPassword.trim()) {
-      setError('Please enter your temporary password from the email');
+      setError(viaSms
+        ? 'Please enter your temporary password from the SMS'
+        : 'Please enter your temporary password'
+      );
       return;
     }
     if (newPassword.length < 6) {
@@ -39,7 +46,7 @@ export default function SetPasswordScreen({ email, firstName, onComplete }: SetP
     }
 
     setIsLoading(true);
-    const result = await setPassword(email, currentPassword, newPassword);
+    const result = await setPassword(email || '', currentPassword, newPassword, phone);
     setIsLoading(false);
 
     if (result.success) {
@@ -81,7 +88,10 @@ export default function SetPasswordScreen({ email, firstName, onComplete }: SetP
                   type={showCurrent ? 'text' : 'password'}
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder={t('login.tempPasswordPlaceholder') || 'Enter temporary password from email'}
+                  placeholder={viaSms
+                    ? (t('login.tempPasswordPlaceholderSMS') || 'Enter temp password from SMS')
+                    : (t('login.tempPasswordPlaceholder') || 'Enter temporary password')
+                  }
                   className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all bg-white text-sm"
                 />
                 <button
@@ -93,7 +103,10 @@ export default function SetPasswordScreen({ email, firstName, onComplete }: SetP
                 </button>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                {t('login.checkEmail') || "Check your email for the temporary password we sent you."}
+                {viaSms
+                  ? (t('login.checkSMS') || `Check the SMS we sent to ${identifierLabel} for your temporary password.`)
+                  : (t('login.checkEmail') || "Check your email for the temporary password we sent you.")
+                }
               </p>
             </div>
 
@@ -173,7 +186,10 @@ export default function SetPasswordScreen({ email, firstName, onComplete }: SetP
 
             {/* Footer */}
             <p className="text-xs text-gray-400 text-center mt-4">
-              {t('login.passwordHelp') || "Can't find the email? Contact your administrator for assistance."}
+              {viaSms
+                ? (t('login.passwordHelpSMS') || "Didn't receive the SMS? Contact your administrator.")
+                : (t('login.passwordHelp') || "Can't find the email? Contact your administrator for assistance.")
+              }
             </p>
           </form>
         </div>

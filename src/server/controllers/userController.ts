@@ -1,33 +1,47 @@
 /**
- * User Controller — Admin-Only User Creation with Email Delivery & Retry
+ * User Controller — Admin-Only User Creation with SMS Delivery
  *
- * POST /api/v1/users       — Create user + send welcome email
- * POST /api/v1/users/:id/resend — Resend welcome email
+ * POST /api/v1/users       — Create user + send welcome SMS
+ * POST /api/v1/users/:id/resend — Resend welcome SMS
  * GET  /api/v1/users       — List users (admin only)
+ *
+ * SMS-FIRST: All user creation sends welcome via Africa's Talking SMS.
+ * Email is kept for admin accounts only (legacy). Collectors use phone as
+ * their primary identifier.
  */
 
 import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import User from '../models/User.js';
-import { sendWelcomeEmail, resendWelcomeEmail } from '../services/emailService.js';
+import { sendWelcomeSMS, sendVerificationCodeSMS } from '../services/smsService.js';
 import type { AuthenticatedRequest } from '../middleware/regionalAuth.js';
 
 // ─── TEMP PASSWORD GENERATOR ───
 
-function generateTempPassword(length = 12): string {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghijkmnopqrstuvwxyz';
+function generateTempPassword(length = 8): string {
   const digits = '23456789';
-  const all = upper + lower + digits;
+  const lower = 'abcdefghijkmnpqrstuvwxyz';
+  const all = digits + lower;
   let password = '';
-  password += upper[Math.floor(Math.random() * upper.length)];
-  password += lower[Math.floor(Math.random() * lower.length)];
   password += digits[Math.floor(Math.random() * digits.length)];
-  for (let i = 3; i < length; i++) {
+  password += lower[Math.floor(Math.random() * lower.length)];
+  for (let i = 2; i < length; i++) {
     password += all[Math.floor(Math.random() * all.length)];
   }
   return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+// ─── SMS VERIFICATION CODE GENERATOR ───
+
+function generateVerificationCode(length = 6): string {
+  const digits = '0123456789';
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += digits[Math.floor(Math.random() * digits.length)];
+  }
+  return code;
 }
 
 // ─── ADMIN GUARD ───
@@ -44,32 +58,66 @@ function requireAdmin(req: AuthenticatedRequest, res: Response): boolean {
   return true;
 }
 
-// ─── CREATE USER ───
+// ─── CREATE USER (SMS-FIRST) ───
 
 export async function handleCreateUser(req: Request, res: Response): Promise<void> {
   try {
     const authReq = req as AuthenticatedRequest;
     if (!requireAdmin(authReq, res)) return;
 
-    const { firstName, lastName, email, phone, role, assignedFacility, stationName, stationType, stationId, region } = req.body;
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      role,
+      assignedFacility,
+      stationName,
+      stationType,
+      stationId,
+      region,
+      sendVerificationCode,
+    } = req.body;
 
-    // Validation
-    if (!firstName || !lastName || !email || !phone || !role) {
+    // ── Validation ──
+    if (!firstName || !lastName || !phone || !role) {
       res.status(400).json({
         success: false,
-        error: { code: 'MISSING_FIELDS', message: 'firstName, lastName, email, phone, and role are required' },
+        error: { code: 'MISSING_FIELDS', message: 'firstName, lastName, phone, and role are required' },
       });
       return;
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    // Admin accounts still require email; collectors can use phone-only
+    if (role === 'admin' && !email) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'EMAIL_REQUIRED', message: 'Email is required for admin accounts' },
+      });
+      return;
+    }
 
-    // Check duplicate email
-    const existing = await User.findOne({ email: normalizedEmail }).exec();
-    if (existing) {
+    const normalizedEmail = email ? email.toLowerCase().trim() : undefined;
+    const trimmedPhone = phone.trim();
+
+    // Check duplicate email (if provided)
+    if (normalizedEmail) {
+      const existingEmail = await User.findOne({ email: normalizedEmail }).exec();
+      if (existingEmail) {
+        res.status(409).json({
+          success: false,
+          error: { code: 'EMAIL_EXISTS', message: 'A user with this email already exists' },
+        });
+        return;
+      }
+    }
+
+    // Check duplicate phone
+    const existingPhone = await User.findOne({ phone: trimmedPhone }).exec();
+    if (existingPhone) {
       res.status(409).json({
         success: false,
-        error: { code: 'EMAIL_EXISTS', message: 'A user with this email already exists' },
+        error: { code: 'PHONE_EXISTS', message: 'A user with this phone number already exists' },
       });
       return;
     }
@@ -78,22 +126,37 @@ export async function handleCreateUser(req: Request, res: Response): Promise<voi
     const tempPassword = generateTempPassword();
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
+    // Generate SMS verification code if requested
+    let verificationCode: string | undefined;
+    let smsCodeExpires: Date | undefined;
+    if (sendVerificationCode) {
+      verificationCode = generateVerificationCode();
+      smsCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    }
+
     // Create user
     const newUser = new User({
       _id: new mongoose.Types.ObjectId(),
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      email: normalizedEmail,
+      email: normalizedEmail || undefined,
       password: hashedPassword,
-      phone: phone.trim(),
+      phone: trimmedPhone,
       role,
       status: 'active',
       region: (region || 'default').trim(),
       facilityId: assignedFacility ? assignedFacility.toString().trim() : undefined,
       stationName: stationName ? stationName.toString().trim() : undefined,
       stationType: stationType || undefined,
-      stationId: stationId ? stationId.toString().trim() : (stationName ? stationName.toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') : undefined),
+      stationId: stationId
+        ? stationId.toString().trim()
+        : stationName
+          ? stationName.toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+          : undefined,
       forcePasswordChange: true,
+      phoneVerified: false,
+      smsVerificationCode: verificationCode ? await bcrypt.hash(verificationCode, 10) : undefined,
+      smsCodeExpires,
       preferences: {
         language: 'en',
         notifications: true,
@@ -101,8 +164,8 @@ export async function handleCreateUser(req: Request, res: Response): Promise<voi
         timezone: 'Africa/Nairobi',
         autoLogout: 30,
       },
-      emailDelivery: {
-        lastEmailStatus: 'pending',
+      smsDelivery: {
+        lastSMSStatus: 'pending',
       },
       _sync: {
         version: 1,
@@ -119,51 +182,63 @@ export async function handleCreateUser(req: Request, res: Response): Promise<voi
 
     await newUser.save();
 
-    // Send welcome email with temporary password
+    // ── Send welcome SMS with temporary password ──
     const loginUrl = process.env.FRONTEND_URL || 'https://oizwnscb3c4jm.kimi.show';
-    const emailResult = await sendWelcomeEmail({
+    const smsResult = await sendWelcomeSMS({
+      phone: trimmedPhone,
       firstName: newUser.firstName,
-      email: newUser.email,
-      role: newUser.role,
       tempPassword,
       loginUrl,
+      role: newUser.role,
     });
 
-    // Track email delivery status on user record
-    if (emailResult.success) {
-      newUser.emailDelivery = {
+    // Track SMS delivery status
+    if (smsResult.success) {
+      newUser.smsDelivery = {
         welcomeSentAt: new Date().toISOString(),
-        lastEmailStatus: 'sent',
+        lastSMSStatus: 'sent',
       };
       await newUser.save();
-      console.log(`[UserController] Welcome email sent to ${newUser.email}: ${emailResult.messageId}`);
+      console.log(`[UserController] Welcome SMS sent to ${trimmedPhone}: ${smsResult.messageId}`);
     } else {
-      newUser.emailDelivery = {
+      newUser.smsDelivery = {
         welcomeFailedAt: new Date().toISOString(),
-        welcomeError: emailResult.error || 'Unknown error',
-        lastEmailStatus: 'failed',
+        welcomeError: smsResult.error || 'Unknown error',
+        lastSMSStatus: 'failed',
       };
       await newUser.save();
-      console.error(`[UserController] Welcome email FAILED for ${newUser.email}: ${emailResult.error}`);
+      console.error(`[UserController] Welcome SMS FAILED for ${trimmedPhone}: ${smsResult.error}`);
     }
 
-    // Return user without password, but INCLUDE tempPassword for admin to see
+    // ── Send verification code SMS if requested ──
+    let verificationSmsResult: { success: boolean; error?: string } | undefined;
+    if (sendVerificationCode && verificationCode) {
+      verificationSmsResult = await sendVerificationCodeSMS({
+        phone: trimmedPhone,
+        firstName: newUser.firstName,
+        code: verificationCode,
+      });
+    }
+
+    // Return user without password, but INCLUDE tempPassword for admin to see (only if SMS failed)
     const userObj = newUser.toObject() as unknown as Record<string, unknown>;
     delete userObj.password;
+    delete userObj.smsVerificationCode;
 
     res.status(201).json({
       success: true,
       data: {
         user: userObj,
-        tempPassword: emailResult.success ? undefined : tempPassword, // Only show if email failed
-        emailSent: emailResult.success,
-        emailError: emailResult.error,
-        message: emailResult.success
-          ? 'User created and welcome email sent successfully'
-          : 'User created but welcome email failed to send. The temporary password is shown above — please share it securely with the user.',
+        tempPassword: smsResult.success ? undefined : tempPassword,
+        smsSent: smsResult.success,
+        smsError: smsResult.error,
+        verificationCodeSent: verificationSmsResult?.success,
+        verificationCodeError: verificationSmsResult?.error,
+        message: smsResult.success
+          ? `User created and welcome SMS sent to ${trimmedPhone}`
+          : `User created but welcome SMS failed: ${smsResult.error}. Temp password shown above — share it securely.`,
       },
     });
-
   } catch (error) {
     console.error('[UserController] Create user error:', error);
     res.status(500).json({
@@ -173,20 +248,20 @@ export async function handleCreateUser(req: Request, res: Response): Promise<voi
   }
 }
 
-// ─── RESEND WELCOME EMAIL ───
+// ─── RESEND WELCOME SMS ───
 
 export async function handleResendWelcome(req: Request, res: Response): Promise<void> {
   try {
     const authReq = req as AuthenticatedRequest;
     if (!requireAdmin(authReq, res)) return;
 
-    const { email } = req.body;
-    if (!email) {
-      res.status(400).json({ success: false, error: { code: 'MISSING_EMAIL', message: 'Email is required' } });
+    const { userId } = req.body;
+    if (!userId) {
+      res.status(400).json({ success: false, error: { code: 'MISSING_USER_ID', message: 'User ID is required' } });
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password').exec();
+    const user = await User.findById(userId).select('+password').exec();
 
     if (!user) {
       res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
@@ -200,29 +275,30 @@ export async function handleResendWelcome(req: Request, res: Response): Promise<
     user.forcePasswordChange = true;
     await user.save();
 
+    // Send via SMS
     const loginUrl = process.env.FRONTEND_URL || 'https://oizwnscb3c4jm.kimi.show';
-    const emailResult = await resendWelcomeEmail({
+    const smsResult = await sendWelcomeSMS({
+      phone: user.phone,
       firstName: user.firstName,
-      email: user.email,
-      role: user.role,
       tempPassword,
       loginUrl,
+      role: user.role,
     });
 
     // Track status
-    if (emailResult.success) {
-      user.emailDelivery = {
-        ...user.emailDelivery,
+    if (smsResult.success) {
+      user.smsDelivery = {
+        ...user.smsDelivery,
         welcomeSentAt: new Date().toISOString(),
-        lastEmailStatus: 'sent',
+        lastSMSStatus: 'sent',
       };
       await user.save();
     } else {
-      user.emailDelivery = {
-        ...user.emailDelivery,
+      user.smsDelivery = {
+        ...user.smsDelivery,
         welcomeFailedAt: new Date().toISOString(),
-        welcomeError: emailResult.error || 'Unknown error',
-        lastEmailStatus: 'failed',
+        welcomeError: smsResult.error || 'Unknown error',
+        lastSMSStatus: 'failed',
       };
       await user.save();
     }
@@ -230,24 +306,119 @@ export async function handleResendWelcome(req: Request, res: Response): Promise<
     res.status(200).json({
       success: true,
       data: {
-        emailSent: emailResult.success,
-        tempPassword: emailResult.success ? undefined : tempPassword,
-        emailError: emailResult.error,
-        message: emailResult.success
-          ? 'Welcome email resent successfully'
-          : 'Email failed again. Temporary password provided — please share it securely.',
+        smsSent: smsResult.success,
+        tempPassword: smsResult.success ? undefined : tempPassword,
+        smsError: smsResult.error,
+        message: smsResult.success
+          ? 'Welcome SMS resent successfully'
+          : 'SMS failed again. Temp password provided — share it securely.',
       },
     });
   } catch (error) {
-    console.error('[UserController] Resend email error:', error);
+    console.error('[UserController] Resend SMS error:', error);
     res.status(500).json({
       success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to resend welcome email' },
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to resend welcome SMS' },
     });
   }
 }
 
-// ─── LIST USERS (ADMIN ONLY) ───
+// ─── REQUEST PHONE VERIFICATION CODE ───
+
+export async function handleRequestVerificationCode(req: Request, res: Response): Promise<void> {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      res.status(400).json({ success: false, error: { code: 'MISSING_PHONE', message: 'Phone number is required' } });
+      return;
+    }
+
+    const user = await User.findOne({ phone: phone.trim() }).select('+smsVerificationCode').exec();
+    if (!user) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return;
+    }
+
+    // Generate new code
+    const code = generateVerificationCode();
+    user.smsVerificationCode = await bcrypt.hash(code, 10);
+    user.smsCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    await user.save();
+
+    // Send SMS
+    const smsResult = await sendVerificationCodeSMS({
+      phone: user.phone,
+      firstName: user.firstName,
+      code,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        sent: smsResult.success,
+        error: smsResult.error,
+        message: smsResult.success ? 'Verification code sent' : `Failed to send code: ${smsResult.error}`,
+      },
+    });
+  } catch (error) {
+    console.error('[UserController] Request verification code error:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to send verification code' },
+    });
+  }
+}
+
+// ─── VERIFY PHONE NUMBER ───
+
+export async function handleVerifyPhone(req: Request, res: Response): Promise<void> {
+  try {
+    const { phone, code } = req.body;
+    if (!phone || !code) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'MISSING_FIELDS', message: 'Phone and verification code are required' },
+      });
+      return;
+    }
+
+    const user = await User.findOne({ phone: phone.trim() }).select('+smsVerificationCode +smsCodeExpires').exec();
+    if (!user) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return;
+    }
+
+    // Check if code expired
+    if (!user.smsCodeExpires || new Date() > user.smsCodeExpires) {
+      res.status(400).json({ success: false, error: { code: 'CODE_EXPIRED', message: 'Verification code has expired. Please request a new one.' } });
+      return;
+    }
+
+    // Verify code
+    const isMatch = await bcrypt.compare(code, user.smsVerificationCode || '');
+    if (!isMatch) {
+      res.status(400).json({ success: false, error: { code: 'INVALID_CODE', message: 'Invalid verification code' } });
+      return;
+    }
+
+    // Mark phone as verified
+    user.phoneVerified = true;
+    user.smsVerificationCode = undefined;
+    user.smsCodeExpires = undefined;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      data: { message: 'Phone number verified successfully' },
+    });
+  } catch (error) {
+    console.error('[UserController] Verify phone error:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to verify phone' },
+    });
+  }
+}
 
 // ─── UPDATE OWN PROFILE (COLLECTOR + ADMIN) ───
 
@@ -292,6 +463,18 @@ export async function handleUpdateProfile(req: Request, res: Response): Promise<
       }
     }
 
+    // Check phone uniqueness if changing
+    if (allowedUpdates.phone) {
+      const existing = await User.findOne({
+        phone: allowedUpdates.phone,
+        _id: { $ne: authReq.user._id },
+      }).exec();
+      if (existing) {
+        res.status(409).json({ success: false, error: { code: 'PHONE_EXISTS', message: 'Phone number already in use' } });
+        return;
+      }
+    }
+
     const updated = await User.findByIdAndUpdate(
       userId,
       { $set: allowedUpdates },
@@ -328,7 +511,7 @@ export async function handleGetMe(req: Request, res: Response): Promise<void> {
     }
 
     const user = await User.findById(authReq.user._id)
-      .select('-password -twoFactorSecret -twoFactorBackupCodes -passwordResetToken')
+      .select('-password -twoFactorSecret -twoFactorBackupCodes -passwordResetToken -smsVerificationCode')
       .lean()
       .exec();
 
@@ -348,6 +531,7 @@ export async function handleGetMe(req: Request, res: Response): Promise<void> {
         role: user.role,
         status: user.status,
         region: user.region,
+        phoneVerified: user.phoneVerified,
         assignedFacility: user.facilityId?.toString(),
         stationId: user.stationId?.toString(),
         stationName: user.stationName,
@@ -377,7 +561,6 @@ export async function handleGetMe(req: Request, res: Response): Promise<void> {
 
 export async function handleListCollectorStations(req: Request, res: Response): Promise<void> {
   try {
-    // No admin check — any authenticated user can see station list
     // Include collectors with either stationName OR facilityId (assignedFacility)
     const collectors = await User.find(
       {
@@ -393,9 +576,8 @@ export async function handleListCollectorStations(req: Request, res: Response): 
     // Group by stationName (fallback to facilityId/assignedFacility if stationName empty)
     const map = new Map<string, { name: string; type: string; collectors: string[] }>();
     collectors.forEach((c: any) => {
-      // Use stationName if set, otherwise fall back to facilityId (assignedFacility)
       const rawName = (c.stationName && c.stationName.trim()) || (c.facilityId && c.facilityId.toString().trim()) || '';
-      if (!rawName) return; // Skip if no name at all
+      if (!rawName) return;
       const key = rawName.toLowerCase().trim();
       const existing = map.get(key);
       if (existing) {
@@ -427,7 +609,7 @@ export async function handleListUsers(req: Request, res: Response): Promise<void
     if (!requireAdmin(authReq, res)) return;
 
     const users = await User.find({ status: { $ne: 'deleted' } })
-      .select('-password -twoFactorSecret -twoFactorBackupCodes -passwordResetToken')
+      .select('-password -twoFactorSecret -twoFactorBackupCodes -passwordResetToken -smsVerificationCode')
       .sort({ createdAt: -1 })
       .lean()
       .exec();
@@ -484,11 +666,23 @@ export async function handleAdminUpdateUser(req: Request, res: Response): Promis
       }
     }
 
+    // Check phone uniqueness if changing
+    if (allowedUpdates.phone) {
+      const existing = await User.findOne({
+        phone: allowedUpdates.phone,
+        _id: { $ne: id },
+      }).exec();
+      if (existing) {
+        res.status(409).json({ success: false, error: { code: 'PHONE_EXISTS', message: 'Phone number already in use' } });
+        return;
+      }
+    }
+
     const updated = await User.findByIdAndUpdate(
       id,
       { $set: allowedUpdates },
       { new: true, runValidators: true }
-    ).select('-password -twoFactorSecret -twoFactorBackupCodes').lean().exec();
+    ).select('-password -twoFactorSecret -twoFactorBackupCodes -smsVerificationCode').lean().exec();
 
     if (!updated) {
       res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });

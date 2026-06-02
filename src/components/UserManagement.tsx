@@ -20,7 +20,6 @@ import {
   Crown,
   UserCircle,
   ChevronDown,
-  Mail,
   Copy,
   Check,
   AlertCircle,
@@ -57,10 +56,11 @@ export default function UserManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [createdUserResult, setCreatedUserResult] = useState<{
     tempPassword?: string;
-    emailSent: boolean;
-    emailError?: string;
+    smsSent: boolean;
+    smsError?: string;
+    verificationCodeSent?: boolean;
     userName: string;
-    userEmail: string;
+    userPhone: string;
   } | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [changingRoleUser, setChangingRoleUser] = useState<User | null>(null);
@@ -106,11 +106,10 @@ export default function UserManagement() {
     setChangingRoleUser(null);
   };
 
-  const handleResendEmail = async (user: User) => {
+  const handleResendSMS = async (user: User) => {
     if (resendingUserId) return;
 
     // ── Detect "ghost" users created offline but never synced ──
-    // lastSyncedAt is only set when data is confirmed from the backend
     const isGhostUser = !user.lastSyncedAt;
 
     if (isGhostUser) {
@@ -126,7 +125,7 @@ export default function UserManagement() {
     const isLocalToken = jwtToken?.startsWith('local_');
 
     if (isLocalToken) {
-      toast.info(t('users.cannotResendOffline') || 'Cannot resend welcome email while in offline mode. User will receive email when system syncs.');
+      toast.info(t('users.cannotResendOffline') || 'Cannot resend welcome SMS while in offline mode. Will send when system syncs.');
       return;
     }
 
@@ -143,9 +142,8 @@ export default function UserManagement() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${jwtToken}`,
         },
-        body: JSON.stringify({ email: user.email }),
+        body: JSON.stringify({ userId: user.id }),
       });
-      // Guard against HTML responses
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
         const text = await res.text();
@@ -156,20 +154,20 @@ export default function UserManagement() {
       }
       const result = await res.json();
       if (result.success) {
-        if (!result.data.emailSent && result.data.tempPassword) {
+        if (!result.data.smsSent && result.data.tempPassword) {
           setCreatedUserResult({
             tempPassword: result.data.tempPassword,
-            emailSent: false,
-            emailError: result.data.emailError,
+            smsSent: false,
+            smsError: result.data.smsError,
             userName: `${user.firstName} ${user.lastName}`,
-            userEmail: user.email,
+            userPhone: user.phone || '',
           });
         } else {
-          toast.success('Welcome email resent successfully');
+          toast.success(t('users.smsResent') || 'Welcome SMS resent successfully');
         }
       } else {
-        const errorMsg = result.error?.message || result.error || 'Failed to resend email';
-        toast.error(`Email failed: ${errorMsg}`);
+        const errorMsg = result.error?.message || result.error || 'Failed to resend SMS';
+        toast.error(`SMS failed: ${errorMsg}`);
       }
     } catch (err: any) {
       const errorMsg = err?.message || String(err);
@@ -434,9 +432,9 @@ export default function UserManagement() {
                           <UserCircle className="w-4 h-4 mr-2" />
                           {t('users.viewProfile')}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleResendEmail(user)}>
-                          <Mail className="w-4 h-4 mr-2" />
-                          {resendingUserId === user.id ? 'Sending...' : 'Resend Welcome Email'}
+                        <DropdownMenuItem onClick={() => handleResendSMS(user)}>
+                          <Phone className="w-4 h-4 mr-2" />
+                          {resendingUserId === user.id ? (t('users.sending') || 'Sending...') : (t('users.resendWelcomeSMS') || 'Resend Welcome SMS')}
                         </DropdownMenuItem>
                         {!isPrimaryAdmin(user.email) && (
                           <DropdownMenuItem
@@ -517,13 +515,14 @@ export default function UserManagement() {
                     stationType: data.stationType,
                     stationId: stationId || data.stationName?.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
                     region: 'default',
+                    sendVerificationCode: data.sendVerificationCode,
                   }
                 );
 
                 setShowAddModal(false);
 
                 if (serverSynced) {
-                  toast.success(t('users.userCreated') || 'User created successfully');
+                  toast.success(t('users.userCreatedSms') || 'User created and welcome SMS sent');
                 } else {
                   toast.success(
                     t('users.savedLocallyWillSync') ||
@@ -532,8 +531,8 @@ export default function UserManagement() {
                   if (error) console.log('[AddUser] Offline:', error);
                 }
 
-                // If backend gave us a tempPassword, show it (for admin to share)
-                // Note: tempPassword only comes from server, not available offline
+                // If backend returned SMS delivery info, show result modal
+                // Note: detailed SMS status comes from server only
               } catch (err: any) {
                 const errorMsg = err?.message || String(err);
                 console.error('[AddUser] Error:', errorMsg);
@@ -624,26 +623,26 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Created User Confirmation Modal (shows temp password if email failed) ── */}
+      {/* ── Created User Confirmation Modal (shows temp password if SMS failed) ── */}
       <Dialog open={!!createdUserResult} onOpenChange={() => setCreatedUserResult(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
-                <Mail className="w-4 h-4 text-amber-600" />
+                <Phone className="w-4 h-4 text-amber-600" />
               </div>
-              {createdUserResult?.emailSent ? 'User Created' : 'Email Delivery Issue'}
+              {createdUserResult?.smsSent ? (t('users.userCreatedSms') || 'User Created & SMS Sent') : (t('users.smsDeliveryIssue') || 'SMS Delivery Issue')}
             </DialogTitle>
             <DialogDescription>
-              {createdUserResult?.emailSent
-                ? `${createdUserResult.userName} has been created and the welcome email was sent to ${createdUserResult.userEmail}.`
-                : `The welcome email could not be sent to ${createdUserResult?.userEmail}. Please share the temporary password below securely with the user.`}
+              {createdUserResult?.smsSent
+                ? `${createdUserResult.userName} has been created and the welcome SMS was sent to ${createdUserResult.userPhone}.`
+                : `The welcome SMS could not be sent to ${createdUserResult?.userPhone}. Please share the temporary password below securely with the user.`}
             </DialogDescription>
           </DialogHeader>
-          {createdUserResult && !createdUserResult.emailSent && (
+          {createdUserResult && !createdUserResult.smsSent && (
             <div className="mt-4 space-y-4">
               <div className="bg-slate-800 rounded-xl p-4 text-center">
-                <p className="text-xs text-slate-400 mb-2">Temporary Password</p>
+                <p className="text-xs text-slate-400 mb-2">{t('users.tempPassword') || 'Temporary Password'}</p>
                 <div className="flex items-center justify-center gap-2">
                   <code className="text-xl font-mono font-bold text-white tracking-widest">
                     {createdUserResult.tempPassword}
@@ -651,14 +650,14 @@ export default function UserManagement() {
                   <CopyTempPasswordButton password={createdUserResult.tempPassword || ''} />
                 </div>
               </div>
-              {createdUserResult.emailError && (
+              {createdUserResult.smsError && (
                 <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-lg">
                   <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                  <p className="text-sm text-red-600">{createdUserResult.emailError}</p>
+                  <p className="text-sm text-red-600">{createdUserResult.smsError}</p>
                 </div>
               )}
               <p className="text-xs text-gray-500 text-center">
-                The system will retry sending this email automatically. You can also resend from the user dropdown menu.
+                {t('users.smsRetryHint') || 'You can resend the welcome SMS from the user dropdown menu.'}
               </p>
             </div>
           )}
@@ -711,6 +710,7 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
     assignedFacility: '',
     stationName: '',
     stationType: 'household' as 'household' | 'hip' | 'referral-center',
+    sendVerificationCode: false,
   });
 
   const handleStationNameChange = (value: string) => {
@@ -757,25 +757,33 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.email')} *</label>
-        <input
-          type="email"
-          required
-          value={formData.email}
-          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
-          placeholder="john.doe@example.com"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.phoneNumber')}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {t('users.phoneNumber')} *
+          <span className="text-xs font-normal text-teal-600 ml-1">({t('users.phonePrimary') || 'Primary — used for SMS login'})</span>
+        </label>
         <input
           type="tel"
+          required
           value={formData.phone}
           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
           className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
           placeholder="+254 7XX XXX XXX"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {t('users.email')}
+          {formData.role === 'admin' && <span className="text-red-500 ml-0.5">*</span>}
+          <span className="text-xs font-normal text-gray-400 ml-1">({t('users.emailOptional') || 'Optional for collectors'})</span>
+        </label>
+        <input
+          type="email"
+          required={formData.role === 'admin'}
+          value={formData.email}
+          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
+          placeholder="john.doe@example.com"
         />
       </div>
 
@@ -793,6 +801,19 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
 
       {formData.role === 'collector' && (
         <>
+          <div className="flex items-center gap-2 p-3 bg-teal-50 border border-teal-100 rounded-lg">
+            <input
+              type="checkbox"
+              id="sendVerificationCode"
+              checked={formData.sendVerificationCode}
+              onChange={(e) => setFormData({ ...formData, sendVerificationCode: e.target.checked })}
+              className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+            />
+            <label htmlFor="sendVerificationCode" className="text-sm text-teal-800 font-medium cursor-pointer">
+              {t('users.sendVerificationCode') || 'Send phone verification code'}
+            </label>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.assignedFacility')}</label>
             <input

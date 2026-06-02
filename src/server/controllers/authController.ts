@@ -73,26 +73,33 @@ export async function bootstrapPrimaryAdmin(): Promise<void> {
   }
 }
 
-// ─── LOGIN ─——
+// ─── LOGIN — Supports email OR phone number ─——
 
 export async function handleLogin(req: Request, res: Response): Promise<void> {
   try {
-    const { email, password } = req.body;
+    const { email, phone, password } = req.body;
 
-    if (!email || !password) {
+    if (!password || (!email && !phone)) {
       res.status(400).json({
         success: false,
-        error: { code: 'MISSING_CREDENTIALS', message: 'Email and password are required' },
+        error: { code: 'MISSING_CREDENTIALS', message: 'Email or phone, and password are required' },
       });
       return;
     }
 
-    // Find user with password included
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password').exec();
+    // Find user — by email or phone
+    let user: typeof User.prototype | null = null;
+
+    if (email) {
+      user = await User.findOne({ email: email.toLowerCase() }).select('+password').exec();
+    } else if (phone) {
+      user = await User.findOne({ phone: phone.trim() }).select('+password').exec();
+    }
+
     if (!user) {
       res.status(401).json({
         success: false,
-        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' },
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email/phone or password' },
       });
       return;
     }
@@ -122,6 +129,7 @@ export async function handleLogin(req: Request, res: Response): Promise<void> {
         success: true,
         forcePasswordChange: true,
         email: user.email,
+        phone: user.phone,
         firstName: user.firstName,
         message: 'You must set a new password before accessing the dashboard.',
       });
@@ -134,6 +142,7 @@ export async function handleLogin(req: Request, res: Response): Promise<void> {
         success: true,
         twoFactorRequired: true,
         email: user.email,
+        phone: user.phone,
         message: 'Two-factor authentication required. Please enter the 6-digit code from your authenticator app.',
       });
       return;
@@ -269,16 +278,16 @@ export async function handleLogout(_req: Request, res: Response): Promise<void> 
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 }
 
-// ─── SET PASSWORD (FIRST LOGIN) ───
+// ─── SET PASSWORD (FIRST LOGIN) — Supports email OR phone ───
 
 export async function handleSetPassword(req: Request, res: Response): Promise<void> {
   try {
-    const { email, currentPassword, newPassword } = req.body;
+    const { email, phone, currentPassword, newPassword } = req.body;
 
-    if (!email || !currentPassword || !newPassword) {
+    if (!currentPassword || !newPassword || (!email && !phone)) {
       res.status(400).json({
         success: false,
-        error: { code: 'MISSING_FIELDS', message: 'Email, current password, and new password are required' },
+        error: { code: 'MISSING_FIELDS', message: 'Email or phone, current password, and new password are required' },
       });
       return;
     }
@@ -291,12 +300,18 @@ export async function handleSetPassword(req: Request, res: Response): Promise<vo
       return;
     }
 
-    // Find user with password
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password').exec();
+    // Find user with password — by email or phone
+    let user: typeof User.prototype | null = null;
+    if (email) {
+      user = await User.findOne({ email: email.toLowerCase() }).select('+password').exec();
+    } else if (phone) {
+      user = await User.findOne({ phone: phone.trim() }).select('+password').exec();
+    }
+
     if (!user) {
       res.status(401).json({
         success: false,
-        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' },
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email/phone or password' },
       });
       return;
     }

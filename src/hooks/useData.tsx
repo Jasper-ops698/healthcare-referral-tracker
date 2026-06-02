@@ -189,7 +189,7 @@ export function useUsers() {
    */
   const addUser = useCallback(async (
     userData: Omit<User, 'id' | 'createdAt'> & { id?: string; password?: string },
-    apiPayload?: { firstName: string; lastName: string; email: string; phone: string; role: string; assignedFacility?: string; stationName?: string; stationType?: string; stationId?: string; region?: string }
+    apiPayload?: { firstName: string; lastName: string; email: string; phone: string; role: string; assignedFacility?: string; stationName?: string; stationType?: string; stationId?: string; region?: string; sendVerificationCode?: boolean }
   ): Promise<{ user: User; serverSynced: boolean; error?: string }> => {
     const email = userData.email?.toLowerCase().trim();
     if (email) {

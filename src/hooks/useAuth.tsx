@@ -36,9 +36,9 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<LoginResult>;
+  login: (email: string, password: string, twoFactorCode?: string, phone?: string) => Promise<LoginResult>;
   completeLogin: (token: string, apiUser: any) => void;
-  setPassword: (email: string, currentPassword: string, newPassword: string) => Promise<LoginResult>;
+  setPassword: (email: string, currentPassword: string, newPassword: string, phone?: string) => Promise<LoginResult>;
   logout: () => void;
   refreshUser: () => Promise<boolean>;
   hasRole: (role: UserRole) => boolean;
@@ -209,12 +209,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+  const login = useCallback(async (email: string, password: string, _twoFactorCode?: string, phone?: string): Promise<LoginResult> => {
     setIsLoading(true);
 
-    if (!email.trim() || !password.trim()) {
+    if ((!email?.trim() && !phone?.trim()) || !password.trim()) {
       setIsLoading(false);
-      return { success: false, error: 'Please enter email and password' };
+      return { success: false, error: 'Please enter email/phone and password' };
     }
 
     // ── Strategy 1: Try backend API (when server is running) ──
@@ -224,10 +224,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Render free tier cold start takes 30-60s; give it 45s
       const timeout = setTimeout(() => controller.abort(), 45000);
 
+      // Build payload — use email if provided, otherwise phone
+      const payload: Record<string, string> = { password };
+      if (email?.trim()) payload.email = email.trim();
+      if (phone?.trim()) payload.phone = phone.trim();
+
       const res = await fetch(`${apiUrl}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -296,20 +301,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (window as any).__healthtrack_session_expired_fired = false;
   }, []);
 
-  const setPassword = useCallback(async (email: string, currentPassword: string, newPassword: string): Promise<LoginResult> => {
+  const setPassword = useCallback(async (email: string, currentPassword: string, newPassword: string, phone?: string): Promise<LoginResult> => {
     setIsLoading(true);
 
-    if (!email.trim() || !currentPassword.trim() || !newPassword.trim()) {
+    if ((!email?.trim() && !phone?.trim()) || !currentPassword.trim() || !newPassword.trim()) {
       setIsLoading(false);
       return { success: false, error: 'Please fill in all fields' };
     }
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || API_BASE_URL;
+      const payload: Record<string, string> = { currentPassword, newPassword };
+      if (email?.trim()) payload.email = email.trim();
+      if (phone?.trim()) payload.phone = phone.trim();
+
       const res = await fetch(`${apiUrl}/api/v1/auth/set-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, currentPassword, newPassword }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();

@@ -194,6 +194,131 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen - 3) + '...';
 }
 
+// ─── SEND WELCOME SMS TO NEW USER ───
+
+export async function sendWelcomeSMS(options: {
+  phone: string;
+  firstName: string;
+  tempPassword: string;
+  loginUrl: string;
+  role: string;
+}): Promise<SMSResult> {
+  const { phone, firstName, tempPassword, loginUrl, role } = options;
+
+  if (!USE_SMS || !smsClient) {
+    return { success: false, error: 'SMS not configured. Set AFRICASTALKING_API_KEY.' };
+  }
+
+  const normalizedPhone = normalizePhoneNumber(phone);
+  if (!normalizedPhone) {
+    return { success: false, error: `Invalid phone number: ${phone}` };
+  }
+
+  const roleLabel = role === 'admin' ? 'Admin' : 'Collector';
+  const message = `HealthTrack: Welcome ${firstName}! Your ${roleLabel} account is ready. Temp password: ${tempPassword}. Login at ${loginUrl}. Change your password after first login.`;
+
+  try {
+    const response = await smsClient.SMS.send({
+      to: [normalizedPhone],
+      message,
+      ...(SENDER_ID ? { from: SENDER_ID } : {}),
+    });
+    const result = response.SMSMessageData?.Recipients?.[0];
+
+    if (result && result.status === 'Success') {
+      console.log(`[SMS] Welcome SMS sent to ${normalizedPhone}, messageId=${result.messageId}`);
+      return { success: true, messageId: result.messageId };
+    } else {
+      const err = result?.status || 'Unknown error';
+      console.error(`[SMS] Welcome SMS failed to ${normalizedPhone}: ${err}`);
+      return { success: false, error: err };
+    }
+  } catch (err: any) {
+    console.error(`[SMS] Welcome SMS exception to ${normalizedPhone}:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// ─── SEND VERIFICATION CODE SMS ───
+
+export async function sendVerificationCodeSMS(options: {
+  phone: string;
+  firstName: string;
+  code: string;
+}): Promise<SMSResult> {
+  const { phone, firstName, code } = options;
+
+  if (!USE_SMS || !smsClient) {
+    return { success: false, error: 'SMS not configured. Set AFRICASTALKING_API_KEY.' };
+  }
+
+  const normalizedPhone = normalizePhoneNumber(phone);
+  if (!normalizedPhone) {
+    return { success: false, error: `Invalid phone number: ${phone}` };
+  }
+
+  const message = `HealthTrack: Hello ${firstName}, your verification code is: ${code}. Valid for 15 minutes. Do not share this code with anyone.`;
+
+  try {
+    const response = await smsClient.SMS.send({
+      to: [normalizedPhone],
+      message,
+      ...(SENDER_ID ? { from: SENDER_ID } : {}),
+    });
+    const result = response.SMSMessageData?.Recipients?.[0];
+
+    if (result && result.status === 'Success') {
+      console.log(`[SMS] Verification code sent to ${normalizedPhone}`);
+      return { success: true, messageId: result.messageId };
+    } else {
+      const err = result?.status || 'Unknown error';
+      return { success: false, error: err };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ─── SEND PASSWORD RESET CODE SMS ───
+
+export async function sendPasswordResetSMS(options: {
+  phone: string;
+  firstName: string;
+  resetCode: string;
+}): Promise<SMSResult> {
+  const { phone, firstName, resetCode } = options;
+
+  if (!USE_SMS || !smsClient) {
+    return { success: false, error: 'SMS not configured. Set AFRICASTALKING_API_KEY.' };
+  }
+
+  const normalizedPhone = normalizePhoneNumber(phone);
+  if (!normalizedPhone) {
+    return { success: false, error: `Invalid phone number: ${phone}` };
+  }
+
+  const message = `HealthTrack: Hello ${firstName}, your password reset code is: ${resetCode}. Valid for 15 minutes. If you didn't request this, contact your administrator.`;
+
+  try {
+    const response = await smsClient.SMS.send({
+      to: [normalizedPhone],
+      message,
+      ...(SENDER_ID ? { from: SENDER_ID } : {}),
+    });
+    const result = response.SMSMessageData?.Recipients?.[0];
+
+    if (result && result.status === 'Success') {
+      console.log(`[SMS] Password reset code sent to ${normalizedPhone}`);
+      return { success: true, messageId: result.messageId };
+    } else {
+      const err = result?.status || 'Unknown error';
+      return { success: false, error: err };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 // ─── HEALTH CHECK ───
 
 export function checkSMSHealth(): { configured: boolean; provider: string; username: string } {

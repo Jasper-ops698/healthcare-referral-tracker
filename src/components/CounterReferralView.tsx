@@ -16,7 +16,7 @@ import {
   ClipboardList, Search, CheckCircle, Clock, AlertTriangle,
   ArrowLeft, Stethoscope, User, MapPin, Ambulance, Send,
   RefreshCw, ChevronRight, Sparkles, HeartPulse,
-  Calendar, Mail, ArrowDownLeft, ArrowUpRight,
+  Calendar, ArrowDownLeft, ArrowUpRight,
   Loader2, FileText, TrendingUp, PackageCheck, Phone,
 } from 'lucide-react';
 import {
@@ -93,7 +93,6 @@ export default function CounterReferralView({ stationId, stationName, collectorI
   const [warningSigns, setWarningSigns] = useState('');
   const [chpName, setChpName] = useState('');
   const [chpPhone, setChpPhone] = useState('');
-  const [chpEmail, setChpEmail] = useState('');
 
   useEffect(() => { loadData(); }, [stationId, stationName, collectorId]);
 
@@ -143,7 +142,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
 
   const openDetail = (r: ReferralV2, dir: 'incoming' | 'outgoing') => {
     setSelected(r); setSelectedDir(dir); setView('detail'); setShowForm(false);
-    setChpName(r.chpName || ''); setChpPhone(r.chpPhone || ''); setChpEmail(r.chpEmail || '');
+    setChpName(r.chpName || ''); setChpPhone(r.chpPhone || '');
     setPreviousJourney(null);
 
     // Phase C: Fetch previous journey for follow-up referrals
@@ -179,7 +178,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
         medicationsGiven: medications || undefined, proceduresDone: procedures || undefined,
         recoveryStatus, nextVisitDate: nextVisitDate ? new Date(nextVisitDate) : undefined,
         followUpInstructions: followUp, warningSigns: warningSigns || undefined,
-        chpName, chpPhone: chpPhone || undefined, chpEmail: chpEmail || undefined,
+        chpName, chpPhone: chpPhone || undefined,
       };
       const cRes = await createCounterReferral(payload);
       if (!cRes.success) {
@@ -198,30 +197,16 @@ export default function CounterReferralView({ stationId, stationName, collectorI
         return;
       }
       const cData = cRes.data as any;
-      // Warn if both email and SMS failed
-      if (chpEmail && !cData?.emailSent && chpPhone && !cData?.smsSent) {
+      if (chpPhone && !cData?.smsSent) {
         toast.warning(
-          `${t('counterReferral.emailFailedToast')}: ${cData?.emailError || 'Email failed'}. SMS: ${cData?.smsError || 'SMS failed'}. ${t('counterReferral.contactChpManually')}`,
-          { duration: 8000 }
-        );
-      } else if (chpEmail && !cData?.emailSent) {
-        toast.warning(
-          `${t('counterReferral.emailFailedToast')}: ${cData?.emailError || t('counterReferral.emailConfigMissing')}. ${t('counterReferral.contactChpManually')}`,
-          { duration: 8000 }
-        );
-      } else if (chpPhone && !cData?.smsSent) {
-        toast.warning(
-          `SMS failed: ${cData?.smsError || 'Check Africa\'s Talking configuration'}. ${t('counterReferral.contactChpManually')}`,
+          `SMS failed: ${cData?.smsError || t('counterReferral.smsConfigMissing')}. ${t('counterReferral.contactChpManually')}`,
           { duration: 8000 }
         );
       }
       const sRes = await updateReferralV2Status(refId, 'counter-referral-created');
       if (sRes.success) {
-        const notifyMethods: string[] = [];
-        if (cData?.emailSent) notifyMethods.push('email');
-        if (cData?.smsSent) notifyMethods.push('SMS');
-        const toastMsg = notifyMethods.length > 0
-          ? `Counter-referral created — CHP notified via ${notifyMethods.join(' + ')}`
+        const toastMsg = cData?.smsSent
+          ? t('counterReferral.chpSmsNotified')
           : t('counterReferral.counterCreated');
         toast.success(toastMsg);
         // Mark as submitted so button stays disabled
@@ -229,7 +214,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
         setShowForm(false);
         // Clear form state
         setFinalDiagnosis(''); setTreatment(''); setMedications(''); setProcedures('');
-        setFollowUp(''); setWarningSigns(''); setChpName(''); setChpPhone(''); setChpEmail('');
+        setFollowUp(''); setWarningSigns(''); setChpName(''); setChpPhone('');
         await loadData();
       } else {
         toast.error((sRes as any).error?.message || t('counterReferral.statusFailed'));
@@ -582,7 +567,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
           {selected.chpName && (
             <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
               <p className="text-xs font-semibold text-blue-800 mb-1">Assigned CHP</p>
-              <p className="text-sm text-blue-700">{selected.chpName} {selected.chpPhone && `· ${selected.chpPhone}`} {selected.chpEmail && `· ${selected.chpEmail}`}</p>
+              <p className="text-sm text-blue-700">{selected.chpName} {selected.chpPhone && `· ${selected.chpPhone}`}</p>
             </div>
           )}
         </div>
@@ -713,18 +698,6 @@ export default function CounterReferralView({ stationId, stationName, collectorI
                     title={t('counterReferral.notifyViaSms')}
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-blue-700 mb-1 flex items-center gap-1">
-                    <Mail className="w-3 h-3" />Email
-                  </label>
-                  <input
-                    type="email"
-                    value={chpEmail}
-                    onChange={e => setChpEmail(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-background"
-                    placeholder={t('counterReferral.chpEmailPlaceholder')}
-                  />
-                </div>
               </div>
             </div>
 
@@ -733,7 +706,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
               disabled={submitting || !finalDiagnosis || !treatment || !followUp || !chpName}
               className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {submitting ? <><Loader2 className="w-4 h-4 animate-spin" />Creating...</> : <><Send className="w-4 h-4" />Send Counter-Referral & Notify CHP</>}
+              {submitting ? <><Loader2 className="w-4 h-4 animate-spin" />Creating...</> : <><Send className="w-4 h-4" />Send Counter-Referral & SMS CHP</>}
             </button>
           </div>
         </div>
