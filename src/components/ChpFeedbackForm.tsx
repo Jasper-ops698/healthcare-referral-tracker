@@ -22,6 +22,7 @@ const RECOVERY_OPTIONS: { value: RecoveryStatus; label: string; color: string }[
 export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState('');
   const [patientName, setPatientName] = useState('');
   const [finalDiagnosis, setFinalDiagnosis] = useState('');
   const [followUpInstructions, setFollowUpInstructions] = useState('');
@@ -43,6 +44,7 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
 
   const loadFormData = async () => {
     setLoading(true);
+    setDebugInfo(`Token: ${token?.slice(0, 16)}... | URL: ${window.location.pathname}`);
     try {
       const res = await fetch(`/api/v1/chp-feedback/${token}`);
       const result = await res.json();
@@ -59,9 +61,11 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
         }
       } else {
         setError(result.error || 'Invalid or expired link');
+        setDebugInfo(prev => `${prev} | Server error: ${result.error}`);
       }
-    } catch {
+    } catch (err: any) {
       setError('Failed to load form. Please check your internet connection.');
+      setDebugInfo(prev => `${prev} | Fetch error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -97,19 +101,22 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground">Loading form...</p>
+        <p className="text-xs text-slate-400 mt-2 font-mono break-all">{debugInfo}</p>
       </div>
     );
   }
 
   if (error && !submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6">
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-red-700 mb-2">Link Error</h2>
-          <p className="text-sm text-muted-foreground">{error}</p>
+          <p className="text-sm text-muted-foreground mb-4">{error}</p>
+          <p className="text-xs text-slate-400 font-mono break-all bg-slate-100 p-2 rounded">{debugInfo}</p>
         </div>
       </div>
     );
@@ -117,7 +124,7 @@ export default function ChpFeedbackForm({ token }: ChpFeedbackFormProps) {
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6">
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-emerald-700 mb-2">

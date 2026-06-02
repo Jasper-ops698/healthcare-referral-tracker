@@ -46,11 +46,17 @@ function IdleAutoLogout({ children }: { children: React.ReactNode }) {
 
 /**
  * Detect if the current URL is a CHP public feedback form link.
- * Pattern: /chp-feedback/<token>
+ * Pattern: /chp-feedback/<token> (token is hex from crypto.randomBytes)
+ * Robust: handles query params, hashes, trailing slashes added by email clients
  */
 function getChpFeedbackToken(): string | null {
-  const match = window.location.pathname.match(/^\/chp-feedback\/([a-f0-9]+)$/i);
-  return match ? match[1] : null;
+  // Try pathname first (e.g., /chp-feedback/abc123)
+  const pathMatch = window.location.pathname.match(/\/chp-feedback\/([a-f0-9]+)/i);
+  if (pathMatch) return pathMatch[1];
+  // Fallback: check full href for edge cases (some email clients mangle URLs)
+  const hrefMatch = window.location.href.match(/\/chp-feedback\/([a-f0-9]+)/i);
+  if (hrefMatch) return hrefMatch[1];
+  return null;
 }
 
 function AppContent() {
