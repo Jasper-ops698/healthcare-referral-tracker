@@ -77,7 +77,7 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
         }
         const formUrl = baseUrl ? `${baseUrl}/chp-feedback/${responseToken}` : '';
         emailResult = await sendChpFollowUpEmail({
-          to: body.chpEmail,
+          chpEmail: body.chpEmail,
           chpName: body.chpName,
           patientName: body.patientName,
           patientId: body.patientId,

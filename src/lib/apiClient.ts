@@ -111,15 +111,14 @@ async function apiFetch(
     // Handle 401 — token expired or invalid
     if (res.status === 401) {
       const token = getToken();
-      // Only trigger logout if we actually sent a token.
-      // If the request had no token, the 401 is from an unauthenticated call
-      // (e.g., a bug or a public endpoint that shouldn't require auth).
       if (token) {
-        console.error(`[apiFetch] 401 for ${url} with token present — session expired, logging out`);
-        clearToken();
-        window.dispatchEvent(new CustomEvent('healthtrack-session-expired'));
-      } else {
-        console.warn(`[apiFetch] 401 for ${url} but no token was sent — not triggering logout`);
+        // Use a flag to prevent cascade — only fire session-expired once
+        const alreadyFired = (window as any).__healthtrack_session_expired_fired;
+        if (!alreadyFired) {
+          (window as any).__healthtrack_session_expired_fired = true;
+          console.error(`[apiFetch] 401 for ${url} — session expired, firing logout event`);
+          window.dispatchEvent(new CustomEvent('healthtrack-session-expired'));
+        }
       }
       throw new Error('Session expired. Please log in again.');
     }

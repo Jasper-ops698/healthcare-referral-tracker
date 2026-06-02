@@ -141,8 +141,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('healthtrack_current_user');
       localStorage.removeItem('healthtrack_jwt_token');
     };
-    window.addEventListener('healthtrack-session-expired', handleSessionExpired);
-    return () => window.removeEventListener('healthtrack-session-expired', handleSessionExpired);
+    // Guard: only handle session-expired once per flag cycle
+    const handleSessionExpiredGuarded = () => {
+      if ((window as any).__healthtrack_session_expired_fired) {
+        handleSessionExpired();
+      }
+    };
+    window.addEventListener('healthtrack-session-expired', handleSessionExpiredGuarded);
+    return () => window.removeEventListener('healthtrack-session-expired', handleSessionExpiredGuarded);
   }, []);
 
   const completeLogin = useCallback((token: string, apiUser: any) => {
@@ -183,6 +189,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user);
     localStorage.setItem('healthtrack_current_user', JSON.stringify(user));
     localStorage.setItem('healthtrack_jwt_token', token);
+    // Reset the 401 cascade-prevention flag so future auth failures are handled
+    (window as any).__healthtrack_session_expired_fired = false;
 
     // Apply user preferences from backend
     if (apiUser.preferences) {
@@ -266,6 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const localUser = await localAuthenticate(email, password);
     if (localUser) {
       console.log(`[Auth] Local auth success for ${localUser.email}, role=${(localUser as any).role}`);
+      (window as any).__healthtrack_session_expired_fired = false;
       setUser(localUser);
       localStorage.setItem('healthtrack_current_user', JSON.stringify(localUser));
       // Generate a local session token so API calls don't fail immediately.
@@ -284,6 +293,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     localStorage.removeItem('healthtrack_current_user');
     localStorage.removeItem('healthtrack_jwt_token');
+    (window as any).__healthtrack_session_expired_fired = false;
   }, []);
 
   const setPassword = useCallback(async (email: string, currentPassword: string, newPassword: string): Promise<LoginResult> => {
