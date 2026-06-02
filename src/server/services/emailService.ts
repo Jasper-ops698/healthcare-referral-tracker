@@ -418,3 +418,30 @@ export async function verifyEmailConnection(): Promise<boolean> {
 export async function sendPatientRegistrationEmail(): Promise<EmailResult> {
   return { success: false, error: 'Deprecated — patient registration removed' };
 }
+
+// CHP-related email functions (legacy compatibility)
+export async function sendChpRegistrationEmail(to: string, chpName: string): Promise<EmailResult> {
+  const html = `
+<!DOCTYPE html>
+<html><body style="font-family:system-ui,sans-serif;background:#f8fafc;padding:24px;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <h2 style="color:#0ea5e9;margin-top:0;">CHP Registration</h2>
+    <p>Hello ${chpName},</p>
+    <p>You have been registered as a Community Health Promoter in HealthTrack.</p>
+  </div>
+</body></html>`;
+  return sendEmail({ to, subject: 'HealthTrack: CHP Registration', html, from: RESEND_FROM });
+}
+
+export async function sendChpPatientAssignedEmail(to: string, chpName: string, patientName: string): Promise<EmailResult> {
+  const html = `
+<!DOCTYPE html>
+<html><body style="font-family:system-ui,sans-serif;background:#f8fafc;padding:24px;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <h2 style="color:#0ea5e9;margin-top:0;">New Patient Assignment</h2>
+    <p>Hello ${chpName},</p>
+    <p>You have been assigned to follow up on patient <strong>${patientName}</strong>.</p>
+  </div>
+</body></html>`;
+  return sendEmail({ to, subject: `HealthTrack: Assigned to ${patientName}`, html, from: RESEND_FROM });
+}
