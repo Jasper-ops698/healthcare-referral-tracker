@@ -123,7 +123,9 @@ export default function CounterReferralView({ stationId, stationName, collectorI
     try {
       const res = await acceptReferralV2(id);
       if (res.success) {
-        toast.success(t('counterReferral.careStarted'));
+        toast.success(t('counterReferral.careStarted'), {
+          description: 'Fill the counter-referral form now, or close it and come back later.',
+        });
         await loadData();
         // Auto-open the counter-referral form so collector can immediately
         // fill in diagnosis, treatment, and CHP details
@@ -588,9 +590,18 @@ export default function CounterReferralView({ stationId, stationName, collectorI
       {/* Counter-Referral Form */}
       {showForm && (
         <div className="bg-card rounded-xl border border-primary/30 overflow-hidden">
-          <div className="px-5 py-3 border-b border-primary/20 bg-primary/5 flex items-center gap-2">
-            <ClipboardList className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-bold">Counter-Referral Form</h3>
+          <div className="px-5 py-3 border-b border-primary/20 bg-primary/5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-bold">Counter-Referral Form</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors"
+            >
+              {t('common.cancel') || 'Cancel'}
+            </button>
           </div>
           <div className="p-5 space-y-4">
             <F label={`${t('counterReferral.finalDiagnosis')} *`} value={finalDiagnosis} onChange={setFinalDiagnosis} rows={2} placeholder="e.g., Confirmed malaria with mild anemia" />
