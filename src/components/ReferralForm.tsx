@@ -351,7 +351,7 @@ export default function ReferralForm({
 
                 <p className="text-xs text-muted-foreground mt-1">
                   {facilities.length > 0
-                    ? `${facilities.length} facility${facilities.length > 1 ? 'ies' : 'y'} with stationed collectors`
+                    ? `${facilities.length} facilit${facilities.length > 1 ? 'ies' : 'y'} with stationed collectors`
                     : facilitiesLoading ? 'Loading facilities...' : 'No facilities found. Register collectors with station names or assigned facilities.'}
                 </p>
               </div>
@@ -565,7 +565,7 @@ function SectionCard({ icon: Icon, title, accent, children }: {
   icon: typeof User; title: string; accent: string; children: React.ReactNode;
 }) {
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden">
+    <div className="bg-card rounded-xl border border-border overflow-visible">
       <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
         <div className={`w-7 h-7 rounded-lg ${accent} flex items-center justify-center`}>
           <Icon className="w-4 h-4 text-white" />
