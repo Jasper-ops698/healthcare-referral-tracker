@@ -775,7 +775,7 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
         <label className="block text-sm font-medium text-gray-700 mb-1">
           {t('users.email')}
           {formData.role === 'admin' && <span className="text-red-500 ml-0.5">*</span>}
-          <span className="text-xs font-normal text-gray-400 ml-1">({t('users.emailOptional') || 'Optional for collectors'})</span>
+          {formData.role === 'collector' && <span className="text-xs font-normal text-gray-400 ml-1">({t('users.emailOptional') || 'Optional'})</span>}
         </label>
         <input
           type="email"
@@ -783,7 +783,6 @@ function AddUserForm({ onSubmit, onCancel }: AddUserFormProps) {
           value={formData.email}
           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm"
-          placeholder="john.doe@example.com"
         />
       </div>
 
