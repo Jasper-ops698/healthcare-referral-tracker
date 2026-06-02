@@ -117,6 +117,14 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
     });
   } catch (error: any) {
     console.error('[CounterReferral] Create error:', error);
+    // MongoDB duplicate key error — counter-referral already exists for this referral
+    if (error.code === 11000 || error.message?.includes('E11000')) {
+      res.status(409).json({
+        success: false,
+        error: 'A counter-referral has already been submitted for this patient.',
+      });
+      return;
+    }
     res.status(500).json({ success: false, error: error.message });
   }
 }

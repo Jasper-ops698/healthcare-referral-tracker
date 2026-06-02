@@ -75,6 +75,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
   const [selected, setSelected] = useState<ReferralV2 | null>(null);
   const [selectedDir, setSelectedDir] = useState<'incoming' | 'outgoing'>('incoming');
   const [showForm, setShowForm] = useState(false);
+  const [submittedReferralIds, setSubmittedReferralIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
   // Phase C: Previous journey state for follow-up referrals
@@ -182,8 +183,16 @@ export default function CounterReferralView({ stationId, stationName, collectorI
       };
       const cRes = await createCounterReferral(payload);
       if (!cRes.success) {
+        const statusCode = (cRes as any).error?.statusCode || (cRes as any).status;
         const errMsg = (cRes as any).error?.message || JSON.stringify((cRes as any).error) || 'Failed to create counter-referral';
-        toast.error(errMsg);
+        // 409 = duplicate key — counter-referral already exists
+        if (statusCode === 409 || errMsg.includes('already been submitted')) {
+          toast.error('Counter-referral already submitted for this patient.', {
+            description: 'This form has already been completed.',
+          });
+        } else {
+          toast.error(errMsg);
+        }
         console.error('[CounterReferral] API error:', cRes);
         setSubmitting(false);
         return;
@@ -199,7 +208,12 @@ export default function CounterReferralView({ stationId, stationName, collectorI
       const sRes = await updateReferralV2Status(refId, 'counter-referral-created');
       if (sRes.success) {
         toast.success(cData?.emailSent ? t('counterReferral.chpNotified') : t('counterReferral.counterCreated'));
+        // Mark as submitted so button stays disabled
+        setSubmittedReferralIds(prev => new Set(prev).add(refId));
         setShowForm(false);
+        // Clear form state
+        setFinalDiagnosis(''); setTreatment(''); setMedications(''); setProcedures('');
+        setFollowUp(''); setWarningSigns(''); setChpName(''); setChpPhone(''); setChpEmail('');
         await loadData();
       } else {
         toast.error((sRes as any).error?.message || t('counterReferral.statusFailed'));
@@ -576,13 +590,23 @@ export default function CounterReferralView({ stationId, stationName, collectorI
       {isIncoming && bucket === 'in-care' && !showForm && (
         <div className="space-y-3">
           <button
-            onClick={() => setShowForm(true)}
-            className="w-full px-6 py-3.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+            onClick={() => {
+              if (!submittedReferralIds.has(selected.id || (selected as any)._id)) {
+                setShowForm(true);
+              }
+            }}
+            disabled={submittedReferralIds.has(selected.id || (selected as any)._id)}
+            className="w-full px-6 py-3.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <ClipboardList className="w-5 h-5" />Complete & Create Counter-Referral
+            <ClipboardList className="w-5 h-5" />
+            {submittedReferralIds.has(selected.id || (selected as any)._id)
+              ? 'Counter-Referral Submitted'
+              : 'Complete & Create Counter-Referral'}
           </button>
           <p className="text-xs text-muted-foreground text-center">
-            Record final diagnosis, treatment provided, and assign a CHP for follow-up.
+            {submittedReferralIds.has(selected.id || (selected as any)._id)
+              ? 'This counter-referral has already been submitted.'
+              : 'Record final diagnosis, treatment provided, and assign a CHP for follow-up.'}
           </p>
         </div>
       )}
