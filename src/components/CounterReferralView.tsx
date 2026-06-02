@@ -125,6 +125,9 @@ export default function CounterReferralView({ stationId, stationName, collectorI
       if (res.success) {
         toast.success(t('counterReferral.careStarted'));
         await loadData();
+        // Auto-open the counter-referral form so collector can immediately
+        // fill in diagnosis, treatment, and CHP details
+        setShowForm(true);
       } else {
         toast.error((res as any).error?.message || t('counterReferral.receiveFailed'));
       }
