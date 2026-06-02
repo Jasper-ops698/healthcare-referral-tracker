@@ -26,7 +26,6 @@ import {
   getAllReferralsV2, sendAIChat, generateAIExportReport, analyzeDiseaseIncidence, getChpFollowUpStats,
 } from '@/lib/apiClient';
 import type { ChatMessage } from '@/lib/apiClient';
-import EmailDiagnostics from './EmailDiagnostics';
 import type { ReferralV2 } from '@/types';
 import { toast } from 'sonner';
 import { LOGO_BASE64 } from '@/lib/logoBase64';
@@ -717,9 +716,6 @@ export default function UnifiedAdminDashboard() {
         <Kpi icon={AlertTriangle} color="text-amber-600" bg="bg-amber-50" label={t('analytics.urgentCases')} value={kpi.urgent} />
         <Kpi icon={TrendingUp} color="text-emerald-600" bg="bg-emerald-50" label={t('analytics.completedCases')} value={kpi.completed} />
       </div>
-
-      {/* Email Diagnostics — SMTP Health Monitor */}
-      <EmailDiagnostics />
 
       {/* ─── 1. LINE CHART: Referral Activities Per Facility ─── */}
       <div className="bg-card rounded-xl border border-border p-5">
