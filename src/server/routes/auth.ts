@@ -8,7 +8,7 @@
  */
 
 import { Router } from 'express';
-import { handleLogin, handleLogout, handleMe, handleChangePassword, handleUpdateSettings, handleSetPassword } from '../controllers/authController.js';
+import { handleLogin, handleLogout, handleMe, handleChangePassword, handleUpdateSettings, handleSetPassword, handleRequestPasswordReset, handleResetPasswordWithCode } from '../controllers/authController.js';
 import { handleRequestVerificationCode, handleVerifyPhone } from '../controllers/userController.js';
 import {
   handle2FASetup,
@@ -39,5 +39,9 @@ router.get('/2fa/status', authenticateJWT, handle2FAStatus);
 // ─── Phone Verification Routes ───
 router.post('/request-verification-code', handleRequestVerificationCode);
 router.post('/verify-phone', handleVerifyPhone);
+
+// ─── Password Reset Routes (SMS) ───
+router.post('/request-password-reset', handleRequestPasswordReset);
+router.post('/reset-password', handleResetPasswordWithCode);
 
 export default router;

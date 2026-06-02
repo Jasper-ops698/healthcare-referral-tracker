@@ -203,6 +203,24 @@ export async function saveSettings(settings: UserSettings): Promise<ApiResponse>
   return res.json();
 }
 
+// ─── PASSWORD RESET (SMS) ─——
+
+export async function requestPasswordReset(phone: string): Promise<ApiResponse> {
+  const res = await apiFetch('/api/v1/auth/request-password-reset', {
+    method: 'POST',
+    body: JSON.stringify({ phone }),
+  });
+  return res.json();
+}
+
+export async function resetPasswordWithCode(phone: string, resetCode: string, newPassword: string): Promise<ApiResponse & { token?: string; user?: any }> {
+  const res = await apiFetch('/api/v1/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ phone, resetCode, newPassword }),
+  });
+  return res.json();
+}
+
 // ─── PHONE VERIFICATION ───
 
 export async function requestVerificationCode(phone: string): Promise<ApiResponse> {

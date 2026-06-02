@@ -103,7 +103,7 @@ function LoginPage() {
   const { login, completeLogin, isLoading } = useAuth();
   const { t } = useI18n();
 
-  const [step, setStep] = useState<'password' | '2fa' | 'setPassword'>('password');
+  const [step, setStep] = useState<'password' | '2fa' | 'setPassword' | 'forgotPassword' | 'resetCode' | 'newPassword'>('password');
   const [loginInput, setLoginInput] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -112,6 +112,10 @@ function LoginPage() {
   const [useBackupCode, setUseBackupCode] = useState(false);
   const [error, setError] = useState('');
   const [pendingFirstName, setPendingFirstName] = useState('');
+  const [resetPhone, setResetPhone] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newResetPassword, setNewResetPassword] = useState('');
+  const [confirmResetPassword, setConfirmResetPassword] = useState('');
 
   // Detect if input is email or phone number
   const isEmail = (input: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
@@ -173,6 +177,58 @@ function LoginPage() {
     } catch {
       setError(t('toast.connectionFailed'));
       toast.error(t('toast.connectionFailed'));
+    }
+  };
+
+  // ── Forgot Password: Request reset code ──
+  const handleRequestReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!resetPhone.trim()) {
+      setError('Please enter your phone number');
+      return;
+    }
+    try {
+      const result = await import('@/lib/apiClient').then(m => m.requestPasswordReset(resetPhone.trim()));
+      if (result.success) {
+        toast.success('Reset code sent to your phone');
+        setStep('resetCode');
+      } else {
+        setError(result.error?.message || 'Failed to send reset code');
+      }
+    } catch {
+      setError('Connection failed. Please try again.');
+    }
+  };
+
+  // ── Forgot Password: Verify code and set new password ──
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!resetCode.trim() || !newResetPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
+    if (newResetPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    if (newResetPassword !== confirmResetPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    try {
+      const result = await import('@/lib/apiClient').then(m =>
+        m.resetPasswordWithCode(resetPhone.trim(), resetCode.trim(), newResetPassword)
+      );
+      if (result.success && result.token) {
+        completeLogin(result.token, result.user);
+        toast.success('Password reset successful!');
+      } else {
+        setError(result.error?.message || 'Failed to reset password');
+      }
+    } catch {
+      setError('Connection failed. Please try again.');
     }
   };
 
@@ -258,6 +314,16 @@ function LoginPage() {
                   t('login.signIn')
                 )}
               </button>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => { setStep('forgotPassword'); setError(''); }}
+                  className="text-sm text-sky-600 hover:text-sky-700 hover:underline"
+                >
+                  {t('login.forgotPassword') || 'Forgot password?'}
+                </button>
+              </div>
             </form>
           ) : (
             <form onSubmit={handle2FASubmit} className="space-y-4">
@@ -340,6 +406,109 @@ function LoginPage() {
                   {t('login.back')}
                 </button>
               </div>
+            </form>
+          )}
+
+          {step === 'forgotPassword' && (
+            <form onSubmit={handleRequestReset} className="space-y-4">
+              <div className="text-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">{t('login.forgotPassword') || 'Reset Password'}</h3>
+                <p className="text-sm text-gray-500">{t('login.forgotPasswordDesc') || 'Enter your phone number to receive a reset code via SMS'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.phoneNumber')}</label>
+                <input
+                  type="tel"
+                  value={resetPhone}
+                  onChange={(e) => setResetPhone(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                  placeholder="+254 7XX XXX XXX"
+                  required
+                />
+              </div>
+              {error && (
+                <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm">{error}</div>
+              )}
+              <button type="submit" className="w-full px-4 py-3 bg-sky-500 text-white rounded-lg font-medium hover:bg-sky-600 transition-colors">
+                {t('login.sendResetCode') || 'Send Reset Code'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setStep('password'); setError(''); }}
+                className="w-full text-sm text-gray-500 hover:text-gray-700"
+              >
+                {t('login.backToLogin') || 'Back to Login'}
+              </button>
+            </form>
+          )}
+
+          {step === 'resetCode' && (
+            <form onSubmit={(e) => { e.preventDefault(); setStep('newPassword'); }} className="space-y-4">
+              <div className="text-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">{t('login.enterResetCode') || 'Enter Reset Code'}</h3>
+                <p className="text-sm text-gray-500">{t('login.resetCodeSent') || `We sent a 6-digit code to ${resetPhone}`}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.resetCode') || 'Reset Code'}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={resetCode}
+                  onChange={(e) => setResetCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all text-center tracking-[0.5em] text-lg"
+                  placeholder="000000"
+                  maxLength={6}
+                  autoFocus
+                  required
+                />
+              </div>
+              <button type="submit" className="w-full px-4 py-3 bg-sky-500 text-white rounded-lg font-medium hover:bg-sky-600 transition-colors">
+                {t('login.verifyCode') || 'Verify Code'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setStep('forgotPassword'); setError(''); }}
+                className="w-full text-sm text-gray-500 hover:text-gray-700"
+              >
+                {t('login.resendCode') || 'Resend Code'}
+              </button>
+            </form>
+          )}
+
+          {step === 'newPassword' && (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="text-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">{t('login.newPassword')}</h3>
+                <p className="text-sm text-gray-500">{t('login.createNewPassword') || 'Create a new password for your account'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.newPassword')}</label>
+                <input
+                  type="password"
+                  value={newResetPassword}
+                  onChange={(e) => setNewResetPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                  placeholder="Min 6 characters"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.confirmPassword')}</label>
+                <input
+                  type="password"
+                  value={confirmResetPassword}
+                  onChange={(e) => setConfirmResetPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                  placeholder="Re-enter new password"
+                  required
+                />
+              </div>
+              {error && (
+                <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm">{error}</div>
+              )}
+              <button type="submit" className="w-full px-4 py-3 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 transition-colors">
+                {t('login.resetPassword') || 'Reset Password'}
+              </button>
             </form>
           )}
 

@@ -418,6 +418,159 @@ export async function handleUpdateSettings(req: Request, res: Response): Promise
   }
 }
 
+// ─── REQUEST PASSWORD RESET (SMS CODE) ─——
+
+export async function handleRequestPasswordReset(req: Request, res: Response): Promise<void> {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'MISSING_PHONE', message: 'Phone number is required' },
+      });
+      return;
+    }
+
+    const trimmedPhone = phone.trim();
+
+    // Find user by phone
+    const user = await User.findOne({ phone: trimmedPhone }).select('+passwordResetToken +passwordResetExpires').exec();
+    if (!user) {
+      // Don't reveal whether phone exists — same response either way
+      res.status(200).json({
+        success: true,
+        data: { message: 'If an account exists with this phone number, a reset code has been sent.' },
+      });
+      return;
+    }
+
+    // Generate 6-digit reset code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedCode = await bcrypt.hash(resetCode, 10);
+
+    // Store hashed code with 15-minute expiry
+    user.passwordResetToken = hashedCode;
+    user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+
+    // Send SMS
+    const { sendPasswordResetSMS } = await import('../services/smsService.js');
+    const smsResult = await sendPasswordResetSMS({
+      phone: trimmedPhone,
+      firstName: user.firstName,
+      resetCode,
+    });
+
+    if (smsResult.success) {
+      console.log(`[Auth] Password reset code sent to ${trimmedPhone}`);
+    } else {
+      console.error(`[Auth] Failed to send reset SMS to ${trimmedPhone}: ${smsResult.error}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        message: 'If an account exists with this phone number, a reset code has been sent.',
+        smsSent: smsResult.success,
+        smsError: smsResult.error,
+      },
+    });
+  } catch (error) {
+    console.error('[Auth RequestPasswordReset Error]', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+    });
+  }
+}
+
+// ─── RESET PASSWORD WITH SMS CODE ─——
+
+export async function handleResetPasswordWithCode(req: Request, res: Response): Promise<void> {
+  try {
+    const { phone, resetCode, newPassword } = req.body;
+
+    if (!phone || !resetCode || !newPassword) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'MISSING_FIELDS', message: 'Phone, reset code, and new password are required' },
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'PASSWORD_TOO_SHORT', message: 'New password must be at least 6 characters' },
+      });
+      return;
+    }
+
+    const trimmedPhone = phone.trim();
+
+    // Find user with reset token
+    const user = await User.findOne({
+      phone: trimmedPhone,
+      passwordResetExpires: { $gt: new Date() },
+    }).select('+passwordResetToken +password').exec();
+
+    if (!user || !user.passwordResetToken) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CODE', message: 'Invalid or expired reset code' },
+      });
+      return;
+    }
+
+    // Verify reset code
+    const isMatch = await bcrypt.compare(resetCode, user.passwordResetToken);
+    if (!isMatch) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CODE', message: 'Invalid reset code' },
+      });
+      return;
+    }
+
+    // Hash and save new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    user.password = hashedPassword;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    user.forcePasswordChange = false;
+    user.passwordChangedAt = new Date().toISOString();
+    await user.save();
+
+    // Generate JWT for immediate login
+    const token = signJWT(user);
+
+    console.log(`[Auth] Password reset completed for user: ${user._id}`);
+
+    res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        region: user.region,
+        isPrimaryAdmin: user.isPrimaryAdmin,
+        preferences: user.preferences,
+      },
+      message: 'Password reset successful. You are now logged in.',
+    });
+  } catch (error) {
+    console.error('[Auth ResetPasswordWithCode Error]', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+    });
+  }
+}
+
 // ─── ME ─——
 
 export async function handleMe(req: Request, res: Response): Promise<void> {
