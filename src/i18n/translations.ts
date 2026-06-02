@@ -501,6 +501,8 @@ export const Translations = {
     'counterReferral.emailFailedToast': 'Counter-referral saved, but CHP email failed',
     'counterReferral.emailConfigMissing': 'Resend free tier: can only send to your own email. Verify a domain at resend.com/domains or upgrade your plan.',
     'counterReferral.contactChpManually': 'Contact CHP manually.',
+    'counterReferral.smsConfigMissing': 'Africa\'s Talking not configured. Set AFRICASTALKING_API_KEY on Render.',
+    'counterReferral.notifyViaSms': 'Also notify CHP via SMS (recommended for Kenya)',
 
     // Profile
     'profile.role': 'Role',
@@ -1224,6 +1226,8 @@ export const Translations = {
     'counterReferral.emailFailedToast': 'Rufaa ya kurudia imehifadhiwa, lakini barua pepe ya CHP imeshindwa',
     'counterReferral.emailConfigMissing': 'Resend free tier: inaweza kutuma kwa anuani yako tu. Thibitisha kikoa kwenye resend.com/domains au boresha mpango wako.',
     'counterReferral.contactChpManually': 'Wasiliana na CHP moja kwa moja.',
+    'counterReferral.smsConfigMissing': 'Africa\'s Talking haijasanidiwa. Weka AFRICASTALKING_API_KEY kwenye Render.',
+    'counterReferral.notifyViaSms': 'Pia julisha CHP kupitia SMS (inapendekezwa kwa Kenya)',
 
     // Profile
     'profile.role': 'Jukumu',

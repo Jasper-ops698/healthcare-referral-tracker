@@ -9,6 +9,7 @@ import CounterReferral from '../schemas/CounterReferral.js';
 import ReferralV2 from '../schemas/ReferralV2.js';
 import type { AuthenticatedRequest } from '../middleware/regionalAuth.js';
 import { sendChpFollowUpEmail } from '../services/emailService.js';
+import { sendChpCounterReferralSMS, checkSMSHealth } from '../services/smsService.js';
 
 function requireAuth(req: Request, res: Response): AuthenticatedRequest | null {
   const authReq = req as AuthenticatedRequest;
@@ -106,14 +107,55 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
       }
     }
 
+    // Send CHP follow-up SMS if phone provided
+    let smsResult: { success: boolean; messageId?: string; error?: string } = { success: false, error: 'No CHP phone provided' };
+    if (body.chpPhone) {
+      try {
+        const baseUrl = process.env.APP_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
+        const formUrl = baseUrl ? `${baseUrl}/chp-feedback/${responseToken}` : '';
+        counter.chpPhone = body.chpPhone;
+        smsResult = await sendChpCounterReferralSMS({
+          chpPhone: body.chpPhone,
+          chpName: body.chpName,
+          patientName: body.patientName,
+          patientId: body.patientId,
+          finalDiagnosis: body.finalDiagnosis,
+          formUrl,
+        });
+        if (smsResult.success) {
+          counter.chpSMSSent = true;
+          counter.chpSMSSentAt = new Date();
+          counter.chpSMSStatus = 'sent';
+          console.log('[CounterReferral] CHP SMS sent to', body.chpPhone, 'messageId:', smsResult.messageId);
+        } else {
+          counter.chpSMSStatus = 'failed';
+          console.error('[CounterReferral] CHP SMS failed:', smsResult.error);
+        }
+        await counter.save();
+      } catch (smsErr: any) {
+        console.error('[CounterReferral] SMS exception:', smsErr);
+        counter.chpSMSStatus = 'failed';
+        smsResult = { success: false, error: smsErr.message };
+        await counter.save();
+      }
+    }
+
+    // Build notification summary
+    const notifications: string[] = [];
+    if (emailResult.success) notifications.push('email');
+    if (smsResult.success) notifications.push('SMS');
+    const notificationMsg = notifications.length > 0
+      ? `follow-up ${notifications.join(' + ')} sent`
+      : `no follow-up notification sent — ${emailResult.error || smsResult.error}`;
+
     res.status(201).json({
       success: true,
       data: { counterReferral: counter.toJSON() },
       emailSent: emailResult.success,
       emailError: emailResult.error || undefined,
-      message: emailResult.success
-        ? `Counter-referral created for ${body.patientName}. CHP ${body.chpName} assigned — follow-up email sent.`
-        : `Counter-referral created for ${body.patientName}. CHP ${body.chpName} assigned — but follow-up email failed: ${emailResult.error}. Please contact CHP manually.`,
+      smsSent: smsResult.success,
+      smsError: smsResult.error || undefined,
+      message: `Counter-referral created for ${body.patientName}. CHP ${body.chpName} assigned — ${notificationMsg}.`,
     });
   } catch (error: any) {
     console.error('[CounterReferral] Create error:', error);

@@ -17,7 +17,7 @@ import {
   ArrowLeft, Stethoscope, User, MapPin, Ambulance, Send,
   RefreshCw, ChevronRight, Sparkles, HeartPulse,
   Calendar, Mail, ArrowDownLeft, ArrowUpRight,
-  Loader2, FileText, TrendingUp, PackageCheck,
+  Loader2, FileText, TrendingUp, PackageCheck, Phone,
 } from 'lucide-react';
 import {
   getIncomingReferrals, getOutgoingReferrals, acceptReferralV2,
@@ -198,16 +198,32 @@ export default function CounterReferralView({ stationId, stationName, collectorI
         return;
       }
       const cData = cRes.data as any;
-      if (!cData?.emailSent && chpEmail) {
-        const errorDetail = cData?.emailError || t('counterReferral.emailConfigMissing');
+      // Warn if both email and SMS failed
+      if (chpEmail && !cData?.emailSent && chpPhone && !cData?.smsSent) {
         toast.warning(
-          `${t('counterReferral.emailFailedToast')}: ${errorDetail}. ${t('counterReferral.contactChpManually')}`,
+          `${t('counterReferral.emailFailedToast')}: ${cData?.emailError || 'Email failed'}. SMS: ${cData?.smsError || 'SMS failed'}. ${t('counterReferral.contactChpManually')}`,
+          { duration: 8000 }
+        );
+      } else if (chpEmail && !cData?.emailSent) {
+        toast.warning(
+          `${t('counterReferral.emailFailedToast')}: ${cData?.emailError || t('counterReferral.emailConfigMissing')}. ${t('counterReferral.contactChpManually')}`,
+          { duration: 8000 }
+        );
+      } else if (chpPhone && !cData?.smsSent) {
+        toast.warning(
+          `SMS failed: ${cData?.smsError || 'Check Africa\'s Talking configuration'}. ${t('counterReferral.contactChpManually')}`,
           { duration: 8000 }
         );
       }
       const sRes = await updateReferralV2Status(refId, 'counter-referral-created');
       if (sRes.success) {
-        toast.success(cData?.emailSent ? t('counterReferral.chpNotified') : t('counterReferral.counterCreated'));
+        const notifyMethods: string[] = [];
+        if (cData?.emailSent) notifyMethods.push('email');
+        if (cData?.smsSent) notifyMethods.push('SMS');
+        const toastMsg = notifyMethods.length > 0
+          ? `Counter-referral created — CHP notified via ${notifyMethods.join(' + ')}`
+          : t('counterReferral.counterCreated');
+        toast.success(toastMsg);
         // Mark as submitted so button stays disabled
         setSubmittedReferralIds(prev => new Set(prev).add(refId));
         setShowForm(false);
@@ -686,7 +702,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
                 </div>
                 <div>
                   <label className="text-xs text-blue-700 mb-1 flex items-center gap-1">
-                    <Mail className="w-3 h-3" />Phone
+                    <Phone className="w-3 h-3" />Phone <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full ml-1">SMS</span>
                   </label>
                   <input
                     type="tel"
@@ -694,6 +710,7 @@ export default function CounterReferralView({ stationId, stationName, collectorI
                     onChange={e => setChpPhone(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-background"
                     placeholder={t('counterReferral.chpPhonePlaceholder')}
+                    title={t('counterReferral.notifyViaSms')}
                   />
                 </div>
                 <div>

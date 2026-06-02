@@ -1,14 +1,37 @@
 /**
- * SMS Service — Healthcare Notification via Africa's Talking
+ * SMS Service — Africa's Talking Integration
  *
- * Best practice for Kenya: Africa's Talking offers local routes,
- * affordable pricing (KES 0.3-1.2/SMS), and reliable delivery.
+ * Sends counter-referral notifications to CHPs via SMS.
+ * Falls back gracefully if SMS is not configured.
  *
- * Environment variables:
- *   AT_API_KEY    — Africa's Talking API key
- *   AT_USERNAME   — Africa's Talking username (default: sandbox)
- *   AT_FROM       — Sender ID (optional)
+ * Setup:
+ *   1. Create account at https://africastalking.com
+ *   2. Get API key from dashboard
+ *   3. Set AFRICASTALKING_API_KEY and AFRICASTALKING_USERNAME env vars
+ *   4. (Optional) Set AFRICASTALKING_SENDER_ID for branded SMS
+ *
+ * Cost: ~KES 0.80 per SMS (pay-as-you-go)
  */
+
+import AfricasTalking from 'africastalking';
+
+const API_KEY = process.env.AFRICASTALKING_API_KEY || '';
+const USERNAME = process.env.AFRICASTALKING_USERNAME || 'sandbox';
+const SENDER_ID = process.env.AFRICASTALKING_SENDER_ID || '';
+
+const USE_SMS = !!API_KEY;
+
+let smsClient: any = null;
+
+if (USE_SMS) {
+  smsClient = AfricasTalking({
+    apiKey: API_KEY,
+    username: USERNAME,
+  });
+  console.log(`[SMS] Africa's Talking configured (username: ${USERNAME})`);
+} else {
+  console.log('[SMS] Africa\'s Talking not configured. Set AFRICASTALKING_API_KEY to enable SMS.');
+}
 
 export interface SMSResult {
   success: boolean;
@@ -16,119 +39,164 @@ export interface SMSResult {
   error?: string;
 }
 
-const AT_API_KEY = process.env.AT_API_KEY || '';
-const AT_USERNAME = process.env.AT_USERNAME || 'sandbox';
-const AT_FROM = process.env.AT_FROM || '';
+// ─── SEND COUNTER-REFERRAL SMS TO CHP ───
 
-/**
- * Send SMS via Africa's Talking REST API.
- * Falls back gracefully if credentials are not configured.
- */
-export async function sendSMS(to: string, message: string): Promise<SMSResult> {
-  if (!AT_API_KEY) {
-    console.warn('[SMS] Africa\'s Talking API key not configured. SMS not sent.');
-    return { success: false, error: 'SMS provider not configured' };
+export async function sendChpCounterReferralSMS(options: {
+  chpPhone: string;
+  chpName: string;
+  patientName: string;
+  patientId: string;
+  finalDiagnosis: string;
+  formUrl: string;
+}): Promise<SMSResult> {
+  const { chpPhone, chpName, patientName, finalDiagnosis, formUrl } = options;
+
+  if (!USE_SMS || !smsClient) {
+    return { success: false, error: 'SMS not configured. Set AFRICASTALKING_API_KEY.' };
   }
 
-  // Normalize phone: ensure +254 prefix for Kenya
-  let phone = to.trim();
-  if (phone.startsWith('0')) {
-    phone = '+254' + phone.substring(1);
+  // Normalize Kenyan phone number
+  const normalizedPhone = normalizePhoneNumber(chpPhone);
+  if (!normalizedPhone) {
+    return { success: false, error: `Invalid phone number: ${chpPhone}` };
   }
-  if (!phone.startsWith('+')) {
-    phone = '+' + phone;
-  }
+
+  // Shorten the message (SMS limit ~320 chars for concatenated)
+  const shortUrl = formUrl; // Could use a URL shortener here
+  const message = `HealthTrack: Hello ${chpName}, patient ${patientName} has been referred back. Diagnosis: ${truncate(finalDiagnosis, 60)}. Submit follow-up report: ${shortUrl}`;
 
   try {
-    const response = await fetch('https://api.africastalking.com/version1/messaging', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'apiKey': AT_API_KEY,
-      },
-      body: new URLSearchParams({
-        username: AT_USERNAME,
-        to: phone,
-        message: message.substring(0, 480), // GSM limit safeguard
-        ...(AT_FROM ? { from: AT_FROM } : {}),
-      }).toString(),
-    });
+    const sms = smsClient.SMS;
+    const sendOpts: any = {
+      to: [normalizedPhone],
+      message,
+      // Optional: set sender ID if verified on Africa's Talking
+      ...(SENDER_ID ? { from: SENDER_ID } : {}),
+    };
 
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`HTTP ${response.status}: ${err}`);
-    }
+    const response = await sms.send(sendOpts);
+    const result = response.SMSMessageData?.Recipients?.[0];
 
-    const data = await response.json();
-    const msg = data.SMSMessageData?.Recipients?.[0];
-
-    if (msg && msg.status === 'Success') {
-      console.log(`[SMS] Sent to ${phone}: ${msg.messageId}`);
-      return { success: true, messageId: msg.messageId };
+    if (result && result.status === 'Success') {
+      console.log(`[SMS] Sent to ${normalizedPhone}, messageId=${result.messageId}`);
+      return { success: true, messageId: result.messageId };
     } else {
-      const status = msg?.status || 'Unknown';
-      throw new Error(`Delivery status: ${status}`);
+      const err = result?.status || 'Unknown error';
+      console.error(`[SMS] Failed to ${normalizedPhone}: ${err}`);
+      return { success: false, error: err };
     }
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[SMS] Failed to ${phone}: ${errMsg}`);
-    return { success: false, error: errMsg };
+  } catch (err: any) {
+    console.error(`[SMS] Exception sending to ${normalizedPhone}:`, err.message);
+    return { success: false, error: err.message };
   }
 }
 
-/**
- * Send referral notification SMS — short, actionable message.
- */
-export async function sendReferralSMS(
-  to: string,
-  patientName: string,
-  status: string,
-  facility: string,
-): Promise<SMSResult> {
-  const msg = `HealthTrack: Referral for ${patientName} is now ${status.toUpperCase()} at ${facility}. Log in for details.`;
-  return sendSMS(to, msg);
+// ─── SEND ESCALATION ALERT SMS ───
+
+export async function sendChpEscalationAlert(options: {
+  chpPhone: string;
+  chpName: string;
+  patientName: string;
+  priority: 'emergency' | 'urgent' | 'routine';
+  symptomsObserved?: string;
+  formUrl: string;
+}): Promise<SMSResult> {
+  const { chpPhone, chpName, patientName, priority, symptomsObserved, formUrl } = options;
+
+  if (!USE_SMS || !smsClient) {
+    return { success: false, error: 'SMS not configured' };
+  }
+
+  const normalizedPhone = normalizePhoneNumber(chpPhone);
+  if (!normalizedPhone) {
+    return { success: false, error: `Invalid phone number: ${chpPhone}` };
+  }
+
+  const prefix = priority === 'emergency' ? 'URGENT' : priority === 'urgent' ? 'ATTENTION' : 'HealthTrack';
+  const symptoms = symptomsObserved ? ` Symptoms: ${truncate(symptomsObserved, 50)}.` : '';
+  const message = `${prefix}: ${chpName}, patient ${patientName} needs medical attention.${symptoms} Report: ${formUrl}`;
+
+  try {
+    const response = await smsClient.SMS.send({
+      to: [normalizedPhone],
+      message,
+      ...(SENDER_ID ? { from: SENDER_ID } : {}),
+    });
+    const result = response.SMSMessageData?.Recipients?.[0];
+    if (result?.status === 'Success') {
+      return { success: true, messageId: result.messageId };
+    }
+    return { success: false, error: result?.status || 'Failed' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
-/**
- * Send patient registration confirmation SMS.
- */
-export async function sendPatientRegistrationSMS(
-  to: string,
-  patientName: string,
-  patientId: string,
-  chpName: string,
-): Promise<SMSResult> {
-  const msg = `HealthTrack: Patient ${patientName} (ID: ${patientId}) registered by ${chpName}. Record saved successfully.`;
-  return sendSMS(to, msg);
+// ─── HELPER: Normalize Kenyan Phone Number ───
+
+function normalizePhoneNumber(phone: string): string | null {
+  // Remove all non-digits
+  const digits = phone.replace(/\D/g, '');
+
+  // Kenyan number patterns:
+  // 2547XXXXXXXX (international with country code)
+  // 07XXXXXXXX (local format)
+  // 7XXXXXXXX (without leading 0)
+  // +2547XXXXXXXX (with plus)
+
+  if (digits.length === 12 && digits.startsWith('2547')) {
+    // Already in international format: 2547XXXXXXXX
+    return `+${digits}`;
+  }
+
+  if (digits.length === 12 && digits.startsWith('2541')) {
+    // Airtel format: 2541XXXXXXXX
+    return `+${digits}`;
+  }
+
+  if (digits.length === 10 && digits.startsWith('07')) {
+    // Local Safaricom: 07XXXXXXXX → +2547XXXXXXXX
+    return `+254${digits.slice(1)}`;
+  }
+
+  if (digits.length === 10 && digits.startsWith('01')) {
+    // Local Airtel: 01XXXXXXXX → +2541XXXXXXXX
+    return `+254${digits.slice(1)}`;
+  }
+
+  if (digits.length === 9 && digits.startsWith('7')) {
+    // Without leading 0: 7XXXXXXXX → +2547XXXXXXXX
+    return `+254${digits}`;
+  }
+
+  if (digits.length === 9 && digits.startsWith('1')) {
+    // Airtel without leading 0: 1XXXXXXXX → +2541XXXXXXXX
+    return `+254${digits}`;
+  }
+
+  // If it already starts with +, return as-is (strip any extra +)
+  if (digits.length === 13 && digits.startsWith('254')) {
+    return `+${digits}`;
+  }
+
+  // Could not normalize
+  console.error(`[SMS] Could not normalize phone number: "${phone}" (digits: ${digits})`);
+  return null;
 }
 
-/**
- * Send welcome SMS with login credentials.
- */
-export async function sendWelcomeSMS(
-  to: string,
-  firstName: string,
-  role: string,
-): Promise<SMSResult> {
-  const msg = `Welcome to HealthTrack, ${firstName}! Your ${role} account is active. Login at the web portal.`;
-  return sendSMS(to, msg);
+// ─── HELPER: Truncate text ───
+
+function truncate(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen - 3) + '...';
 }
 
-/**
- * Send security alert SMS (password changed, etc).
- */
-export async function sendSecurityAlertSMS(
-  to: string,
-  alert: string,
-): Promise<SMSResult> {
-  const msg = `HealthTrack Security: ${alert}. If this wasn't you, contact your administrator immediately.`;
-  return sendSMS(to, msg);
-}
+// ─── HEALTH CHECK ───
 
-/**
- * Health check for SMS service.
- */
-export function isSMSEnabled(): boolean {
-  return !!AT_API_KEY && AT_USERNAME !== 'sandbox';
+export function checkSMSHealth(): { configured: boolean; provider: string; username: string } {
+  return {
+    configured: USE_SMS,
+    provider: USE_SMS ? "Africa's Talking" : 'None',
+    username: USERNAME,
+  };
 }

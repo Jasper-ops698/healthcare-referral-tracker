@@ -46,6 +46,10 @@ export interface ICounterReferral extends mongoose.Document {
   chpEmailSent: boolean;
   chpEmailSentAt?: Date;
   chpEmailStatus?: 'pending' | 'sent' | 'failed' | 'bounced';
+  chpPhone?: string;
+  chpSMSSent: boolean;
+  chpSMSSentAt?: Date;
+  chpSMSStatus?: 'pending' | 'sent' | 'failed';
   chpResponseToken?: string; // Unique token for CHP form link
   chpResponseReceived: boolean;
   chpResponseDate?: Date;
@@ -110,6 +114,14 @@ const CounterReferralSchema = new Schema<ICounterReferral>(
     chpEmailStatus: {
       type: String,
       enum: ['pending', 'sent', 'failed', 'bounced'],
+      default: 'pending',
+    },
+    chpPhone: { type: String, trim: true },
+    chpSMSSent: { type: Boolean, default: false },
+    chpSMSSentAt: { type: Date },
+    chpSMSStatus: {
+      type: String,
+      enum: ['pending', 'sent', 'failed'],
       default: 'pending',
     },
     chpResponseToken: { type: String, unique: true, sparse: true },
