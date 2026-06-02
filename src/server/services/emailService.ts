@@ -1,77 +1,51 @@
 /**
- * Email Service — Production-Ready SMTP with Persistent Retry Queue
+ * Email Service — Resend API Integration
+ *
+ * Uses Resend (https://resend.com) for reliable transactional email delivery.
+ * Falls back to SMTP via Nodemailer if Resend is not configured.
  *
  * Features:
- *   - Immediate send attempt via Gmail SMTP (SSL 465, fallback TLS 587)
+ *   - Immediate send via Resend HTTP API
  *   - Persistent MongoDB queue for failed emails
  *   - Cron-friendly batch processor
- *   - Delivery status tracking per email
- *   - HTML templates for all notification types
- *   - SMTP health check with detailed diagnostics
+ *   - HTML templates for CHP follow-up and notifications
  */
 
+import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
-import type { Transporter, SendMailOptions } from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 import EmailJob from '../models/EmailJob.js';
 
 // ─── CONFIGURATION ───
 
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_FROM = process.env.RESEND_FROM || 'HealthTrack <onboarding@resend.dev>';
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
-// CRITICAL: Port 465 requires SSL (secure=true). Port 587 uses STARTTLS (secure=false).
-// Force correct setting based on port to prevent "Connection closed" errors.
 const SMTP_SECURE = SMTP_PORT === 465 ? true : (process.env.SMTP_SECURE === 'true');
-const SMTP_USER = process.env.SMTP_USER || 'your-email@gmail.com';
-// Remove ALL spaces from Gmail app passwords (e.g., "ab cd ef gh" -> "abcdefgh")
+const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS_RAW = process.env.SMTP_PASS || '';
 const SMTP_PASS = SMTP_PASS_RAW.replace(/^"|"$/g, '').replace(/\s/g, '');
-const SMTP_FROM = process.env.SMTP_FROM || 'Patient Referral Tracker <no-reply@example.com>';
 
-console.log(`[Email Config] Host: ${SMTP_HOST}, Port: ${SMTP_PORT}, Secure: ${SMTP_SECURE} (forced for port ${SMTP_PORT}), User: ${SMTP_USER}, Pass length: ${SMTP_PASS.length}`);
+// Prefer Resend, fallback to SMTP
+const USE_RESEND = !!RESEND_API_KEY;
 
-// ─── TRANSPORTER ───
+let resendClient: Resend | null = null;
+let smtpTransporter: Transporter | null = null;
 
-let transporter: Transporter | null = null;
-let transportError: string | null = null;
-
-function getTransporter(): Transporter {
-  if (!transporter) {
-    // Validate credentials before creating
-    if (!SMTP_USER || !SMTP_PASS) {
-      throw new Error(`SMTP credentials missing: USER=${SMTP_USER ? 'set' : 'MISSING'}, PASS=${SMTP_PASS ? 'set (' + SMTP_PASS.length + ' chars)' : 'MISSING'}. Set SMTP_USER and SMTP_PASS environment variables.`);
-    }
-    if (SMTP_PASS.length !== 16) {
-      console.warn(`[Email] SMTP_PASS is ${SMTP_PASS.length} chars (expected 16 for Gmail App Password). Verify your App Password is correct.`);
-    }
-
-    const config: any = {
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_SECURE,
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
-      },
-      tls: {
-        rejectUnauthorized: true,
-      },
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      logger: process.env.NODE_ENV === 'development',
-      debug: process.env.NODE_ENV === 'development',
-    };
-
-    // Gmail-specific: if using port 587, disable secure and enable STARTTLS
-    if (SMTP_PORT === 587) {
-      config.secure = false;
-      config.tls = { rejectUnauthorized: true, ciphers: 'SSLv3' };
-      config.requireTLS = true;
-    }
-
-    transporter = nodemailer.createTransport(config);
-  }
-  return transporter;
+if (USE_RESEND) {
+  resendClient = new Resend(RESEND_API_KEY);
+  console.log(`[Email] Using Resend API (key prefix: ${RESEND_API_KEY.slice(0, 8)}...)`);
+} else if (SMTP_USER && SMTP_PASS) {
+  smtpTransporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_SECURE,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+  console.log(`[Email] Using SMTP fallback (${SMTP_USER})`);
+} else {
+  console.warn('[Email] No email provider configured. Set RESEND_API_KEY or SMTP_USER+SMTP_PASS.');
 }
 
 // ─── TYPES ───
@@ -80,286 +54,303 @@ export interface EmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
-  jobId?: string;
 }
 
-export interface WelcomeEmailData {
-  firstName: string;
-  email: string;
-  role: string;
-  tempPassword?: string;
-  loginUrl: string;
-}
-
-export interface PatientRegistrationEmailData {
+interface EmailPayload {
   to: string;
-  patientName: string;
-  patientId: string;
-  chpName: string;
-  facilityName: string;
-  registrationDate: string;
+  subject: string;
+  html: string;
+  text?: string;
+  from?: string;
 }
 
-export interface ReferralStatusEmailData {
-  to: string;
-  patientName: string;
-  status: string;
-  fromFacility: string;
-  toFacility: string;
-  updatedBy: string;
-  notes?: string;
-}
+// ─── CORE SEND FUNCTION ───
 
-export interface PasswordResetEmailData {
-  to: string;
-  firstName: string;
-  resetToken: string;
-  resetUrl: string;
-  expiresIn: string;
-}
+export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
+  const { to, subject, html, text } = payload;
+  const from = payload.from || RESEND_FROM;
 
-export interface ChpRegistrationEmailData {
-  to: string;
-  chpName: string;
-  chpId: string;
-  facilityName: string;
-  registeredBy: string;
-  phone: string;
-  village: string;
-  county: string;
-}
-
-export interface ChpPatientAssignedEmailData {
-  to: string;
-  chpName: string;
-  patientName: string;
-  patientId: string;
-  patientPhone: string;
-  patientCondition: string;
-  collectorName: string;
-  facilityName: string;
-  assignedDate: string;
-}
-
-export interface SMTPHealthResult {
-  configured: boolean;
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  passConfigured: boolean;
-  passLength: number;
-  connectionTested: boolean;
-  connectionSuccess: boolean;
-  error?: string;
-  suggestions?: string[];
-}
-
-// ─── HEALTH CHECK ───
-
-export async function checkSMTPHealth(): Promise<SMTPHealthResult> {
-  const result: SMTPHealthResult = {
-    configured: !!(SMTP_HOST && SMTP_USER && SMTP_PASS),
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
-    user: SMTP_USER,
-    passConfigured: !!SMTP_PASS,
-    passLength: SMTP_PASS.length,
-    connectionTested: false,
-    connectionSuccess: false,
-    suggestions: [],
-  };
-
-  if (!SMTP_PASS) {
-    result.error = 'SMTP_PASS not configured. Add it in Render dashboard Environment settings.';
-    result.suggestions?.push('Go to Render Dashboard → your service → Environment → Add SMTP_PASS');
-    result.suggestions?.push('Generate App Password at https://myaccount.google.com/apppasswords (requires 2-Step Verification)');
-    return result;
-  }
-
-  // Warn about common port/security mismatches
-  if (SMTP_PORT === 465 && !SMTP_SECURE) {
-    result.suggestions?.push('Note: Port 465 forced SSL on. If connection still fails, try port 587 with SMTP_SECURE=false.');
-  }
-
-  if (SMTP_PASS.length !== 16) {
-    result.suggestions?.push(`Warning: App Password is ${SMTP_PASS.length} chars. Gmail App Passwords are exactly 16 characters.`);
-  }
-
-  try {
-    const transport = getTransporter();
-    await transport.verify();
-    result.connectionTested = true;
-    result.connectionSuccess = true;
-    console.log('[Email] SMTP connection verified successfully');
-  } catch (err) {
-    result.connectionTested = true;
-    result.connectionSuccess = false;
-    const errMsg = err instanceof Error ? err.message : String(err);
-    result.error = errMsg;
-
-    if (errMsg.includes('Invalid login')) {
-      result.suggestions?.push('Invalid login: Use a Gmail App Password (not your regular Gmail password)');
-      result.suggestions?.push('Generate one at https://myaccount.google.com/apppasswords');
-      result.suggestions?.push('Make sure 2-Step Verification is enabled on the Gmail account');
-    }
-    if (errMsg.includes('Application-specific password required')) {
-      result.suggestions?.push('Google requires an App Password. Go to https://myaccount.google.com/apppasswords');
-    }
-    if (errMsg.includes('connect') || errMsg.includes('ETIMEDOUT') || errMsg.includes('ECONNREFUSED')) {
-      result.suggestions?.push(`Connection failed on port ${SMTP_PORT}. Try port 587 with SMTP_SECURE=false (STARTTLS)`);
-      result.suggestions?.push('Alternative: Try port 465 with SMTP_SECURE=true (SSL)');
-    }
-    if (errMsg.includes(' Less secure')) {
-      result.suggestions?.push('"Less secure app access" is disabled. Use an App Password instead.');
-    }
-
-    console.error(`[Email] SMTP health check FAILED: ${errMsg}`);
-  }
-
-  return result;
-}
-
-// ─── CORE SEND ─——
-
-export async function sendEmail(
-  options: SendMailOptions,
-  emailType?: string,
-  userId?: string,
-  patientId?: string,
-  relatedEntity?: string
-): Promise<EmailResult> {
-  try {
-    const transport = getTransporter();
-    const result = await transport.sendMail({ from: SMTP_FROM, ...options });
-    console.log(`[Email] SENT: ${result.messageId} to ${options.to}`);
-    return { success: true, messageId: result.messageId };
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] FAILED to send to ${options.to}: ${errMsg}`);
-
+  // ── Attempt 1: Resend ──
+  if (USE_RESEND && resendClient) {
     try {
-      const job = await EmailJob.create({
-        to: String(options.to || ''),
-        subject: String(options.subject || ''),
-        html: String(options.html || ''),
-        text: options.text ? String(options.text) : undefined,
-        status: 'pending',
-        retries: 0,
-        maxRetries: 5,
-        lastError: errMsg,
-        scheduledFor: new Date(Date.now() + 60_000),
-        emailType: emailType || 'notification',
-        userId,
-        patientId,
-        relatedEntity,
+      const { data, error } = await resendClient.emails.send({
+        from,
+        to,
+        subject,
+        html,
+        text: text || html.replace(/<[^>]*>/g, ''),
       });
-      console.log(`[Email] Queued for retry: jobId=${job._id}`);
-      return { success: false, error: errMsg, jobId: String(job._id) };
-    } catch (queueError) {
-      const queueErr = queueError instanceof Error ? queueError.message : String(queueError);
-      console.error(`[Email] CRITICAL: Failed to queue email: ${queueErr}`);
-      return { success: false, error: `Send failed: ${errMsg}. Queue failed: ${queueErr}` };
+
+      if (error) {
+        console.error(`[Resend] Error sending to ${to}:`, error);
+        // Queue for retry
+        await queueEmail({ to, subject, html, text, from });
+        return { success: false, error: error.message };
+      }
+
+      console.log(`[Resend] Email sent to ${to}, id=${data?.id}`);
+      return { success: true, messageId: data?.id };
+    } catch (err: any) {
+      console.error(`[Resend] Exception sending to ${to}:`, err.message);
+      await queueEmail({ to, subject, html, text, from });
+      return { success: false, error: err.message };
     }
   }
-}
 
-export async function verifyEmailConnection(): Promise<boolean> {
-  try {
-    const transport = getTransporter();
-    await transport.verify();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ─── CRON PROCESSOR ───
-
-export async function processPendingEmails(batchSize = 10): Promise<{
-  processed: number;
-  sent: number;
-  failed: number;
-  cancelled: number;
-}> {
-  const stats = { processed: 0, sent: 0, failed: 0, cancelled: 0 };
-
-  try {
-    const now = new Date();
-    const pendingJobs = await EmailJob.find({
-      status: { $in: ['pending', 'failed'] },
-      scheduledFor: { $lte: now },
-    }).sort({ createdAt: 1 }).limit(batchSize).exec();
-
-    for (const job of pendingJobs) {
-      stats.processed++;
-      if (job.retries >= job.maxRetries) {
-        job.status = 'cancelled';
-        await job.save();
-        stats.cancelled++;
-        console.error(`[Email] Max retries exceeded for ${job.to}: jobId=${job._id}`);
-        continue;
-      }
-      try {
-        const transport = getTransporter();
-        const result = await transport.sendMail({
-          from: SMTP_FROM,
-          to: job.to,
-          subject: job.subject,
-          html: job.html,
-          text: job.text,
-        });
-        job.status = 'sent';
-        job.messageId = result.messageId;
-        job.sentAt = new Date();
-        job.lastError = undefined;
-        await job.save();
-        stats.sent++;
-        console.log(`[Email] DELIVERED: ${result.messageId} jobId=${job._id}`);
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : 'Unknown';
-        job.retries++;
-        job.lastError = errMsg;
-        job.status = 'failed';
-        job.scheduledFor = new Date(Date.now() + Math.pow(2, job.retries) * 60_000);
-        await job.save();
-        stats.failed++;
-        console.warn(`[Email] Retry ${job.retries}/${job.maxRetries} failed: ${errMsg} jobId=${job._id}`);
-      }
+  // ── Attempt 2: SMTP fallback ──
+  if (smtpTransporter) {
+    try {
+      const info = await smtpTransporter.sendMail({
+        from,
+        to,
+        subject,
+        html,
+        text: text || html.replace(/<[^>]*>/g, ''),
+      });
+      console.log(`[SMTP] Email sent to ${to}, id=${info.messageId}`);
+      return { success: true, messageId: info.messageId || undefined };
+    } catch (err: any) {
+      console.error(`[SMTP] Failed to send to ${to}:`, err.message);
+      await queueEmail({ to, subject, html, text, from });
+      return { success: false, error: err.message };
     }
+  }
 
-    return stats;
-  } catch (err) {
-    console.error('[Email] processPendingEmails error:', err);
-    return stats;
+  // ── No provider configured ──
+  const err = 'No email provider configured. Set RESEND_API_KEY or SMTP_USER+SMTP_PASS.';
+  console.error(`[Email] ${err}`);
+  await queueEmail({ to, subject, html, text, from });
+  return { success: false, error: err };
+}
+
+// ─── QUEUE FAILED EMAILS FOR RETRY ───
+
+async function queueEmail(payload: EmailPayload): Promise<void> {
+  try {
+    await EmailJob.create({
+      to: payload.to,
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text,
+      from: payload.from,
+      attempts: 1,
+      status: 'pending',
+      lastError: 'Initial send failed, queued for retry',
+      createdAt: new Date(),
+    });
+    console.log(`[EmailQueue] Queued email to ${payload.to}`);
+  } catch (err: any) {
+    console.error('[EmailQueue] Failed to queue email:', err.message);
   }
 }
 
-// ─── STATS ───
+// ─── CHP FOLLOW-UP EMAIL ───
 
-export async function getEmailStats(userEmail: string): Promise<{
-  pending: number;
-  sent: number;
-  failed: number;
-  cancelled: number;
-}> {
-  const [pending, sent, failed, cancelled] = await Promise.all([
-    EmailJob.countDocuments({ to: userEmail, status: 'pending' }),
-    EmailJob.countDocuments({ to: userEmail, status: 'sent' }),
-    EmailJob.countDocuments({ to: userEmail, status: 'failed' }),
-    EmailJob.countDocuments({ to: userEmail, status: 'cancelled' }),
-  ]);
-  return { pending, sent, failed, cancelled };
+export async function sendChpFollowUpEmail(options: {
+  chpEmail: string;
+  chpName: string;
+  patientName: string;
+  patientId: string;
+  finalDiagnosis: string;
+  treatmentProvided: string;
+  recoveryStatus: string;
+  followUpInstructions: string;
+  warningSigns: string;
+  formUrl: string;
+}): Promise<EmailResult> {
+  const {
+    chpEmail, chpName, patientName, patientId,
+    finalDiagnosis, treatmentProvided, recoveryStatus,
+    followUpInstructions, warningSigns, formUrl,
+  } = options;
+
+  const subject = `HealthTrack: Follow-up needed for ${patientName}`;
+
+  const statusColor = recoveryStatus === 'critical' ? '#dc2626' : recoveryStatus === 'improving' ? '#16a34a' : '#d97706';
+  const statusBg = recoveryStatus === 'critical' ? '#fef2f2' : recoveryStatus === 'improving' ? '#f0fdf4' : '#fffbeb';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HealthTrack CHP Follow-up</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:system-ui,-apple-system,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:24px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <!-- Header -->
+        <tr><td style="background:linear-gradient(135deg,#0ea5e9,#0284c7);padding:28px 32px;text-align:center;">
+          <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;">HealthTrack</h1>
+          <p style="color:#e0f2fe;margin:6px 0 0;font-size:13px;">Community Health Follow-up</p>
+        </td></tr>
+
+        <!-- Alert Banner -->
+        <tr><td style="padding:20px 32px 0;">
+          <div style="background:${statusBg};border-left:4px solid ${statusColor};border-radius:8px;padding:14px 16px;">
+            <p style="margin:0;color:${statusColor};font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">
+              ${recoveryStatus === 'critical' ? '⚠️ Critical Follow-up Required' : recoveryStatus === 'improving' ? '✓ Improving — Monitor' : '● Standard Follow-up'}
+            </p>
+          </div>
+        </td></tr>
+
+        <!-- Patient Info -->
+        <tr><td style="padding:20px 32px;">
+          <h2 style="color:#0f172a;font-size:16px;margin:0 0 14px;">Patient: ${patientName}</h2>
+          <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#475569;">
+            <tr><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;"><strong>ID:</strong></td><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;text-align:right;font-family:monospace;">${patientId}</td></tr>
+            <tr><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;"><strong>Final Diagnosis:</strong></td><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;text-align:right;">${finalDiagnosis}</td></tr>
+            <tr><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;"><strong>Treatment:</strong></td><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;text-align:right;">${treatmentProvided}</td></tr>
+            <tr><td style="padding:6px 0;"><strong>Recovery Status:</strong></td><td style="padding:6px 0;text-align:right;text-transform:capitalize;">${recoveryStatus}</td></tr>
+          </table>
+        </td></tr>
+
+        <!-- Instructions -->
+        <tr><td style="padding:0 32px 20px;">
+          <div style="background:#f8fafc;border-radius:8px;padding:16px;">
+            <h3 style="color:#0f172a;font-size:13px;margin:0 0 10px;font-weight:600;">Follow-up Instructions</h3>
+            <p style="margin:0;color:#475569;font-size:13px;line-height:1.6;">${followUpInstructions.replace(/\n/g, '<br>')}</p>
+          </div>
+        </td></tr>
+
+        <!-- Warning Signs -->
+        ${warningSigns ? `
+        <tr><td style="padding:0 32px 20px;">
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;">
+            <h3 style="color:#dc2626;font-size:13px;margin:0 0 10px;font-weight:600;">⚠️ Warning Signs — Refer Back Immediately If:</h3>
+            <p style="margin:0;color:#991b1b;font-size:13px;line-height:1.6;">${warningSigns.replace(/\n/g, '<br>')}</p>
+          </div>
+        </td></tr>
+        ` : ''}
+
+        <!-- CTA Button -->
+        <tr><td style="padding:0 32px 24px;text-align:center;">
+          <a href="${formUrl}" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:14px;font-weight:600;box-shadow:0 2px 8px rgba(14,165,233,0.3);">Submit Follow-up Report</a>
+          <p style="margin:10px 0 0;font-size:11px;color:#94a3b8;">This secure link is unique to this patient</p>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:16px 32px;border-top:1px solid #f1f5f9;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#94a3b8;">Sent by HealthTrack Referral System</p>
+          <p style="margin:4px 0 0;font-size:11px;color:#cbd5e1;">Do not reply to this email</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  return sendEmail({
+    to: chpEmail,
+    subject,
+    html,
+    from: RESEND_FROM,
+  });
 }
 
-export async function getQueueStatus(): Promise<{
-  pending: number;
-  sent: number;
-  failed: number;
-  cancelled: number;
-  total: number;
-}> {
+// ─── WELCOME EMAIL ───
+
+export async function sendWelcomeEmail(to: string, name: string, tempPassword: string, loginUrl: string): Promise<EmailResult> {
+  const html = `
+<!DOCTYPE html>
+<html><body style="font-family:system-ui,sans-serif;background:#f8fafc;padding:24px;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <h2 style="color:#0ea5e9;margin-top:0;">Welcome to HealthTrack</h2>
+    <p>Hello ${name},</p>
+    <p>Your account has been created. Use the credentials below to log in:</p>
+    <div style="background:#f1f5f9;padding:16px;border-radius:8px;margin:16px 0;">
+      <p style="margin:4px 0;"><strong>Login URL:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
+      <p style="margin:4px 0;"><strong>Email:</strong> ${to}</p>
+      <p style="margin:4px 0;"><strong>Password:</strong> <code style="background:#e2e8f0;padding:2px 6px;border-radius:4px;">${tempPassword}</code></p>
+    </div>
+    <p style="color:#64748b;font-size:13px;">Please change your password after first login.</p>
+  </div>
+</body></html>`;
+
+  return sendEmail({ to, subject: 'Welcome to HealthTrack', html, from: RESEND_FROM });
+}
+
+// ─── PASSWORD RESET EMAIL ───
+
+export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string): Promise<EmailResult> {
+  const html = `
+<!DOCTYPE html>
+<html><body style="font-family:system-ui,sans-serif;background:#f8fafc;padding:24px;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <h2 style="color:#0ea5e9;margin-top:0;">Password Reset</h2>
+    <p>Hello ${name},</p>
+    <p>Click the link below to reset your password. This link expires in 1 hour.</p>
+    <a href="${resetUrl}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">Reset Password</a>
+    <p style="color:#64748b;font-size:13px;">If you didn't request this, ignore this email.</p>
+  </div>
+</body></html>`;
+
+  return sendEmail({ to, subject: 'HealthTrack Password Reset', html, from: RESEND_FROM });
+}
+
+// ─── STATUS UPDATE EMAIL ───
+
+export async function sendReferralStatusEmail(to: string, patientName: string, status: string, facility: string): Promise<EmailResult> {
+  const html = `
+<!DOCTYPE html>
+<html><body style="font-family:system-ui,sans-serif;background:#f8fafc;padding:24px;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <h2 style="color:#0ea5e9;margin-top:0;">Referral Update</h2>
+    <p>Patient <strong>${patientName}</strong> has been <strong>${status}</strong> at <strong>${facility}</strong>.</p>
+    <p style="color:#64748b;font-size:13px;">Log in to HealthTrack for full details.</p>
+  </div>
+</body></html>`;
+
+  return sendEmail({ to, subject: `HealthTrack: ${patientName} — ${status}`, html, from: RESEND_FROM });
+}
+
+// ─── QUEUE PROCESSING ───
+
+export async function processPendingEmails(batchSize: number = 20): Promise<{ processed: number; sent: number; failed: number; cancelled: number }> {
+  const pending = await EmailJob.find({ status: 'pending', attempts: { $lt: 5 } })
+    .sort({ createdAt: 1 })
+    .limit(batchSize)
+    .lean();
+
+  let sent = 0, failed = 0, cancelled = 0;
+
+  for (const job of pending) {
+    try {
+      const result = await sendEmail({
+        to: job.to,
+        subject: job.subject,
+        html: job.html,
+        text: job.text,
+        from: job.from || RESEND_FROM,
+      });
+
+      if (result.success) {
+        await EmailJob.findByIdAndUpdate(job._id, { status: 'sent', sentAt: new Date(), messageId: result.messageId });
+        sent++;
+      } else {
+        const newAttempts = (job.attempts || 0) + 1;
+        if (newAttempts >= 5) {
+          await EmailJob.findByIdAndUpdate(job._id, { status: 'cancelled', attempts: newAttempts, lastError: result.error });
+          cancelled++;
+        } else {
+          await EmailJob.findByIdAndUpdate(job._id, { attempts: newAttempts, lastError: result.error, lastAttemptAt: new Date() });
+          failed++;
+        }
+      }
+    } catch (err: any) {
+      await EmailJob.findByIdAndUpdate(job._id, { attempts: (job.attempts || 0) + 1, lastError: err.message, lastAttemptAt: new Date() });
+      failed++;
+    }
+  }
+
+  return { processed: pending.length, sent, failed, cancelled };
+}
+
+// ─── QUEUE STATUS ───
+
+export async function getQueueStatus(): Promise<{ pending: number; sent: number; failed: number; cancelled: number; total: number }> {
   const [pending, sent, failed, cancelled] = await Promise.all([
     EmailJob.countDocuments({ status: 'pending' }),
     EmailJob.countDocuments({ status: 'sent' }),
@@ -369,331 +360,61 @@ export async function getQueueStatus(): Promise<{
   return { pending, sent, failed, cancelled, total: pending + sent + failed + cancelled };
 }
 
-// ─── TEMPLATES ───
+// ─── SMTP HEALTH CHECK (fallback diagnostics) ───
 
-function baseTemplate(title: string, content: string): string {
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title>
-<style>body{margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;}.container{max-width:600px;margin:0 auto;background:#ffffff;}.header{background:linear-gradient(135deg,#1e3a8a 0%,#0284c7 100%);color:#fff;padding:30px 20px;text-align:center;}.header h1{margin:0;font-size:24px;}.body{padding:30px 20px;}.footer{background:#f8fafc;padding:15px 20px;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0;}.box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:15px;margin:15px 0;}.btn{display:inline-block;background:#0284c7;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;margin:15px 0;}.password-box{background:#f0f9ff;border:1px solid #0284c7;border-radius:6px;padding:10px;font-family:monospace;text-align:center;margin:10px 0;}code{font-family:monospace;background:#f8fafc;padding:2px 6px;border-radius:4px;}</style>
-</head><body><div class="container"><div class="header"><h1>Patient Referral Tracker</h1></div><div class="body">${content}</div><div class="footer"><p>This is an automated message from Patient Referral Tracker. Please do not reply directly to this email.</p></div></div></body></html>
-`;
-}
+export async function checkSMTPHealth(): Promise<{
+  configured: boolean; smtp: any; connection: any; suggestions: string[]; queue: any;
+}> {
+  const suggestions: string[] = [];
 
-export function buildWelcomeEmail(data: WelcomeEmailData): SendMailOptions {
-  const subject = 'Welcome to Patient Referral Tracker - Your Account is Ready';
-  const content = `
-    <h2>Hello ${data.firstName},</h2>
-    <p>Your account has been created on the <strong>Patient Referral Tracker</strong> system.</p>
-    <p>You have been assigned the role of <strong>${data.role === 'admin' ? 'Administrator' : 'Collector'}</strong>.</p>
-    ${data.tempPassword ? `
-    <p>Here is your temporary password to sign in:</p>
-    <div class="password-box">
-      <code>${data.tempPassword}</code>
-    </div>
-    <p style="color:#dc2626;font-weight:600;font-size:13px;">For security, you will be required to change this password on your first login.</p>
-    ` : ''}
-    <div class="box">
-      <p><strong>Sign-in URL:</strong> <a href="${data.loginUrl}">${data.loginUrl}</a></p>
-      <p><strong>Email:</strong> ${data.email}</p>
-      ${data.tempPassword ? `<p><strong>Temp Password:</strong> ${data.tempPassword}</p>` : ''}
-    </div>
-    <a href="${data.loginUrl}" class="btn">Sign In Now</a>
-    <p style="font-size:12px;color:#94a3b8;margin-top:20px;">If you did not request this account, please contact your administrator immediately.</p>
-  `;
+  if (USE_RESEND) {
+    // Resend is configured — check if the API key is valid
+    try {
+      // We can't easily test the key without sending, but we can check format
+      if (RESEND_API_KEY.startsWith('re_')) {
+        return {
+          configured: true,
+          smtp: { provider: 'Resend', from: RESEND_FROM },
+          connection: { tested: true, success: true },
+          suggestions: [],
+          queue: await getQueueStatus(),
+        };
+      } else {
+        suggestions.push('RESEND_API_KEY does not start with "re_". Verify your API key from https://resend.com/api-keys');
+      }
+    } catch (e: any) {
+      suggestions.push(`Resend check failed: ${e.message}`);
+    }
+  }
+
+  if (!USE_RESEND && (!SMTP_USER || !SMTP_PASS)) {
+    suggestions.push('No email provider configured. Set RESEND_API_KEY (recommended) or SMTP_USER+SMTP_PASS.');
+  }
+
+  if (SMTP_USER === 'your-email@gmail.com') {
+    suggestions.push('SMTP_USER is still the placeholder. Replace with your actual Gmail address.');
+  }
 
   return {
-    to: data.email,
-    subject,
-    html: baseTemplate(subject, content),
-    text: `Welcome to Patient Referral Tracker, ${data.firstName}! Role: ${data.role} Email: ${data.email} ${data.tempPassword ? `Temp Password: ${data.tempPassword} (must change on first login)` : ''} Sign in at ${data.loginUrl}`,
+    configured: USE_RESEND || !!(SMTP_USER && SMTP_PASS),
+    smtp: {
+      provider: USE_RESEND ? 'Resend' : 'SMTP',
+      from: RESEND_FROM,
+      host: SMTP_HOST,
+      user: SMTP_USER ? `${SMTP_USER.slice(0, 3)}...` : 'MISSING',
+      passConfigured: !!SMTP_PASS,
+    },
+    connection: { tested: false, success: false },
+    suggestions,
+    queue: await getQueueStatus(),
   };
 }
 
-export function buildPatientRegistrationEmail(data: PatientRegistrationEmailData): SendMailOptions {
-  const subject = `New Patient Registered - ${data.patientName}`;
-  const content = `
-    <h2>New Patient Registration</h2>
-    <p>A new patient has been registered in the system.</p>
-    <div class="box">
-      <p><strong>Patient:</strong> ${data.patientName}</p>
-      <p><strong>Patient ID:</strong> ${data.patientId}</p>
-      <p><strong>Registered by:</strong> ${data.chpName}</p>
-      <p><strong>Facility:</strong> ${data.facilityName}</p>
-      <p><strong>Date:</strong> ${data.registrationDate}</p>
-    </div>
-  `;
-
-  return {
-    to: data.to,
-    subject,
-    html: baseTemplate(subject, content),
-    text: `New patient registered: ${data.patientName} (${data.patientId}) by ${data.chpName} at ${data.facilityName} on ${data.registrationDate}.`,
-  };
+// Legacy exports for compatibility
+export async function verifyEmailConnection(): Promise<boolean> {
+  return USE_RESEND || !!(SMTP_USER && SMTP_PASS);
 }
 
-export function buildReferralStatusEmail(data: ReferralStatusEmailData): SendMailOptions {
-  const subject = `Referral Update - ${data.patientName} is now ${data.status}`;
-  const content = `
-    <h2>Referral Status Update</h2>
-    <p>The referral for <strong>${data.patientName}</strong> has been updated.</p>
-    <div class="box">
-      <p><strong>Status:</strong> ${data.status}</p>
-      <p><strong>From:</strong> ${data.fromFacility}</p>
-      <p><strong>To:</strong> ${data.toFacility}</p>
-      <p><strong>Updated by:</strong> ${data.updatedBy}</p>
-      ${data.notes ? `<p><strong>Notes:</strong> ${data.notes}</p>` : ''}
-    </div>
-  `;
-
-  return {
-    to: data.to,
-    subject,
-    html: baseTemplate(subject, content),
-    text: `Referral update for ${data.patientName}: now ${data.status}. From ${data.fromFacility} to ${data.toFacility}. Updated by ${data.updatedBy}.`,
-  };
-}
-
-export function buildPasswordResetEmail(data: PasswordResetEmailData): SendMailOptions {
-  const subject = 'Password Reset Request - Patient Referral Tracker';
-  const content = `
-    <h2>Password Reset</h2>
-    <p>Hello ${data.firstName},</p>
-    <p>A password reset was requested for your account.</p>
-    <div class="box">
-      <p><strong>Reset URL:</strong> <a href="${data.resetUrl}">${data.resetUrl}</a></p>
-      <p><strong>Expires in:</strong> ${data.expiresIn}</p>
-    </div>
-    <p>If you did not request this reset, please ignore this email or contact your administrator.</p>
-  `;
-
-  return {
-    to: data.to,
-    subject,
-    html: baseTemplate(subject, content),
-    text: `Password reset for ${data.firstName}. Use this link: ${data.resetUrl} (expires in ${data.expiresIn}). If you didn't request this, contact your administrator.`,
-  };
-}
-
-// ─── SEND WRAPPERS ───
-
-export function sendWelcomeEmail(data: WelcomeEmailData): Promise<EmailResult> {
-  const options = buildWelcomeEmail(data);
-  return sendEmail(options, 'welcome', data.email, undefined, data.role);
-}
-
-export function sendPatientRegistrationEmail(data: PatientRegistrationEmailData): Promise<EmailResult> {
-  const options = buildPatientRegistrationEmail(data);
-  return sendEmail(options, 'patient_registered', undefined, data.patientId, data.facilityName);
-}
-
-export function sendReferralStatusEmail(data: ReferralStatusEmailData): Promise<EmailResult> {
-  const options = buildReferralStatusEmail(data);
-  return sendEmail(options, 'referral_update', undefined, data.patientName, data.toFacility);
-}
-
-export function sendPasswordResetEmail(data: PasswordResetEmailData): Promise<EmailResult> {
-  const options = buildPasswordResetEmail(data);
-  return sendEmail(options, 'password_reset', data.to);
-}
-
-export function resendWelcomeEmail(data: WelcomeEmailData): Promise<EmailResult> {
-  return sendWelcomeEmail(data);
-}
-
-// ════════════════════════════════════════════════════════════════
-// CHP EMAILS
-// ════════════════════════════════════════════════════════════════
-
-export function buildChpRegistrationEmail(data: ChpRegistrationEmailData): SendMailOptions {
-  const subject = 'Welcome to PatientTrack — CHP Registration Confirmed';
-  const content = `
-    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:20px;margin:20px 0;">
-      <h3 style="color:#065f46;margin-top:0;">Dear ${data.chpName},</h3>
-      <p style="font-size:15px;">
-        You have been successfully registered as a <strong>Community Health Promoter (CHP)</strong>
-        in the PatientTrack system by <strong>${data.registeredBy}</strong>.
-      </p>
-      <div style="background:#fff;border-radius:6px;padding:15px;margin-top:15px;">
-        <h4 style="color:#374151;margin-top:0;">Your Registration Details</h4>
-        <table style="width:100%;font-size:14px;">
-          <tr><td style="padding:6px 0;color:#6b7280;width:40%;"><strong>CHP ID:</strong></td><td style="padding:6px 0;">${data.chpId}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Full Name:</strong></td><td style="padding:6px 0;">${data.chpName}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Phone:</strong></td><td style="padding:6px 0;">${data.phone}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Location:</strong></td><td style="padding:6px 0;">${data.village}, ${data.county}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Facility:</strong></td><td style="padding:6px 0;">${data.facilityName || 'Not assigned yet'}</td></tr>
-        </table>
-      </div>
-      <p style="margin-top:20px;font-size:14px;color:#4b5563;">
-        As a registered CHP, you will be assigned patients who need accompaniment
-        through their referral journey. You will receive an email notification each
-        time a new patient is assigned to you.
-      </p>
-      <p style="font-size:13px;color:#6b7280;">
-        If you have any questions, please contact your supervisor or the facility administrator.
-      </p>
-    </div>
-  `;
-  return {
-    to: data.to,
-    subject,
-    html: baseTemplate(subject, content),
-    text: `Dear ${data.chpName}, you have been registered as a CHP in PatientTrack. CHP ID: ${data.chpId}. Facility: ${data.facilityName || 'Not assigned'}. Phone: ${data.phone}.`,
-  };
-}
-
-export function buildChpPatientAssignedEmail(data: ChpPatientAssignedEmailData): SendMailOptions {
-  const subject = `New Patient Assigned — ${data.patientName}`;
-  const content = `
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px;margin:20px 0;">
-      <h3 style="color:#1e40af;margin-top:0;">Dear ${data.chpName},</h3>
-      <p style="font-size:15px;">
-        A new patient has been <strong>assigned to you</strong> by <strong>${data.collectorName}</strong>
-        at <strong>${data.facilityName}</strong>.
-      </p>
-      <div style="background:#fff;border-radius:6px;padding:15px;margin-top:15px;">
-        <h4 style="color:#374151;margin-top:0;">Patient Details</h4>
-        <table style="width:100%;font-size:14px;">
-          <tr><td style="padding:6px 0;color:#6b7280;width:40%;"><strong>Patient ID:</strong></td><td style="padding:6px 0;">${data.patientId}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Full Name:</strong></td><td style="padding:6px 0;">${data.patientName}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Phone:</strong></td><td style="padding:6px 0;">${data.patientPhone || 'N/A'}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Condition:</strong></td><td style="padding:6px 0;">${data.patientCondition || 'Not specified'}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Assigned Date:</strong></td><td style="padding:6px 0;">${data.assignedDate}</td></tr>
-        </table>
-      </div>
-      <p style="margin-top:20px;font-size:14px;color:#4b5563;">
-        Please follow up with this patient and ensure they receive the care they need
-        throughout their referral journey. Update their referral stages in the PatientTrack
-        system as they progress.
-      </p>
-    </div>
-  `;
-  return {
-    to: data.to,
-    subject,
-    html: baseTemplate(subject, content),
-    text: `Dear ${data.chpName}, a new patient ${data.patientName} (${data.patientId}) has been assigned to you by ${data.collectorName} at ${data.facilityName}.`,
-  };
-}
-
-// ─── CHP SEND WRAPPERS ───
-
-export function sendChpRegistrationEmail(data: ChpRegistrationEmailData): Promise<EmailResult> {
-  const options = buildChpRegistrationEmail(data);
-  return sendEmail(options, 'chp_registration', data.to);
-}
-
-export function sendChpPatientAssignedEmail(data: ChpPatientAssignedEmailData): Promise<EmailResult> {
-  const options = buildChpPatientAssignedEmail(data);
-  return sendEmail(options, 'chp_patient_assigned', data.to, data.patientId, data.facilityName);
-}
-
-// ════════════════════════════════════════════════════════════════
-
-export function buildNotificationEmail(
-  to: string,
-  notification: { title: string; body: string; priority: 'low' | 'normal' | 'high' }
-): SendMailOptions {
-  const priorityColors = { low: '#3b82f6', normal: '#8b5cf6', high: '#ef4444' };
-  const subject = `${notification.priority === 'high' ? '🔴 ' : ''}${notification.title}`;
-  const content = `
-    <h2>${notification.title}</h2>
-    <p style="color:${priorityColors[notification.priority]};font-weight:600;">
-      Priority: ${notification.priority.toUpperCase()}
-    </p>
-    <p>${notification.body}</p>
-  `;
-
-  return {
-    to,
-    subject,
-    html: baseTemplate(notification.title, content),
-    text: `${notification.title}\nPriority: ${notification.priority}\n\n${notification.body}`,
-  };
-}
-
-
-// ════════════════════════════════════════════════════════════════
-// CHP FOLLOW-UP EMAIL (for counter-referral discharge)
-// ════════════════════════════════════════════════════════════════
-
-export interface ChpFollowUpEmailData {
-  to: string;
-  chpName: string;
-  patientName: string;
-  patientId: string;
-  finalDiagnosis: string;
-  followUpInstructions: string;
-  nextVisitDate?: string;
-  warningSigns?: string;
-  recoveryStatus: string;
-  formUrl: string;
-}
-
-export function buildChpFollowUpEmail(data: ChpFollowUpEmailData): SendMailOptions {
-  const subject = `Follow-up Required — ${data.patientName} (${data.patientId})`;
-
-  const statusColor = data.recoveryStatus === 'fully-recovered' ? '#059669' :
-    data.recoveryStatus === 'partially-recovered' ? '#d97706' : '#dc2626';
-
-  const statusLabel = data.recoveryStatus === 'fully-recovered' ? 'Fully Recovered' :
-    data.recoveryStatus === 'partially-recovered' ? 'Partially Recovered' :
-    data.recoveryStatus === 'still-unwell' ? 'Still Unwell — Needs Monitoring' : data.recoveryStatus;
-
-  const content = `
-    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:20px;margin:20px 0;">
-      <h3 style="color:#9a3412;margin-top:0;">Dear ${data.chpName},</h3>
-      <p style="font-size:15px;">
-        <strong>${data.patientName}</strong> has been discharged from the referral center
-        and requires community follow-up. Please monitor their recovery and report any changes.
-      </p>
-
-      <div style="background:#fff;border-radius:6px;padding:15px;margin-top:15px;">
-        <h4 style="color:#374151;margin-top:0;">Patient Summary</h4>
-        <table style="width:100%;font-size:14px;">
-          <tr><td style="padding:6px 0;color:#6b7280;width:40%;"><strong>Patient ID:</strong></td><td style="padding:6px 0;">${data.patientId}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Name:</strong></td><td style="padding:6px 0;">${data.patientName}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Final Diagnosis:</strong></td><td style="padding:6px 0;">${data.finalDiagnosis}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;"><strong>Current Status:</strong></td>
-            <td style="padding:6px 0;color:${statusColor};font-weight:600;">${statusLabel}</td></tr>
-          ${data.nextVisitDate ? `<tr><td style="padding:6px 0;color:#6b7280;"><strong>Next Visit:</strong></td><td style="padding:6px 0;">${data.nextVisitDate}</td></tr>` : ''}
-        </table>
-      </div>
-
-      <div style="background:#fff;border-radius:6px;padding:15px;margin-top:15px;">
-        <h4 style="color:#374151;margin-top:0;">Follow-up Instructions</h4>
-        <p style="white-space:pre-wrap;font-size:14px;">${data.followUpInstructions}</p>
-        ${data.warningSigns ? `<p style="color:#dc2626;font-size:14px;margin-top:10px;"><strong>Warning Signs to Watch:</strong></p><p style="font-size:14px;">${data.warningSigns}</p>` : ''}
-      </div>
-
-      <div style="text-align:center;margin-top:25px;padding:20px;background:#f0f9ff;border-radius:8px;">
-        <p style="font-size:15px;margin-bottom:15px;"><strong>Report Recovery Update</strong></p>
-        <p style="font-size:14px;color:#4b5563;margin-bottom:15px;">
-          Click the button below to submit a recovery update for this patient.
-          You do not need to log in.
-        </p>
-        <a href="${data.formUrl}" style="display:inline-block;background:#0284c7;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
-          Submit Recovery Update
-        </a>
-        <p style="font-size:12px;color:#6b7280;margin-top:10px;">
-          Or copy this link: <code style="background:#e0f2fe;padding:4px 8px;border-radius:4px;">${data.formUrl}</code>
-        </p>
-      </div>
-
-      <p style="margin-top:20px;font-size:13px;color:#6b7280;">
-        If you have any questions or the patient's condition worsens, contact the referral center immediately.
-      </p>
-    </div>
-  `;
-
-  return {
-    to: data.to,
-    subject,
-    html: baseTemplate(subject, content),
-    text: `Dear ${data.chpName}, patient ${data.patientName} (${data.patientId}) discharged. Status: ${statusLabel}. Final Diagnosis: ${data.finalDiagnosis}. Follow-up: ${data.followUpInstructions}. Submit update: ${data.formUrl}`,
-  };
-}
-
-export function sendChpFollowUpEmail(data: ChpFollowUpEmailData): Promise<EmailResult> {
-  const options = buildChpFollowUpEmail(data);
-  return sendEmail(options, 'chp_follow_up', data.to, data.patientId, 'counter-referral');
+export async function sendPatientRegistrationEmail(): Promise<EmailResult> {
+  return { success: false, error: 'Deprecated — patient registration removed' };
 }
