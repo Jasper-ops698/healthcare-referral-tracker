@@ -499,7 +499,7 @@ export const Translations = {
     'counterReferral.patientJourney': 'Patient Journey',
     'counterReferral.createCounter': 'Complete & Create Counter-Referral',
     'counterReferral.emailFailedToast': 'Counter-referral saved, but CHP email failed',
-    'counterReferral.emailConfigMissing': 'Email service not configured. Check RESEND_API_KEY on Render.',
+    'counterReferral.emailConfigMissing': 'Resend free tier: can only send to your own email. Verify a domain at resend.com/domains or upgrade your plan.',
     'counterReferral.contactChpManually': 'Contact CHP manually.',
 
     // Profile
@@ -1222,7 +1222,7 @@ export const Translations = {
     'counterReferral.patientJourney': 'Safari ya Mgonjwa',
     'counterReferral.createCounter': 'Kamilisha na Tengeneza Rufaa ya Kurudia',
     'counterReferral.emailFailedToast': 'Rufaa ya kurudia imehifadhiwa, lakini barua pepe ya CHP imeshindwa',
-    'counterReferral.emailConfigMissing': 'Huduma ya barua pepe haijasanidiwa. Angalia RESEND_API_KEY kwenye Render.',
+    'counterReferral.emailConfigMissing': 'Resend free tier: inaweza kutuma kwa anuani yako tu. Thibitisha kikoa kwenye resend.com/domains au boresha mpango wako.',
     'counterReferral.contactChpManually': 'Wasiliana na CHP moja kwa moja.',
 
     // Profile
