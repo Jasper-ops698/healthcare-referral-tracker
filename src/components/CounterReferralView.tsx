@@ -185,8 +185,9 @@ export default function CounterReferralView({ stationId, stationName, collectorI
       }
       const cData = cRes.data as any;
       if (!cData?.emailSent && chpEmail) {
+        const errorDetail = cData?.emailError || t('counterReferral.emailConfigMissing');
         toast.warning(
-          `Counter-referral saved, but CHP email failed: ${cData?.emailError || 'Check SMTP settings'}. Contact CHP manually.`,
+          `${t('counterReferral.emailFailedToast')}: ${errorDetail}. ${t('counterReferral.contactChpManually')}`,
           { duration: 8000 }
         );
       }

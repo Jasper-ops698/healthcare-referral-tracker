@@ -498,6 +498,9 @@ export const Translations = {
     'counterReferral.startCare': 'Start Care',
     'counterReferral.patientJourney': 'Patient Journey',
     'counterReferral.createCounter': 'Complete & Create Counter-Referral',
+    'counterReferral.emailFailedToast': 'Counter-referral saved, but CHP email failed',
+    'counterReferral.emailConfigMissing': 'Email service not configured. Check RESEND_API_KEY on Render.',
+    'counterReferral.contactChpManually': 'Contact CHP manually.',
 
     // Profile
     'profile.role': 'Role',
@@ -1218,6 +1221,9 @@ export const Translations = {
     'counterReferral.startCare': 'Anza Matibabu',
     'counterReferral.patientJourney': 'Safari ya Mgonjwa',
     'counterReferral.createCounter': 'Kamilisha na Tengeneza Rufaa ya Kurudia',
+    'counterReferral.emailFailedToast': 'Rufaa ya kurudia imehifadhiwa, lakini barua pepe ya CHP imeshindwa',
+    'counterReferral.emailConfigMissing': 'Huduma ya barua pepe haijasanidiwa. Angalia RESEND_API_KEY kwenye Render.',
+    'counterReferral.contactChpManually': 'Wasiliana na CHP moja kwa moja.',
 
     // Profile
     'profile.role': 'Jukumu',
