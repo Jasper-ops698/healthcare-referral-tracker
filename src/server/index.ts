@@ -129,6 +129,11 @@ import { handleChpFormData, handleChpFormSubmit } from './controllers/counterRef
 app.get(`${API_PREFIX}/chp-feedback/:token`, handleChpFormData);
 app.post(`${API_PREFIX}/chp-feedback/:token`, handleChpFormSubmit);
 
+// USSD webhook for CHP responses via Africa's Talking
+import ussdRoutes from './routes/ussd.js';
+app.use(`${API_PREFIX}/ussd`, ussdRoutes);
+console.log('[Routes] USSD routes registered at', `${API_PREFIX}/ussd`);
+
 // Station routes
 import stationRoutes from './routes/stations.js';
 import { seedStations } from './controllers/stationController.js';

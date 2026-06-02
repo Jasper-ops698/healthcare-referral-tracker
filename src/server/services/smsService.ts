@@ -62,8 +62,11 @@ export async function sendChpCounterReferralSMS(options: {
   }
 
   // Shorten the message (SMS limit ~320 chars for concatenated)
-  const shortUrl = formUrl; // Could use a URL shortener here
-  const message = `HealthTrack: Hello ${chpName}, patient ${patientName} has been referred back. Diagnosis: ${truncate(finalDiagnosis, 60)}. Submit follow-up report: ${shortUrl}`;
+  // Extract token from formUrl for USSD option
+  const tokenMatch = formUrl.match(/chp-feedback\/(.+)$/);
+  const token = tokenMatch ? tokenMatch[1] : '';
+  const ussdOption = token ? ` Or dial *384*${token}# (no internet needed)` : '';
+  const message = `HealthTrack: Hello ${chpName}, patient ${patientName} referred back. Diagnosis: ${truncate(finalDiagnosis, 50)}. Report: ${formUrl}${truncate(ussdOption, 100)}`;
 
   try {
     const sms = smsClient.SMS;
