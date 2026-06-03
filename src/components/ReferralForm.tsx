@@ -177,7 +177,7 @@ export default function ReferralForm({
       await onSubmit({
         patientId: form.patientId, patientName: form.patientName,
         patientAge: parseInt(form.patientAge) || 0, patientGender: form.patientGender, patientPhone: form.patientPhone,
-        village: form.village?.trim() || undefined,
+        village: form.village ? (form.village.charAt(0).toUpperCase() + form.village.slice(1)).trim() : undefined,
         sourceStationId, sourceStationName, sourceStationType,
         sourceCollectorId: collectorId, sourceCollectorName: collectorName,
         destinationStationId: destId, destinationStationName: form.destinationStationName, destinationStationType: form.destinationStationType,
@@ -250,10 +250,10 @@ export default function ReferralForm({
                 <InputField
                   label="Village"
                   value={form.village}
-                  onChange={v => setForm(p => ({ ...p, village: v }))}
+                  onChange={v => setForm(p => ({ ...p, village: v ? v.charAt(0).toUpperCase() + v.slice(1) : v }))}
                   placeholder="e.g., Kisauni, Mtwapa, Ganze"
                 />
-                <p className="text-[11px] text-muted-foreground mt-1">Used for disease incidence mapping in your area</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Village names are automatically capitalized (e.g., Chidongo not chidongo)</p>
               </div>
             </div>
           </SectionCard>
