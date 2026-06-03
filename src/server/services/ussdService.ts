@@ -366,12 +366,141 @@ async function submitResponse(session: USSDSession, patientName: string): Promis
   }
 }
 
+// ─── SHARED USSD CODE SESSIONS (by Africa's Talking sessionId) ───
+
+interface SharedUSSDSession {
+  sessionId: string;
+  phoneNumber: string;
+  token?: string;
+  tokenValidated: boolean;
+  ussdSession?: USSDSession;
+  createdAt: number;
+}
+
+const sharedSessions = new Map<string, SharedUSSDSession>();
+
+function getOrCreateSharedSession(sessionId: string, phoneNumber: string): SharedUSSDSession {
+  const existing = sharedSessions.get(sessionId);
+  if (existing) {
+    existing.createdAt = Date.now();
+    return existing;
+  }
+  const session: SharedUSSDSession = {
+    sessionId,
+    phoneNumber,
+    tokenValidated: false,
+    createdAt: Date.now(),
+  };
+  sharedSessions.set(sessionId, session);
+  return session;
+}
+
+// ─── SHARED CODE HANDLER (*384*53795#) ───
+
+export async function handleUSSDWithSharedCode(
+  phoneNumber: string,
+  text: string,
+  sessionId: string,
+): Promise<string> {
+  const session = getOrCreateSharedSession(sessionId, phoneNumber);
+  const inputs = text.split('*').filter(s => s.trim());
+  const lastInput = inputs.length > 0 ? inputs[inputs.length - 1] : '';
+
+  // Step 1: Ask for patient token (first interaction or token not yet validated)
+  if (!session.tokenValidated) {
+    // First time: show welcome + ask for token
+    if (!text || text === '' || inputs.length === 0) {
+      return u(
+        `CON HealthTrack Community
+Welcome! Report patient follow-up.
+
+Enter patient code:
+(From SMS you received)`
+      );
+    }
+
+    // CHP has entered the token (first input)
+    const enteredToken = inputs[0]?.trim();
+    if (!enteredToken || enteredToken.length < 3) {
+      return u('CON Invalid code. Please enter the patient code from your SMS:\n\n0. Cancel');
+    }
+
+    // Validate token
+    const counter = await CounterReferral.findOne({ chpResponseToken: enteredToken }).lean();
+    if (!counter) {
+      return u(
+        `CON Invalid patient code: "${enteredToken.substring(0, 10)}"
+
+Please check the code from your SMS and try again.
+
+1. Try again
+0. Cancel`
+      );
+    }
+
+    if (counter.chpResponseReceived) {
+      return u('END A response has already been submitted for this patient. Thank you.');
+    }
+
+    // Token is valid — store and transition to main flow
+    session.token = enteredToken;
+    session.tokenValidated = true;
+
+    // Create the main USSD session
+    const ussdSession = getOrCreateSession(phoneNumber, enteredToken);
+    ussdSession.counterReferralId = counter._id.toString();
+    ussdSession.patientName = counter.patientName;
+    session.ussdSession = ussdSession;
+
+    // If CHP entered "1" after invalid token, handle it
+    if (lastInput === '1') {
+      return u(
+        `CON HealthTrack Community
+Welcome! Report patient follow-up.
+
+Enter patient code:
+(From SMS you received)`
+      );
+    }
+
+    // Show the main menu (skip token, go straight to menu)
+    return handleMenu(ussdSession, '', ussdSession.patientName || 'the patient');
+  }
+
+  // Step 2: Token validated — delegate to main USSD flow
+  if (!session.token || !session.ussdSession) {
+    // Something went wrong, reset
+    session.tokenValidated = false;
+    session.token = undefined;
+    return u('CON Session expired. Please enter patient code again:');
+  }
+
+  // If CHP is retrying after invalid token
+  if (lastInput === '0') {
+    clearSession(session.phoneNumber, session.token);
+    sharedSessions.delete(sessionId);
+    return u('END Thank you. Goodbye.');
+  }
+
+  // Pass remaining inputs (after the token) to the main handler
+  // Strip the token from inputs and rebuild the text
+  const inputsAfterToken = inputs.slice(1);
+  const rebuiltText = inputsAfterToken.join('*');
+
+  return handleUSSD(phoneNumber, session.token, rebuiltText);
+}
+
 // ─── CLEANUP OLD SESSIONS ───
 export function cleanupOldUSSDSessions(): void {
   const now = Date.now();
+  // Clean legacy sessions
   for (const [key, session] of sessions.entries()) {
-    // Sessions older than 5 minutes are stale
-    // We can't track creation time easily with Map, so just clear all periodically
     sessions.delete(key);
+  }
+  // Clean shared sessions older than 10 minutes
+  for (const [key, session] of sharedSessions.entries()) {
+    if (now - session.createdAt > 10 * 60 * 1000) {
+      sharedSessions.delete(key);
+    }
   }
 }

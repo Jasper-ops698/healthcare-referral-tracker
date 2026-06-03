@@ -7,14 +7,17 @@
  * the USSD session. The response body must be plain text starting with
  * "CON " (continue) or "END " (end).
  *
- * CHP dials: *384*<token>#
- * The token is the same one from the counter-referral email/SMS link.
+ * Configured service code: *384*53795#
+ * CHP dials the shared code, then enters their patient token through the menu.
  */
 
 import { Router, type Request, type Response } from 'express';
-import { handleUSSD } from '../services/ussdService.js';
+import { handleUSSD, handleUSSDWithSharedCode } from '../services/ussdService.js';
 
 const router = Router();
+
+/** The USSD service code configured in Africa's Talking (e.g., *384*53795#) */
+const USSD_SERVICE_CODE = process.env.AFRICASTALKING_USSD_CODE || '*384*53795#';
 
 // Africa's Talking sends POST to this endpoint
 router.post('/', async (req: Request, res: Response) => {
@@ -26,33 +29,36 @@ router.post('/', async (req: Request, res: Response) => {
       serviceCode,
     } = req.body;
 
-    // Africa's Talking sends the token as part of serviceCode
-    // e.g., serviceCode = "*384*abc123#" → token = "abc123"
+    console.log(`[USSD] sessionId=${sessionId}, phone=${phoneNumber}, serviceCode=${serviceCode}, text="${text}"`);
+
+    // Check if this is the configured shared service code (*384*53795#)
+    const isSharedCode = serviceCode === USSD_SERVICE_CODE ||
+      serviceCode === USSD_SERVICE_CODE.replace(/#$/, ''); // without trailing #
+
+    if (isSharedCode) {
+      // Shared USSD code flow: CHP dials *384*53795#, then enters patient token via menu
+      const response = await handleUSSDWithSharedCode(phoneNumber || '', text || '', sessionId || '');
+      res.set('Content-Type', 'text/plain');
+      res.send(response);
+      return;
+    }
+
+    // Legacy: token embedded in serviceCode (e.g., *384*abc123#)
     let token = '';
     if (serviceCode) {
       const match = serviceCode.match(/\*384\*(.+)/);
       if (match) {
-        token = match[1].replace(/#$/, ''); // Remove trailing #
-      }
-    }
-
-    // Fallback: token might be in the text input (first entry)
-    if (!token && text) {
-      const parts = text.split('*');
-      if (parts.length >= 2) {
-        token = parts[0];
+        token = match[1].replace(/#$/, '');
       }
     }
 
     if (!token) {
       res.set('Content-Type', 'text/plain');
-      res.send('END Invalid session. Please use the link sent by your community health worker.');
+      res.send('END Invalid session. Please dial *384*53795# to access HealthTrack.');
       return;
     }
 
     const response = await handleUSSD(phoneNumber || '', token, text || '');
-
-    // Must return plain text for Africa's Talking
     res.set('Content-Type', 'text/plain');
     res.send(response);
 
@@ -63,14 +69,20 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET version for testing in browser (doesn't create real sessions)
+// GET version for testing in browser
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { phone, token, text } = req.query;
+    const { phone, token, text, sessionId } = req.query;
 
     if (!token) {
+      // Test with shared code flow
+      const response = await handleUSSDWithSharedCode(
+        (phone as string) || '254700000000',
+        (text as string) || '',
+        (sessionId as string) || 'test-session'
+      );
       res.set('Content-Type', 'text/plain');
-      res.send('END Missing token. Use ?token=xxx&phone=2547...');
+      res.send(response);
       return;
     }
 
@@ -79,7 +91,6 @@ router.get('/', async (req: Request, res: Response) => {
       token as string,
       (text as string) || ''
     );
-
     res.set('Content-Type', 'text/plain');
     res.send(response);
 
