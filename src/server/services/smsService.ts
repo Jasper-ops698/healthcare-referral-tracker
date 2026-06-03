@@ -65,7 +65,7 @@ export async function sendChpCounterReferralSMS(options: {
   // Extract token from formUrl for USSD option
   const tokenMatch = formUrl.match(/chp-feedback\/(.+)$/);
   const token = tokenMatch ? tokenMatch[1] : '';
-  const ussdOption = token ? ` Or dial *384*${token}# (no internet needed)` : '';
+  const ussdOption = token ? ` Or dial *384*53795# then enter: ${token}` : '';
   const message = `HealthTrack: Hello ${chpName}, patient ${patientName} referred back. Diagnosis: ${truncate(finalDiagnosis, 50)}. Report: ${formUrl}${truncate(ussdOption, 100)}`;
 
   try {
