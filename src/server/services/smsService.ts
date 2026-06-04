@@ -319,6 +319,63 @@ export async function sendPasswordResetSMS(options: {
   }
 }
 
+// ─── NOTIFY ORIGINAL COLLECTOR THAT PATIENT WAS DISCHARGED ───
+
+export async function sendCollectorDischargeSMS(options: {
+  collectorPhone: string;
+  collectorName: string;
+  patientName: string;
+  patientId: string;
+  destinationFacility: string;
+  finalDiagnosis: string;
+  chpName: string;
+  recoveryStatus: string;
+}): Promise<SMSResult> {
+  const { collectorPhone, collectorName, patientName, patientId, destinationFacility, finalDiagnosis, chpName, recoveryStatus } = options;
+
+  if (!USE_SMS || !smsClient) {
+    return { success: false, error: 'SMS not configured. Set AFRICASTALKING_API_KEY.' };
+  }
+
+  const normalizedPhone = normalizePhoneNumber(collectorPhone);
+  if (!normalizedPhone) {
+    return { success: false, error: `Invalid collector phone number: ${collectorPhone}` };
+  }
+
+  // Format recovery status for SMS
+  const statusMap: Record<string, string> = {
+    'fully-recovered': 'Fully Recovered',
+    'partially-recovered': 'Partially Recovered',
+    'still-unwell': 'Still Unwell',
+    'deceased': 'Deceased',
+    'lost-to-follow-up': 'Lost to Follow-up',
+  };
+  const readableStatus = statusMap[recoveryStatus] || recoveryStatus;
+
+  const message = `HealthTrack: Hello ${collectorName}, your patient ${patientName} (ID: ${patientId}) has been discharged from ${destinationFacility}. Diagnosis: ${truncate(finalDiagnosis, 50)}. Status: ${readableStatus}. CHP ${chpName} assigned for community follow-up. Thank you.`;
+
+  try {
+    const response = await smsClient.SMS.send({
+      to: [normalizedPhone],
+      message,
+      ...(SENDER_ID ? { from: SENDER_ID } : {}),
+    });
+    const result = response.SMSMessageData?.Recipients?.[0];
+
+    if (result && result.status === 'Success') {
+      console.log(`[SMS] Discharge notification sent to collector ${normalizedPhone}, messageId=${result.messageId}`);
+      return { success: true, messageId: result.messageId };
+    } else {
+      const err = result?.status || 'Unknown error';
+      console.error(`[SMS] Discharge notification failed to collector ${normalizedPhone}: ${err}`);
+      return { success: false, error: err };
+    }
+  } catch (err: any) {
+    console.error(`[SMS] Discharge notification exception to collector ${normalizedPhone}:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 // ─── HEALTH CHECK ───
 
 export function checkSMSHealth(): { configured: boolean; provider: string; username: string } {

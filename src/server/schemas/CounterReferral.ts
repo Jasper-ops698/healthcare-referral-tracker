@@ -45,6 +45,13 @@ export interface ICounterReferral extends mongoose.Document {
   chpSMSSent: boolean;
   chpSMSSentAt?: Date;
   chpSMSStatus?: 'pending' | 'sent' | 'failed';
+
+  /** Original collector notification tracking */
+  originalCollectorId?: string;
+  originalCollectorName?: string;
+  collectorNotified: boolean;
+  collectorNotifiedAt?: Date;
+  collectorNotificationStatus?: 'pending' | 'sent' | 'failed';
   chpResponseToken?: string; // Unique token for CHP form link / USSD
   chpResponseReceived: boolean;
   chpResponseDate?: Date;
@@ -106,6 +113,17 @@ const CounterReferralSchema = new Schema<ICounterReferral>(
     chpSMSSent: { type: Boolean, default: false },
     chpSMSSentAt: { type: Date },
     chpSMSStatus: {
+      type: String,
+      enum: ['pending', 'sent', 'failed'],
+      default: 'pending',
+    },
+
+    // Original collector notification
+    originalCollectorId: { type: String, index: true },
+    originalCollectorName: { type: String },
+    collectorNotified: { type: Boolean, default: false },
+    collectorNotifiedAt: { type: Date },
+    collectorNotificationStatus: {
       type: String,
       enum: ['pending', 'sent', 'failed'],
       default: 'pending',

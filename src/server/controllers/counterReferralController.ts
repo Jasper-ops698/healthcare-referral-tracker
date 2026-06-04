@@ -8,7 +8,8 @@ import crypto from 'crypto';
 import CounterReferral from '../schemas/CounterReferral.js';
 import ReferralV2 from '../schemas/ReferralV2.js';
 import type { AuthenticatedRequest } from '../middleware/regionalAuth.js';
-import { sendChpCounterReferralSMS } from '../services/smsService.js';
+import { sendChpCounterReferralSMS, sendCollectorDischargeSMS } from '../services/smsService.js';
+import User from '../models/User.js';
 
 function requireAuth(req: Request, res: Response): AuthenticatedRequest | null {
   const authReq = req as AuthenticatedRequest;
@@ -66,6 +67,10 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
     original.counterReferralId = counter._id as mongoose.Types.ObjectId;
     await original.save();
 
+    // Track original collector on counter-referral
+    counter.originalCollectorId = original.sourceCollectorId;
+    counter.originalCollectorName = original.sourceCollectorName;
+
     // Send CHP follow-up SMS if phone provided
     let smsResult: { success: boolean; messageId?: string; error?: string } = { success: false, error: 'No CHP phone provided' };
     if (body.chpPhone) {
@@ -99,13 +104,51 @@ export async function handleCreate(req: Request, res: Response): Promise<void> {
       }
     }
 
+    // ── Notify the original collector that their patient has been discharged ──
+    let collectorNotificationResult: { success: boolean; messageId?: string; error?: string } = { success: false, error: 'No original collector found' };
+    if (original.sourceCollectorId) {
+      try {
+        const originalCollector = await User.findById(original.sourceCollectorId).exec();
+        if (originalCollector && originalCollector.phone) {
+          collectorNotificationResult = await sendCollectorDischargeSMS({
+            collectorPhone: originalCollector.phone,
+            collectorName: originalCollector.firstName || 'Collector',
+            patientName: body.patientName,
+            patientId: body.patientId,
+            destinationFacility: user.stationName || 'the referral center',
+            finalDiagnosis: body.finalDiagnosis,
+            chpName: body.chpName,
+            recoveryStatus: body.recoveryStatus || 'still-unwell',
+          });
+          counter.collectorNotified = collectorNotificationResult.success;
+          counter.collectorNotifiedAt = collectorNotificationResult.success ? new Date() : undefined;
+          counter.collectorNotificationStatus = collectorNotificationResult.success ? 'sent' : 'failed';
+          if (collectorNotificationResult.success) {
+            console.log(`[CounterReferral] Original collector ${originalCollector.phone} notified of discharge for ${body.patientName}`);
+          } else {
+            console.error(`[CounterReferral] Failed to notify original collector: ${collectorNotificationResult.error}`);
+          }
+          await counter.save();
+        } else {
+          console.log(`[CounterReferral] Original collector ${original.sourceCollectorId} has no phone number — skipping discharge notification`);
+        }
+      } catch (notifyErr: any) {
+        console.error('[CounterReferral] Collector notification exception:', notifyErr.message);
+        counter.collectorNotificationStatus = 'failed';
+        collectorNotificationResult = { success: false, error: notifyErr.message };
+        await counter.save();
+      }
+    }
+
     res.status(201).json({
       success: true,
       data: { counterReferral: counter.toJSON() },
       smsSent: smsResult.success,
       smsError: smsResult.error || undefined,
+      collectorNotified: collectorNotificationResult.success,
+      collectorNotificationError: collectorNotificationResult.error || undefined,
       message: smsResult.success
-        ? `Counter-referral created for ${body.patientName}. CHP ${body.chpName} notified via SMS.`
+        ? `Counter-referral created for ${body.patientName}. CHP ${body.chpName} notified via SMS.${collectorNotificationResult.success ? ` Original collector also notified.` : ''}`
         : `Counter-referral created for ${body.patientName}. CHP ${body.chpName} assigned — but SMS failed: ${smsResult.error}. Please contact CHP manually.`,
     });
   } catch (error: any) {
