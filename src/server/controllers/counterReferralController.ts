@@ -265,11 +265,21 @@ export async function handleChpFormSubmit(req: Request, res: Response): Promise<
       needsMedicalAttention,
       recommendedAction,
       symptomsObserved,
+      medicationAdherence,
+      woundHealingProgress,
+      woundPhotoUrl,
+      woundPhotoDescription,
     } = req.body;
 
     // Validate recoveryStatus
     if (!recoveryStatus || !VALID_RECOVERY_STATUSES.includes(recoveryStatus)) {
       res.status(400).json({ success: false, error: `recoveryStatus must be one of: ${VALID_RECOVERY_STATUSES.join(', ')}` });
+      return;
+    }
+
+    // Validate recoveryNotes (now required)
+    if (!recoveryNotes || recoveryNotes.trim().length < 10) {
+      res.status(400).json({ success: false, error: 'Recovery notes are required (minimum 10 characters)' });
       return;
     }
 
@@ -298,6 +308,12 @@ export async function handleChpFormSubmit(req: Request, res: Response): Promise<
     counter.chpNeedsMedicalAttention = !!needsMedicalAttention;
     counter.chpRecommendedAction = recommendedAction || undefined;
     counter.chpSymptomsObserved = symptomsObserved || undefined;
+
+    // Medication & wound assessment
+    if (medicationAdherence) counter.medicationAdherence = medicationAdherence;
+    if (woundHealingProgress) counter.woundHealingProgress = woundHealingProgress;
+    if (woundPhotoUrl) counter.woundPhotoUrl = woundPhotoUrl;
+    if (woundPhotoDescription) counter.woundPhotoDescription = woundPhotoDescription;
 
     // Auto-escalate if CHP flags medical attention needed
     const isEscalated = !!needsMedicalAttention || recoveryStatus === 'still-unwell';

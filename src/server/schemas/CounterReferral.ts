@@ -63,6 +63,12 @@ export interface ICounterReferral extends mongoose.Document {
   chpRecommendedAction?: 'see-doctor' | 'return-to-facility' | 'emergency' | 'monitor' | 'other';
   chpSymptomsObserved?: string;
 
+  // CHP medication & wound assessment
+  medicationAdherence?: 'taking-regularly' | 'taking-irregularly' | 'not-taking' | 'unknown';
+  woundHealingProgress?: 'healing-well' | 'slow-healing' | 'infected' | 'not-applicable';
+  woundPhotoUrl?: string;
+  woundPhotoDescription?: string;
+
   // Status
   status: 'active' | 'closed' | 'escalated';
 
@@ -143,6 +149,18 @@ const CounterReferralSchema = new Schema<ICounterReferral>(
       enum: ['see-doctor', 'return-to-facility', 'emergency', 'monitor', 'other'],
     },
     chpSymptomsObserved: { type: String, trim: true },
+
+    // CHP medication & wound assessment
+    medicationAdherence: {
+      type: String,
+      enum: ['taking-regularly', 'taking-irregularly', 'not-taking', 'unknown'],
+    },
+    woundHealingProgress: {
+      type: String,
+      enum: ['healing-well', 'slow-healing', 'infected', 'not-applicable'],
+    },
+    woundPhotoUrl: { type: String }, // base64 encoded
+    woundPhotoDescription: { type: String, trim: true },
 
     status: {
       type: String,
