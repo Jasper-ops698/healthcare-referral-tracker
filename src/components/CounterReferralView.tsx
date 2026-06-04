@@ -460,14 +460,24 @@ export default function CounterReferralView({ stationId, stationName, collectorI
             </p>
           </div>
           <div className="text-right">
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">From Facility</p>
                 <p className="text-sm font-medium">{selected.sourceStationName || 'Unknown'}</p>
+                {selected.sourceStationType && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 capitalize">
+                    {selected.sourceStationType.replace(/-/g, ' ')}
+                  </span>
+                )}
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">To Facility</p>
                 <p className="text-sm font-semibold text-emerald-700">{selected.destinationStationName || 'Unknown'}</p>
+                {selected.destinationStationType && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 capitalize">
+                    {selected.destinationStationType.replace(/-/g, ' ')}
+                  </span>
+                )}
               </div>
             </div>
           </div>
