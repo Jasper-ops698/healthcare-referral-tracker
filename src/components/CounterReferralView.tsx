@@ -460,8 +460,16 @@ export default function CounterReferralView({ stationId, stationName, collectorI
             </p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-muted-foreground">{isIncoming ? 'Referred to' : 'Sent from'}</p>
-            <p className="text-sm font-medium">{stationName}</p>
+            <div className="space-y-1">
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">From Facility</p>
+                <p className="text-sm font-medium">{selected.sourceStationName || 'Unknown'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">To Facility</p>
+                <p className="text-sm font-semibold text-emerald-700">{selected.destinationStationName || 'Unknown'}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
