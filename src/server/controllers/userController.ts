@@ -654,8 +654,15 @@ export async function handleAdminUpdateUser(req: Request, res: Response): Promis
       allowedUpdates.stationId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     }
 
-    // Check email uniqueness if changing
-    if (allowedUpdates.email) {
+    // Fetch existing user to compare against current values
+    const existingUser = await User.findById(id).exec();
+    if (!existingUser) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return;
+    }
+
+    // Check email uniqueness ONLY if email is actually changing
+    if (allowedUpdates.email && allowedUpdates.email !== existingUser.email) {
       const existing = await User.findOne({
         email: allowedUpdates.email,
         _id: { $ne: id },
@@ -666,8 +673,8 @@ export async function handleAdminUpdateUser(req: Request, res: Response): Promis
       }
     }
 
-    // Check phone uniqueness if changing
-    if (allowedUpdates.phone) {
+    // Check phone uniqueness ONLY if phone is actually changing
+    if (allowedUpdates.phone && allowedUpdates.phone !== existingUser.phone) {
       const existing = await User.findOne({
         phone: allowedUpdates.phone,
         _id: { $ne: id },
