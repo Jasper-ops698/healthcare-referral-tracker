@@ -49,7 +49,7 @@ import { toast } from 'sonner';
 export default function UserManagement() {
   const { t } = useI18n();
   const { user: currentUser, isPrimaryAdmin: isViewerPrimaryAdmin } = useAuth();
-  const { users, addUser, updateUser, toggleUserStatus, clearUsers } = useUsers();
+  const { users, addUser, updateUser, toggleUserStatus, clearUsers, loadUsers } = useUsers();
   const { isOnline, pendingCount } = useSync();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
@@ -560,16 +560,22 @@ export default function UserManagement() {
                   ...data,
                   stationId: data.stationId || data.stationName?.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
                 };
-                // Update locally
-                updateUser(editingUser.id, payload);
+                // Update locally first for immediate UI feedback
+                await updateUser(editingUser.id, payload);
                 // Sync to backend
                 try {
-                  await import('@/lib/apiClient').then(m => m.updateUser(editingUser.id, payload));
-                } catch {
-                  // Backend sync failed — local change is saved, sync engine will retry
+                  const result = await import('@/lib/apiClient').then(m => m.updateUser(editingUser.id, payload));
+                  if (result.success) {
+                    toast.success(t('users.userUpdated') || 'User updated successfully');
+                    // Refresh from backend to get source-of-truth data
+                    await loadUsers();
+                  } else {
+                    toast.error(result.error?.message || 'Server failed to save changes');
+                  }
+                } catch (err: any) {
+                  toast.error(`Network error: ${err.message || 'Could not reach server'}. Changes saved locally — will sync when online.`);
                 }
                 setEditingUser(null);
-                toast.success(t('users.userUpdated') || 'User updated successfully');
               }}
               onCancel={() => setEditingUser(null)}
             />
